@@ -1,0 +1,122 @@
+
+!**/.env.example
+!**/.env.sample
+!.env.example
+!.env.sample
+# =====================================================
+# AC Store System - GitHub safety rules
+# Database backups / dumps
+# Databases
+# Environment / secrets
+# IDE
+# Logs
+# Node / Next.js
+# Python
+# Python cache / tooling
+# Python virtual environments
+# SQLite / production databases
+# Temporary / backup files
+# Temporary files
+# Virtual environments
+# macOS
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite3
+**/.DS_Store
+**/.env
+**/.env.*
+**/.mypy_cache/
+**/.next/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.venv/
+**/__pycache__/
+**/backups/
+**/coverage/
+**/dist/
+**/logs/
+**/node_modules/
+**/out/
+**/venv/
+*.backup
+*.bak
+*.before_*
+*.db
+*.db-shm
+*.db-wal
+*.dump
+*.log
+*.orig
+*.py[cod]
+*.sql.gz
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3
+*.swp
+*.temp
+*.tmp
+*~
+.DS_Store
+.coverage
+.env
+.env.*
+.idea/
+.mypy_cache/
+.next/
+.pytest_cache/
+.ruff_cache/
+.venv/
+.vscode/
+__pycache__/
+backups/
+coverage/
+dist/
+env/
+htmlcov/
+logs/
+node_modules/
+out/
+venv/
+
+# AC Store System GitHub safety
+.DS_Store
+**/.DS_Store
+
+.env
+.env.*
+!.env.example
+!.env.sample
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample
+
+.venv/
+**/.venv/
+venv/
+**/venv/
+
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+
+*.db
+**/*.db
+*.sqlite
+**/*.sqlite
+*.sqlite3
+**/*.sqlite3
+*.db-shm
+*.db-wal
+
+*.pem
+*.key
+
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/

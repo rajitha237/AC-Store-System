@@ -1,0 +1,492 @@
+export type ServiceJobStatus =
+  | "received"
+  | "inspection"
+  | "waiting_approval"
+  | "approved"
+  | "repairing"
+  | "testing"
+  | "ready"
+  | "delivered"
+  | "cancelled";
+
+
+export type ServiceJobPriority =
+  | "low"
+  | "normal"
+  | "high"
+  | "urgent";
+
+
+export type ServiceType =
+  | "repair"
+  | "warranty"
+  | "installation"
+  | "maintenance"
+  | "inspection"
+  | "other";
+
+
+export type ApprovalStatus =
+  | "not_required"
+  | "pending"
+  | "approved"
+  | "rejected";
+
+
+export type ServiceJobCreate = {
+  customer_id:
+    number;
+
+  branch_id?:
+    number | null;
+
+  product_id?:
+    number | null;
+
+  sold_serial_id?:
+    number | null;
+
+  serial_number?:
+    string | null;
+
+  secondary_serial_number?:
+    string | null;
+
+  brand_name?:
+    string | null;
+
+  model_number?:
+    string | null;
+
+  item_color?:
+    string | null;
+
+  service_type:
+    ServiceType;
+
+  priority:
+    ServiceJobPriority;
+
+  complaint:
+    string;
+
+  reported_issue?:
+    string | null;
+
+  accessories_received?:
+    string | null;
+
+  physical_condition?:
+    string | null;
+
+  special_notes?:
+    string | null;
+
+  technician_id?:
+    number | null;
+
+  receiving_officer_id?:
+    number | null;
+
+  is_warranty_job:
+    boolean;
+
+  related_invoice_id?:
+    number | null;
+
+  estimated_cost:
+    string;
+
+  expected_completion_date?:
+    string | null;
+};
+
+
+export type ServiceJobUpdate = {
+  technician_id?:
+    number | null;
+
+  technician_diagnosis?:
+    string | null;
+
+  work_performed?:
+    string | null;
+
+  testing_result?:
+    string | null;
+
+  reported_issue?:
+    string | null;
+
+  accessories_received?:
+    string | null;
+
+  physical_condition?:
+    string | null;
+
+  special_notes?:
+    string | null;
+
+  warranty_notes?:
+    string | null;
+
+  estimated_cost?:
+    string | null;
+
+  discount_amount?:
+    string | null;
+
+  expected_completion_date?:
+    string | null;
+};
+
+
+export type ServiceApprovalRequest = {
+  approval_status:
+    ApprovalStatus;
+
+  remarks?:
+    string | null;
+};
+
+
+export type ServiceStatusChangeRequest = {
+  new_status:
+    ServiceJobStatus;
+
+  remarks?:
+    string | null;
+};
+
+
+export type ServiceLabourCreate = {
+  description:
+    string;
+
+  hours:
+    string;
+
+  amount:
+    string;
+
+  notes?:
+    string | null;
+};
+
+
+export type ServicePartCreate = {
+  product_id:
+    number;
+
+  warehouse_id:
+    number;
+
+  quantity:
+    string;
+
+  unit_price?:
+    string | null;
+
+  notes?:
+    string | null;
+};
+
+
+export type ServiceJobStatusHistoryResponse = {
+  id:
+    number;
+
+  job_card_id:
+    number;
+
+  old_status:
+    string | null;
+
+  new_status:
+    string;
+
+  remarks:
+    string | null;
+
+  changed_by_id:
+    number;
+
+  created_at:
+    string;
+};
+
+
+export type ServiceLabourResponse = {
+  id:
+    number;
+
+  job_card_id:
+    number;
+
+  description:
+    string;
+
+  hours:
+    string;
+
+  amount:
+    string;
+
+  notes:
+    string | null;
+
+  created_by_id:
+    number;
+
+  created_at:
+    string;
+};
+
+
+export type ServicePartResponse = {
+  id:
+    number;
+
+  job_card_id:
+    number;
+
+  product_id:
+    number;
+
+  warehouse_id:
+    number;
+
+  quantity:
+    string;
+
+  unit_cost:
+    string;
+
+  unit_price:
+    string;
+
+  line_total:
+    string;
+
+  stock_movement_id:
+    number | null;
+
+  notes:
+    string | null;
+
+  created_by_id:
+    number;
+
+  created_at:
+    string;
+};
+
+
+export type ServiceJobDetailResponse = {
+  id:
+    number;
+
+  company_id:
+    number;
+
+  branch_id:
+    number;
+
+  job_number:
+    string;
+
+  customer_id:
+    number;
+
+  customer_name:
+    string;
+
+  customer_phone:
+    string;
+
+  product_id:
+    number | null;
+
+  product_name:
+    string | null;
+
+  product_code:
+    string | null;
+
+  sold_serial_id:
+    number | null;
+
+  serial_number:
+    string | null;
+
+  secondary_serial_number:
+    string | null;
+
+  brand_name:
+    string | null;
+
+  model_number:
+    string | null;
+
+  item_color:
+    string | null;
+
+  service_type:
+    string;
+
+  priority:
+    string;
+
+  status:
+    string;
+
+  approval_status:
+    string;
+
+  complaint:
+    string;
+
+  reported_issue:
+    string | null;
+
+  technician_diagnosis:
+    string | null;
+
+  work_performed:
+    string | null;
+
+  testing_result:
+    string | null;
+
+  accessories_received:
+    string | null;
+
+  physical_condition:
+    string | null;
+
+  special_notes:
+    string | null;
+
+  technician_id:
+    number | null;
+
+  technician_name:
+    string | null;
+
+  receiving_officer_id:
+    number | null;
+
+  receiving_officer_name:
+    string | null;
+
+  is_warranty_job:
+    boolean;
+
+  warranty_verified:
+    boolean;
+
+  warranty_notes:
+    string | null;
+
+  related_invoice_id:
+    number | null;
+
+  estimated_cost:
+    string;
+
+  labour_total:
+    string;
+
+  parts_total:
+    string;
+
+  discount_amount:
+    string;
+
+  final_amount:
+    string;
+
+  received_at:
+    string;
+
+  expected_completion_date:
+    string | null;
+
+  approval_at:
+    string | null;
+
+  completed_at:
+    string | null;
+
+  delivered_at:
+    string | null;
+
+  created_by_id:
+    number;
+
+  updated_by_id:
+    number | null;
+
+  created_at:
+    string;
+
+  updated_at:
+    string;
+
+  status_history:
+    ServiceJobStatusHistoryResponse[];
+
+  parts:
+    ServicePartResponse[];
+
+  labour_items:
+    ServiceLabourResponse[];
+};
+
+
+export type ServiceJobListResponse = {
+  items:
+    ServiceJobDetailResponse[];
+
+  total:
+    number;
+
+  page:
+    number;
+
+  page_size:
+    number;
+
+  total_pages:
+    number;
+};
+
+
+export type ServiceJobListParams = {
+  page?:
+    number;
+
+  pageSize?:
+    number;
+
+  search?:
+    string;
+
+  jobStatus?:
+    ServiceJobStatus | "";
+
+  serviceType?:
+    ServiceType | "";
+
+  priority?:
+    ServiceJobPriority | "";
+
+  technicianId?:
+    number;
+
+  customerId?:
+    number;
+
+  warrantyOnly?:
+    boolean;
+};

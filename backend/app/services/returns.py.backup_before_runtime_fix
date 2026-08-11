@@ -1,0 +1,1330 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from decimal import Decimal
+from math import ceil
+
+from fastapi import HTTPException, status
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models import (
+    Branch,
+    Company,
+    Customer,
+    CustomerPayment,
+    Product,
+    ProductSerialNumber,
+    SalesInvoice,
+    SalesInvoiceItem,
+    StockItem,
+    StockMovement,
+    User,
+    Warehouse,
+)
+from app.models.inventory import SerialNumberStatus
+from app.models.returns import (
+    ReturnItemCondition,
+    ReturnResolution,
+    ReturnStatus,
+    ReturnType,
+    SalesReturn,
+    SalesReturnItem,
+    SalesReturnStatusHistory,
+)
+from app.models.sales import (
+    InvoiceItemType,
+    InvoiceStatus,
+    PaymentStatus,
+)
+from app.schemas.returns import (
+    ReplacementItemRequest,
+    ReturnApprovalRequest,
+    ReturnInspectionRequest,
+    ReturnStatusChangeRequest,
+    SalesReturnCreate,
+    SalesReturnDetailResponse,
+    SalesReturnListResponse,
+)
+
+
+ZERO_2 = Decimal("0.00")
+ZERO_3 = Decimal("0.000")
+
+
+def money(value: Decimal) -> Decimal:
+    return Decimal(value).quantize(
+        Decimal("0.01")
+    )
+
+
+def quantity_3(value: Decimal) -> Decimal:
+    return Decimal(value).quantize(
+        Decimal("0.001")
+    )
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+async def get_return(
+    session: AsyncSession,
+    return_id: int,
+) -> SalesReturn:
+    result = await session.execute(
+        select(SalesReturn)
+        .options(
+            selectinload(SalesReturn.items),
+            selectinload(SalesReturn.status_history),
+        )
+        .where(SalesReturn.id == return_id)
+    )
+
+    sales_return = result.scalar_one_or_none()
+
+    if sales_return is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sales return was not found",
+        )
+
+    return sales_return
+
+
+async def get_invoice(
+    session: AsyncSession,
+    invoice_id: int,
+) -> SalesInvoice:
+    result = await session.execute(
+        select(SalesInvoice)
+        .options(
+            selectinload(SalesInvoice.items)
+        )
+        .where(SalesInvoice.id == invoice_id)
+    )
+
+    invoice = result.scalar_one_or_none()
+
+    if invoice is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sales invoice was not found",
+        )
+
+    return invoice
+
+
+async def add_status_history(
+    session: AsyncSession,
+    sales_return: SalesReturn,
+    *,
+    old_status: str | None,
+    new_status: str,
+    current_user: User,
+    remarks: str | None = None,
+) -> SalesReturnStatusHistory:
+    history = SalesReturnStatusHistory(
+        sales_return_id=sales_return.id,
+        old_status=old_status,
+        new_status=new_status,
+        remarks=remarks,
+        changed_by_id=current_user.id,
+    )
+
+    session.add(history)
+
+    return history
+
+
+async def calculate_previously_returned_quantity(
+    session: AsyncSession,
+    *,
+    invoice_item_id: int,
+    exclude_return_id: int | None = None,
+) -> Decimal:
+    filters = [
+        SalesReturnItem.invoice_item_id
+        == invoice_item_id,
+        SalesReturn.status.notin_(
+            [
+                ReturnStatus.REJECTED.value,
+                ReturnStatus.CANCELLED.value,
+            ]
+        ),
+    ]
+
+    if exclude_return_id is not None:
+        filters.append(
+            SalesReturn.id != exclude_return_id
+        )
+
+    value = await session.scalar(
+        select(
+            func.coalesce(
+                func.sum(
+                    SalesReturnItem.quantity
+                ),
+                ZERO_3,
+            )
+        )
+        .select_from(SalesReturnItem)
+        .join(
+            SalesReturn,
+            SalesReturn.id
+            == SalesReturnItem.sales_return_id,
+        )
+        .where(*filters)
+    )
+
+    return quantity_3(
+        Decimal(value or ZERO_3)
+    )
+
+
+async def create_return(
+    session: AsyncSession,
+    payload: SalesReturnCreate,
+    current_user: User,
+) -> SalesReturn:
+    invoice = await get_invoice(
+        session,
+        payload.invoice_id,
+    )
+
+    if invoice.invoice_status not in {
+        InvoiceStatus.CONFIRMED.value,
+        InvoiceStatus.RETURNED.value,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Returns can only be created for "
+                "confirmed or previously returned invoices"
+            ),
+        )
+
+    customer = await session.get(
+        Customer,
+        invoice.customer_id,
+    )
+
+    if customer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invoice customer was not found",
+        )
+
+    invoice_items = {
+        item.id: item
+        for item in invoice.items
+    }
+
+    prepared_items: list[
+        tuple[
+            SalesInvoiceItem,
+            Decimal,
+        ]
+    ] = []
+
+    for requested_item in payload.items:
+        invoice_item = invoice_items.get(
+            requested_item.invoice_item_id
+        )
+
+        if invoice_item is None:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail=(
+                    f"Invoice item "
+                    f"{requested_item.invoice_item_id} "
+                    "does not belong to this invoice"
+                ),
+            )
+
+        if invoice_item.product_id is None:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail=(
+                    "Non-product invoice items such as "
+                    "labour cannot be physically returned"
+                ),
+            )
+
+        if invoice_item.item_type == (
+            InvoiceItemType.LABOUR.value
+        ):
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail="Labour items cannot be returned",
+            )
+
+        requested_quantity = quantity_3(
+            requested_item.quantity
+        )
+
+        previously_returned = (
+            await calculate_previously_returned_quantity(
+                session,
+                invoice_item_id=invoice_item.id,
+            )
+        )
+
+        available_to_return = quantity_3(
+            Decimal(invoice_item.quantity)
+            - previously_returned
+        )
+
+        if requested_quantity > available_to_return:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail=(
+                    f"Return quantity for invoice item "
+                    f"{invoice_item.id} exceeds the "
+                    "remaining returnable quantity "
+                    f"{available_to_return}"
+                ),
+            )
+
+        prepared_items.append(
+            (
+                invoice_item,
+                requested_quantity,
+            )
+        )
+
+    sales_return = SalesReturn(
+        company_id=invoice.company_id,
+        branch_id=invoice.branch_id,
+        return_number=None,
+        invoice_id=invoice.id,
+        customer_id=invoice.customer_id,
+        return_type=payload.return_type.value,
+        status=ReturnStatus.REQUESTED.value,
+        resolution=ReturnResolution.PENDING.value,
+        reason=payload.reason,
+        customer_notes=payload.customer_notes,
+        inspection_notes=None,
+        approval_notes=None,
+        refund_amount=ZERO_2,
+        refund_processed=False,
+        refund_processed_at=None,
+        requested_at=utc_now(),
+        inspected_at=None,
+        approved_at=None,
+        completed_at=None,
+        created_by_id=current_user.id,
+        updated_by_id=None,
+    )
+
+    session.add(sales_return)
+
+    try:
+        await session.flush()
+
+        sales_return.return_number = (
+            f"RET-{sales_return.id:06d}"
+        )
+
+        for (
+            requested_item,
+            prepared,
+        ) in zip(
+            payload.items,
+            prepared_items,
+            strict=True,
+        ):
+            invoice_item, requested_quantity = (
+                prepared
+            )
+
+            product = await session.get(
+                Product,
+                invoice_item.product_id,
+            )
+
+            if product is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=(
+                        f"Product "
+                        f"{invoice_item.product_id} "
+                        "was not found"
+                    ),
+                )
+
+            session.add(
+                SalesReturnItem(
+                    sales_return_id=sales_return.id,
+                    invoice_item_id=invoice_item.id,
+                    product_id=invoice_item.product_id,
+                    serial_number_id=(
+                        invoice_item.serial_number_id
+                    ),
+                    quantity=requested_quantity,
+                    unit_price=invoice_item.unit_price,
+                    line_total=money(
+                        requested_quantity
+                        * Decimal(
+                            invoice_item.unit_price
+                        )
+                    ),
+                    condition=(
+                        ReturnItemCondition.OPENED.value
+                    ),
+                    inspection_notes=None,
+                    destination_warehouse_id=None,
+                    stock_movement_id=None,
+                    replacement_product_id=None,
+                    replacement_serial_number_id=None,
+                    replacement_stock_movement_id=None,
+                    created_by_id=current_user.id,
+                )
+            )
+
+        await add_status_history(
+            session,
+            sales_return,
+            old_status=None,
+            new_status=ReturnStatus.REQUESTED.value,
+            current_user=current_user,
+            remarks="Sales return request created",
+        )
+
+        await session.commit()
+
+    except Exception:
+        await session.rollback()
+        raise
+
+    return await get_return(
+        session,
+        sales_return.id,
+    )
+
+
+async def inspect_return(
+    session: AsyncSession,
+    return_id: int,
+    payload: ReturnInspectionRequest,
+    current_user: User,
+) -> SalesReturn:
+    sales_return = await get_return(
+        session,
+        return_id,
+    )
+
+    if sales_return.status not in {
+        ReturnStatus.REQUESTED.value,
+        ReturnStatus.INSPECTION.value,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Only requested or inspection returns "
+                "can be inspected"
+            ),
+        )
+
+    old_status = sales_return.status
+
+    item_map = {
+        item.id: item
+        for item in sales_return.items
+    }
+
+    for inspection_item in payload.items:
+        return_item = item_map.get(
+            inspection_item.return_item_id
+        )
+
+        if return_item is None:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail=(
+                    f"Return item "
+                    f"{inspection_item.return_item_id} "
+                    "does not belong to this return"
+                ),
+            )
+
+        return_item.condition = (
+            inspection_item.condition.value
+        )
+
+        return_item.inspection_notes = (
+            inspection_item.inspection_notes
+        )
+
+        if (
+            inspection_item.destination_warehouse_id
+            is not None
+        ):
+            warehouse = await session.get(
+                Warehouse,
+                inspection_item.destination_warehouse_id,
+            )
+
+            if warehouse is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=(
+                        "Destination warehouse "
+                        "was not found"
+                    ),
+                )
+
+            if not warehouse.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Destination warehouse is inactive"
+                    ),
+                )
+
+            return_item.destination_warehouse_id = (
+                warehouse.id
+            )
+
+    sales_return.inspection_notes = (
+        payload.inspection_notes
+    )
+    sales_return.inspected_at = utc_now()
+    sales_return.updated_by_id = current_user.id
+
+    sales_return.status = (
+        ReturnStatus.WAITING_APPROVAL.value
+    )
+
+    await add_status_history(
+        session,
+        sales_return,
+        old_status=old_status,
+        new_status=(
+            ReturnStatus.WAITING_APPROVAL.value
+        ),
+        current_user=current_user,
+        remarks=(
+            payload.inspection_notes
+            or "Return inspection completed"
+        ),
+    )
+
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    return await get_return(
+        session,
+        return_id,
+    )
+
+
+async def approve_return(
+    session: AsyncSession,
+    return_id: int,
+    payload: ReturnApprovalRequest,
+    current_user: User,
+) -> SalesReturn:
+    sales_return = await get_return(
+        session,
+        return_id,
+    )
+
+    if sales_return.status != (
+        ReturnStatus.WAITING_APPROVAL.value
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Return must be waiting for approval"
+            ),
+        )
+
+    old_status = sales_return.status
+
+    if payload.approved:
+        if payload.resolution is None:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail=(
+                    "Resolution is required when "
+                    "approving a return"
+                ),
+            )
+
+        if payload.resolution == (
+            ReturnResolution.PENDING
+        ):
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail=(
+                    "Pending is not a valid approved "
+                    "return resolution"
+                ),
+            )
+
+        sales_return.status = (
+            ReturnStatus.APPROVED.value
+        )
+        sales_return.resolution = (
+            payload.resolution.value
+        )
+        sales_return.refund_amount = money(
+            payload.refund_amount or ZERO_2
+        )
+        sales_return.approved_at = utc_now()
+
+        new_status = ReturnStatus.APPROVED.value
+
+    else:
+        sales_return.status = (
+            ReturnStatus.REJECTED.value
+        )
+        sales_return.resolution = (
+            ReturnResolution.REJECTED.value
+        )
+        sales_return.refund_amount = ZERO_2
+
+        new_status = ReturnStatus.REJECTED.value
+
+    sales_return.approval_notes = payload.remarks
+    sales_return.updated_by_id = current_user.id
+
+    await add_status_history(
+        session,
+        sales_return,
+        old_status=old_status,
+        new_status=new_status,
+        current_user=current_user,
+        remarks=payload.remarks,
+    )
+
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    return await get_return(
+        session,
+        return_id,
+    )
+
+
+async def receive_returned_stock(
+    session: AsyncSession,
+    sales_return: SalesReturn,
+    current_user: User,
+) -> None:
+    invoice = await get_invoice(
+        session,
+        sales_return.invoice_id,
+    )
+
+    for return_item in sales_return.items:
+        if return_item.stock_movement_id is not None:
+            continue
+
+        if return_item.product_id is None:
+            continue
+
+        product = await session.get(
+            Product,
+            return_item.product_id,
+        )
+
+        if product is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    f"Product {return_item.product_id} "
+                    "was not found"
+                ),
+            )
+
+        warehouse_id = (
+            return_item.destination_warehouse_id
+        )
+
+        if warehouse_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "A destination warehouse is required "
+                    "before processing returned stock"
+                ),
+            )
+
+        warehouse = await session.get(
+            Warehouse,
+            warehouse_id,
+        )
+
+        if warehouse is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Destination warehouse was not found",
+            )
+
+        if product.track_serial_numbers:
+            if return_item.serial_number_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Serialized returned product has "
+                        "no serial number"
+                    ),
+                )
+
+            serial = await session.get(
+                ProductSerialNumber,
+                return_item.serial_number_id,
+            )
+
+            if serial is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=(
+                        "Returned product serial number "
+                        "was not found"
+                    ),
+                )
+
+            serial.warehouse_id = warehouse.id
+            serial.current_customer_id = None
+
+            if return_item.condition in {
+                ReturnItemCondition.FAULTY.value,
+                ReturnItemCondition.DAMAGED.value,
+            }:
+                serial.status = (
+                    SerialNumberStatus.FAULTY.value
+                    if return_item.condition
+                    == ReturnItemCondition.FAULTY.value
+                    else SerialNumberStatus.DAMAGED.value
+                )
+            else:
+                serial.status = (
+                    SerialNumberStatus.AVAILABLE.value
+                )
+
+            stock_item = (
+                await session.execute(
+                    select(StockItem)
+                    .where(
+                        StockItem.warehouse_id
+                        == warehouse.id,
+                        StockItem.product_id
+                        == product.id,
+                    )
+                )
+            ).scalar_one_or_none()
+
+            if stock_item is None:
+                stock_item = StockItem(
+                    warehouse_id=warehouse.id,
+                    product_id=product.id,
+                    quantity_on_hand=ZERO_3,
+                    quantity_reserved=ZERO_3,
+                    average_cost=ZERO_2,
+                )
+                session.add(stock_item)
+                await session.flush()
+
+            stock_item.quantity_on_hand = (
+                quantity_3(
+                    Decimal(
+                        stock_item.quantity_on_hand
+                    )
+                    + return_item.quantity
+                )
+            )
+
+        else:
+            stock_item = (
+                await session.execute(
+                    select(StockItem)
+                    .where(
+                        StockItem.warehouse_id
+                        == warehouse.id,
+                        StockItem.product_id
+                        == product.id,
+                    )
+                )
+            ).scalar_one_or_none()
+
+            if stock_item is None:
+                stock_item = StockItem(
+                    warehouse_id=warehouse.id,
+                    product_id=product.id,
+                    quantity_on_hand=ZERO_3,
+                    quantity_reserved=ZERO_3,
+                    average_cost=ZERO_2,
+                )
+
+                session.add(stock_item)
+                await session.flush()
+
+            stock_item.quantity_on_hand = (
+                quantity_3(
+                    Decimal(
+                        stock_item.quantity_on_hand
+                    )
+                    + return_item.quantity
+                )
+            )
+
+        movement = StockMovement(
+            company_id=sales_return.company_id,
+            branch_id=sales_return.branch_id,
+            warehouse_id=warehouse.id,
+            product_id=product.id,
+            serial_number_id=(
+                return_item.serial_number_id
+            ),
+            movement_type="sale_return",
+            quantity=return_item.quantity,
+            unit_cost=stock_item.average_cost,
+            reference_type="sales_return",
+            reference_id=sales_return.return_number,
+            notes=(
+                f"Returned stock received for "
+                f"{sales_return.return_number}"
+            ),
+            created_by_id=current_user.id,
+        )
+
+        session.add(movement)
+        await session.flush()
+
+        return_item.stock_movement_id = movement.id
+
+
+async def process_refund(
+    session: AsyncSession,
+    sales_return: SalesReturn,
+    current_user: User,
+) -> None:
+    if sales_return.refund_processed:
+        return
+
+    refund_amount = money(
+        sales_return.refund_amount
+    )
+
+    if refund_amount <= ZERO_2:
+        sales_return.refund_processed = True
+        sales_return.refund_processed_at = utc_now()
+        return
+
+    invoice = await get_invoice(
+        session,
+        sales_return.invoice_id,
+    )
+
+    customer = await session.get(
+        Customer,
+        sales_return.customer_id,
+    )
+
+    if customer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Return customer was not found",
+        )
+
+    if refund_amount > invoice.paid_amount:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Refund amount cannot exceed the "
+                "amount paid on the invoice"
+            ),
+        )
+
+    invoice.paid_amount = money(
+        Decimal(invoice.paid_amount)
+        - refund_amount
+    )
+
+    invoice.balance_amount = money(
+        max(
+            ZERO_2,
+            Decimal(invoice.grand_total)
+            - Decimal(invoice.paid_amount),
+        )
+    )
+
+    if invoice.paid_amount <= ZERO_2:
+        invoice.payment_status = (
+            PaymentStatus.UNPAID.value
+        )
+    elif invoice.balance_amount > ZERO_2:
+        invoice.payment_status = (
+            PaymentStatus.PARTIAL.value
+        )
+    else:
+        invoice.payment_status = (
+            PaymentStatus.PAID.value
+        )
+
+    customer.current_balance = money(
+        Decimal(customer.current_balance)
+        + refund_amount
+    )
+
+    refund_payment = CustomerPayment(
+        company_id=sales_return.company_id,
+        branch_id=sales_return.branch_id,
+        receipt_number=None,
+        customer_id=sales_return.customer_id,
+        invoice_id=invoice.id,
+        amount=-refund_amount,
+        payment_method="cash",
+        reference_number=sales_return.return_number,
+        notes=(
+            f"Refund for {sales_return.return_number}"
+        ),
+        created_by_id=current_user.id,
+    )
+
+    session.add(refund_payment)
+    await session.flush()
+
+    refund_payment.receipt_number = (
+        f"REF-{refund_payment.id:06d}"
+    )
+
+    sales_return.refund_processed = True
+    sales_return.refund_processed_at = utc_now()
+
+
+async def process_return(
+    session: AsyncSession,
+    return_id: int,
+    current_user: User,
+) -> SalesReturn:
+    sales_return = await get_return(
+        session,
+        return_id,
+    )
+
+    if sales_return.status != (
+        ReturnStatus.APPROVED.value
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Only approved returns can be processed"
+            ),
+        )
+
+    old_status = sales_return.status
+
+    sales_return.status = (
+        ReturnStatus.PROCESSING.value
+    )
+    sales_return.updated_by_id = current_user.id
+
+    await add_status_history(
+        session,
+        sales_return,
+        old_status=old_status,
+        new_status=ReturnStatus.PROCESSING.value,
+        current_user=current_user,
+        remarks="Return processing started",
+    )
+
+    try:
+        await receive_returned_stock(
+            session,
+            sales_return,
+            current_user,
+        )
+
+        if sales_return.resolution in {
+            ReturnResolution.REFUND.value,
+            ReturnResolution.STORE_CREDIT.value,
+        }:
+            await process_refund(
+                session,
+                sales_return,
+                current_user,
+            )
+
+        await session.commit()
+
+    except Exception:
+        await session.rollback()
+        raise
+
+    return await get_return(
+        session,
+        return_id,
+    )
+
+
+async def set_replacement_item(
+    session: AsyncSession,
+    return_id: int,
+    payload: ReplacementItemRequest,
+    current_user: User,
+) -> SalesReturn:
+    sales_return = await get_return(
+        session,
+        return_id,
+    )
+
+    if sales_return.resolution != (
+        ReturnResolution.REPLACEMENT.value
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Replacement items can only be assigned "
+                "to replacement returns"
+            ),
+        )
+
+    if sales_return.status not in {
+        ReturnStatus.APPROVED.value,
+        ReturnStatus.PROCESSING.value,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Return must be approved or processing "
+                "before assigning replacement stock"
+            ),
+        )
+
+    return_item = next(
+        (
+            item
+            for item in sales_return.items
+            if item.id == payload.return_item_id
+        ),
+        None,
+    )
+
+    if return_item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Return item was not found",
+        )
+
+    product = await session.get(
+        Product,
+        payload.replacement_product_id,
+    )
+
+    if product is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Replacement product was not found",
+        )
+
+    return_item.replacement_product_id = (
+        product.id
+    )
+
+    return_item.replacement_serial_number_id = (
+        payload.replacement_serial_number_id
+    )
+
+    sales_return.updated_by_id = current_user.id
+
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    return await get_return(
+        session,
+        return_id,
+    )
+
+
+async def change_return_status(
+    session: AsyncSession,
+    return_id: int,
+    payload: ReturnStatusChangeRequest,
+    current_user: User,
+) -> SalesReturn:
+    sales_return = await get_return(
+        session,
+        return_id,
+    )
+
+    old_status = sales_return.status
+    new_status = payload.new_status.value
+
+    allowed_transitions = {
+        ReturnStatus.REQUESTED.value: {
+            ReturnStatus.INSPECTION.value,
+            ReturnStatus.CANCELLED.value,
+        },
+        ReturnStatus.INSPECTION.value: {
+            ReturnStatus.WAITING_APPROVAL.value,
+            ReturnStatus.CANCELLED.value,
+        },
+        ReturnStatus.WAITING_APPROVAL.value: {
+            ReturnStatus.APPROVED.value,
+            ReturnStatus.REJECTED.value,
+            ReturnStatus.CANCELLED.value,
+        },
+        ReturnStatus.APPROVED.value: {
+            ReturnStatus.PROCESSING.value,
+            ReturnStatus.CANCELLED.value,
+        },
+        ReturnStatus.PROCESSING.value: {
+            ReturnStatus.COMPLETED.value,
+        },
+    }
+
+    allowed = allowed_transitions.get(
+        old_status,
+        set(),
+    )
+
+    if new_status not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Return status cannot change from "
+                f"{old_status} to {new_status}"
+            ),
+        )
+
+    if new_status == ReturnStatus.COMPLETED.value:
+        if sales_return.resolution == (
+            ReturnResolution.PENDING.value
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Return resolution must be completed "
+                    "before closing the return"
+                ),
+            )
+
+        if (
+            sales_return.resolution
+            == ReturnResolution.REFUND.value
+            and not sales_return.refund_processed
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Refund must be processed before "
+                    "completing the return"
+                ),
+            )
+
+        sales_return.completed_at = utc_now()
+
+    sales_return.status = new_status
+    sales_return.updated_by_id = current_user.id
+
+    await add_status_history(
+        session,
+        sales_return,
+        old_status=old_status,
+        new_status=new_status,
+        current_user=current_user,
+        remarks=payload.remarks,
+    )
+
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    return await get_return(
+        session,
+        return_id,
+    )
+
+
+async def build_return_detail(
+    session: AsyncSession,
+    sales_return: SalesReturn,
+) -> SalesReturnDetailResponse:
+    customer = await session.get(
+        Customer,
+        sales_return.customer_id,
+    )
+
+    invoice = await session.get(
+        SalesInvoice,
+        sales_return.invoice_id,
+    )
+
+    return SalesReturnDetailResponse(
+        **{
+            column.name: getattr(
+                sales_return,
+                column.name,
+            )
+            for column
+            in SalesReturn.__table__.columns
+        },
+        customer_name=(
+            customer.full_name
+            if customer
+            else "Unknown"
+        ),
+        customer_phone=(
+            customer.primary_phone
+            if customer
+            else None
+        ),
+        invoice_number=(
+            invoice.invoice_number
+            if invoice
+            else None
+        ),
+        items=sales_return.items,
+        status_history=(
+            sales_return.status_history
+        ),
+    )
+
+
+async def list_returns(
+    session: AsyncSession,
+    *,
+    page: int,
+    page_size: int,
+    search: str | None,
+    return_status: str | None,
+    return_type: str | None,
+    resolution: str | None,
+) -> SalesReturnListResponse:
+    filters = []
+
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+
+        filters.append(
+            or_(
+                SalesReturn.return_number.ilike(
+                    pattern
+                ),
+                Customer.full_name.ilike(
+                    pattern
+                ),
+                Customer.primary_phone.ilike(
+                    pattern
+                ),
+                SalesInvoice.invoice_number.ilike(
+                    pattern
+                ),
+            )
+        )
+
+    if return_status is not None:
+        filters.append(
+            SalesReturn.status == return_status
+        )
+
+    if return_type is not None:
+        filters.append(
+            SalesReturn.return_type == return_type
+        )
+
+    if resolution is not None:
+        filters.append(
+            SalesReturn.resolution == resolution
+        )
+
+    total = int(
+        await session.scalar(
+            select(func.count())
+            .select_from(SalesReturn)
+            .join(
+                Customer,
+                Customer.id
+                == SalesReturn.customer_id,
+            )
+            .join(
+                SalesInvoice,
+                SalesInvoice.id
+                == SalesReturn.invoice_id,
+            )
+            .where(*filters)
+        )
+        or 0
+    )
+
+    result = await session.execute(
+        select(SalesReturn)
+        .options(
+            selectinload(SalesReturn.items),
+            selectinload(
+                SalesReturn.status_history
+            ),
+        )
+        .join(
+            Customer,
+            Customer.id
+            == SalesReturn.customer_id,
+        )
+        .join(
+            SalesInvoice,
+            SalesInvoice.id
+            == SalesReturn.invoice_id,
+        )
+        .where(*filters)
+        .order_by(
+            SalesReturn.id.desc()
+        )
+        .offset(
+            (page - 1) * page_size
+        )
+        .limit(page_size)
+    )
+
+    returns = result.scalars().unique().all()
+
+    items = [
+        await build_return_detail(
+            session,
+            sales_return,
+        )
+        for sales_return in returns
+    ]
+
+    return SalesReturnListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=(
+            ceil(total / page_size)
+            if total
+            else 0
+        ),
+    )

@@ -1,0 +1,382 @@
+.pageHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.pageHeader h1 {
+  color: #273246;
+  font-size: 23px;
+  letter-spacing: -0.035em;
+  margin: 2px 0 5px;
+}
+
+.pageHeader > div:first-child > p:last-child {
+  color: #8490a0;
+  font-size: 10px;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 650px;
+}
+
+.primaryButton,
+.secondaryButton {
+  align-items: center;
+  border-radius: 9px;
+  display: inline-flex;
+  font-size: 9px;
+  font-weight: 750;
+  gap: 7px;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 13px;
+}
+
+.primaryButton {
+  background: #1765d8;
+  border: 1px solid #1765d8;
+  color: #fff;
+}
+
+.secondaryButton {
+  background: #fff;
+  border: 1px solid #d8dfe8;
+  color: #536174;
+}
+
+.errorBanner {
+  align-items: center;
+  background: #fff1f0;
+  border: 1px solid #ffd1cc;
+  border-radius: 9px;
+  color: #b42318;
+  display: flex;
+  font-size: 9px;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px 11px;
+}
+
+.loadingCard,
+.companyCard,
+.branchSection {
+  background: #fff;
+  border: 1px solid #e4e8ee;
+  border-radius: 12px;
+}
+
+.loadingCard {
+  align-items: center;
+  color: #7a8798;
+  display: flex;
+  font-size: 9px;
+  gap: 8px;
+  justify-content: center;
+  min-height: 240px;
+}
+
+.companyCard {
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.companyCard > header {
+  align-items: center;
+  border-bottom: 1px solid #edf0f4;
+  display: flex;
+  gap: 10px;
+  padding: 15px;
+}
+
+.companyCard > header > div:nth-child(2) {
+  flex: 1;
+}
+
+.companyCard h2,
+.sectionHeader h2 {
+  color: #344054;
+  font-size: 15px;
+  margin: 2px 0 0;
+}
+
+.companyIcon,
+.branchIcon {
+  align-items: center;
+  background: #eef4fc;
+  border-radius: 9px;
+  color: #315f9f;
+  display: flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.fieldGrid {
+  display: grid;
+  gap: 0;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+}
+
+.fieldGrid > div {
+  border-bottom: 1px solid #eff2f5;
+  border-right: 1px solid #eff2f5;
+  padding: 11px 13px;
+}
+
+.fieldGrid span,
+.fieldGrid strong {
+  display: block;
+}
+
+.fieldGrid span {
+  color: #929baa;
+  font-size: 7px;
+}
+
+.fieldGrid strong {
+  color: #455367;
+  font-size: 9px;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.branchSection {
+  padding: 14px;
+}
+
+.sectionHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 11px;
+}
+
+.sectionHeader > span {
+  color: #8d97a5;
+  font-size: 8px;
+}
+
+.branchGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+}
+
+.branchCard {
+  border: 1px solid #e2e8ef;
+  border-radius: 11px;
+  padding: 12px;
+}
+
+.branchCard > header {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+
+.branchCard h3 {
+  color: #344054;
+  font-size: 11px;
+  margin: 0;
+}
+
+.branchCard small {
+  color: #8a95a5;
+  font-size: 7px;
+}
+
+.branchFields {
+  margin-top: 11px;
+}
+
+.branchFields > div {
+  border-bottom: 1px solid #eff2f5;
+  padding: 7px 0;
+}
+
+.branchFields span,
+.branchFields strong {
+  display: block;
+}
+
+.branchFields span {
+  color: #929baa;
+  font-size: 7px;
+}
+
+.branchFields strong {
+  color: #455367;
+  font-size: 8px;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.branchButton {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dce2e9;
+  border-radius: 8px;
+  color: #53647a;
+  display: flex;
+  font-size: 8px;
+  font-weight: 700;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
+  min-height: 33px;
+  width: 100%;
+}
+
+.emptyState {
+  align-items: center;
+  color: #8b96a5;
+  display: flex;
+  flex-direction: column;
+  font-size: 9px;
+  gap: 8px;
+  justify-content: center;
+  min-height: 180px;
+}
+
+.backdrop {
+  align-items: center;
+  background: rgba(8, 15, 27, .65);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 14px;
+  position: fixed;
+  z-index: 280;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 15px;
+  box-shadow:
+    0 30px 85px
+    rgba(8, 15, 27, .28);
+  max-height: calc(100vh - 28px);
+  max-width: 780px;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.modalHeader {
+  align-items: flex-start;
+  background: rgba(255,255,255,.98);
+  border-bottom: 1px solid #e7ebf0;
+  display: flex;
+  justify-content: space-between;
+  padding: 18px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.modalHeader h2 {
+  color: #2c3749;
+  font-size: 18px;
+  margin: 2px 0 0;
+}
+
+.iconButton {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dbe1e9;
+  border-radius: 8px;
+  color: #5d6b80;
+  display: inline-flex;
+  height: 33px;
+  justify-content: center;
+  padding: 0;
+  width: 33px;
+}
+
+.modalBody {
+  padding: 17px 20px;
+}
+
+.formGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+}
+
+.formGrid label {
+  color: #657186;
+  display: grid;
+  font-size: 9px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.formGrid input:not([type="checkbox"]) {
+  background: #fff;
+  border: 1px solid #d8dfe8;
+  border-radius: 8px;
+  color: #344054;
+  font-size: 9px;
+  min-height: 38px;
+  outline: 0;
+  padding: 9px;
+  width: 100%;
+}
+
+.formGrid input[type="checkbox"] {
+  height: 18px;
+  width: 18px;
+}
+
+.modalFooter {
+  align-items: center;
+  background: rgba(255,255,255,.98);
+  border-top: 1px solid #e7ebf0;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  position: sticky;
+}
+
+.spin {
+  animation:
+    company-spin .85s
+    linear infinite;
+}
+
+@keyframes company-spin {
+  to {
+    transform:
+      rotate(360deg);
+  }
+}
+
+@media (max-width: 1000px) {
+  .fieldGrid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .branchGrid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .pageHeader {
+    display: grid;
+  }
+
+  .fieldGrid,
+  .branchGrid,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
