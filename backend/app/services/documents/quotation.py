@@ -19,7 +19,7 @@ from reportlab.platypus import (
 from app.services.documents.base import (
     STYLES,
     logo_flowable,
-    money,
+    money,    bandara_document_header,    bandara_footer_story,    bandara_page_footer,
 )
 
 
@@ -68,97 +68,39 @@ def build_quotation_pdf(
 
     story = []
 
-    header = Table(
-        [
-            [
-                logo_flowable(
-                    data.logo_path,
-                    width=31 * mm,
-                    height=26 * mm,
-                ),
-                Paragraph(
-                    (
-                        f"<b>{data.company_name.upper()}</b><br/>"
-                        f"{data.company_address}<br/>"
-                        f"{data.company_phone}"
-                    ),
-                    STYLES["company_detail"],
-                ),
-            ]
-        ],
-        colWidths=[
-            39 * mm,
-            132 * mm,
-        ],
+
+    # UNIFIED_BRANDED_PDF_QUOTATION_V1
+    # PDF_HEADER_BARCODE_PHASE5_V1
+    #
+    # QuotationPDFData is a standalone print-data
+    # contract and currently has no persisted quotation
+    # number. Use a deterministic printable reference
+    # derived from its quotation date.
+    #
+    _brand_logo = (
+        data.logo_path
+        if data.logo_path
+        else None
     )
 
-    header.setStyle(
-        TableStyle(
-            [
-                (
-                    "VALIGN",
-                    (0, 0),
-                    (-1, -1),
-                    "TOP",
-                ),
-            ]
+    _document_number = (
+        "QT-"
+        f"{data.quotation_date:%Y%m%d}"
+    )
+
+    story.extend(
+        bandara_document_header(
+            document_title="Quotation",
+            document_number=_document_number,
+            configured_logo_path=_brand_logo,
         )
     )
 
-    story.append(header)
-    story.append(Spacer(1, 8 * mm))
 
-    title = Table(
-        [["QUOTATION"]],
-        colWidths=[38 * mm],
-    )
+    # PDF_LAYOUT_CLEANUP_PHASE4_V2
+    # The shared Bandara document header already contains
+    # the company identity and QUOTATION title.
 
-    title.setStyle(
-        TableStyle(
-            [
-                (
-                    "BOX",
-                    (0, 0),
-                    (-1, -1),
-                    0.8,
-                    colors.black,
-                ),
-                (
-                    "FONTNAME",
-                    (0, 0),
-                    (-1, -1),
-                    "Times-Bold",
-                ),
-                (
-                    "FONTSIZE",
-                    (0, 0),
-                    (-1, -1),
-                    15,
-                ),
-                (
-                    "LEFTPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    3,
-                ),
-                (
-                    "TOPPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    4,
-                ),
-                (
-                    "BOTTOMPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    4,
-                ),
-            ]
-        )
-    )
-
-    story.append(title)
-    story.append(Spacer(1, 10 * mm))
 
     story.append(
         Paragraph(
@@ -380,7 +322,12 @@ def build_quotation_pdf(
         )
     )
 
-    doc.build(story)
+    story.extend(bandara_footer_story())
+    doc.build(
+        story,
+        onFirstPage=bandara_page_footer,
+        onLaterPages=bandara_page_footer,
+    )
 
     result = buffer.getvalue()
     buffer.close()

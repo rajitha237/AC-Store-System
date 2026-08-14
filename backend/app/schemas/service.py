@@ -55,6 +55,7 @@ class ServiceJobCreate(BaseModel):
     related_invoice_id: int | None = Field(default=None, ge=1)
 
     expected_completion_date: date | None = None
+    scheduled_visit_date: date | None = None
 
     estimated_cost: Decimal = Field(
         default=Decimal("0.00"),
@@ -100,6 +101,7 @@ class ServiceJobCreate(BaseModel):
 class ServiceJobUpdate(BaseModel):
     technician_id: int | None = Field(default=None, ge=1)
     expected_completion_date: date | None = None
+    scheduled_visit_date: date | None = None
 
     reported_issue: str | None = None
     technician_diagnosis: str | None = None
@@ -327,6 +329,7 @@ class ServiceJobResponse(BaseModel):
 
     received_at: datetime
     expected_completion_date: date | None
+    scheduled_visit_date: date | None
     approval_at: datetime | None
     completed_at: datetime | None
     delivered_at: datetime | None

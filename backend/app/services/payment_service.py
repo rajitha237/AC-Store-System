@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     Customer,
     CustomerPayment,
+    InstallmentPlan,
+    InstallmentPlanStatus,
     InvoiceStatus,
     PaymentStatus,
     SalesInvoice,
@@ -27,6 +29,38 @@ from app.schemas.payment import (
 
 
 ZERO = Decimal("0.00")
+
+
+async def _guard_active_installment_invoice(
+    session: AsyncSession,
+    invoice_id: int,
+) -> None:
+    result = await session.execute(
+        select(InstallmentPlan.id)
+        .where(
+            InstallmentPlan.invoice_id
+            == invoice_id,
+            InstallmentPlan.status
+            == (
+                InstallmentPlanStatus
+                .ACTIVE
+                .value
+            ),
+        )
+        .limit(1)
+    )
+
+    if result.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=(
+                "This invoice has an active "
+                "installment plan. Use the "
+                "installment payment endpoint."
+            ),
+        )
 
 
 def money(
@@ -241,6 +275,11 @@ async def receive_invoice_payment(
     invoice = await get_invoice_or_404(
         session,
         payload.invoice_id,
+    )
+
+    await _guard_active_installment_invoice(
+        session,
+        invoice.id,
     )
 
     if invoice.invoice_status != (
@@ -475,6 +514,11 @@ async def reverse_invoice_payment(
     invoice = await get_invoice_or_404(
         session,
         payment.invoice_id,
+    )
+
+    await _guard_active_installment_invoice(
+        session,
+        invoice.id,
     )
 
     customer = await get_customer_or_404(

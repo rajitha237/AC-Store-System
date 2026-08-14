@@ -21,6 +21,7 @@ import {
   X,
   Truck,
   Building2,
+  ShoppingCart,
 } from "lucide-react";
 
 import Link from "next/link";
@@ -91,11 +92,26 @@ const navigation = [
     icon: ReceiptText,
     available: true,
   },
+
+  {
+    label: "Quick Sale",
+    href: "/quick-sale",
+    icon: ShoppingCart,
+    available: true,
+  },
   {
     label: "Payments",
     href: "/payments",
     icon: CreditCard,
     available: true,
+  },
+{
+    label: "Installments",
+    href: "/installments",
+    icon: CreditCard,
+    available: true,
+
+    // PHASE7C9D_INSTALLMENTS_NAV
   },
   {
     label: "Returns",

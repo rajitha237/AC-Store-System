@@ -41,6 +41,17 @@ class Settings(BaseSettings):
     startup_seed_enabled: bool = True
     startup_create_admin_enabled: bool = True
 
+    # SMS notifications.
+    # Credentials must be supplied through .env and must
+    # never be committed to source control.
+    sms_enabled: bool = False
+    sms_provider: str = "smslenz"
+    sms_base_url: str = "https://smslenz.lk"
+    sms_sender_id: str = "SMSlenzDEMO"
+    sms_user_id: str = ""
+    sms_api_key: str = ""
+    sms_timeout_seconds: float = 15.0
+
     # Development/test fallbacks are retained temporarily
     # for local compatibility. Production validation below
     # rejects all known insecure values.

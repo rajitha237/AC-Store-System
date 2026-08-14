@@ -330,6 +330,12 @@ class ServiceJobCard(Base):
         index=True,
     )
 
+    scheduled_visit_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        index=True,
+    )
+
     approval_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

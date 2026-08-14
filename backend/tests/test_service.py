@@ -1060,3 +1060,101 @@ async def test_delivered_job_cannot_be_edited(
             "cannot be edited"
         )
     )
+
+
+@pytest.mark.asyncio
+async def test_service_job_scheduled_visit_date_lifecycle(
+    client,
+    admin_headers,
+):
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix="912",
+    )
+
+    create_payload = {
+        "customer_id":
+            customer["id"],
+        "complaint":
+            "Scheduled visit lifecycle test",
+        "scheduled_visit_date":
+            "2026-08-15",
+        "service_type":
+            "repair",
+        "priority":
+            "normal",
+        "estimated_cost":
+            "0.00",
+    }
+
+    create_response = await client.post(
+        BASE_URL,
+        json=create_payload,
+        headers=admin_headers,
+    )
+
+    assert create_response.status_code == 201, (
+        create_response.text
+    )
+
+    created = create_response.json()
+
+    assert (
+        created["scheduled_visit_date"]
+        == "2026-08-15"
+    )
+
+    job_id = created["id"]
+
+    read_response = await client.get(
+        f"{BASE_URL}/{job_id}",
+        headers=admin_headers,
+    )
+
+    assert read_response.status_code == 200, (
+        read_response.text
+    )
+
+    assert (
+        read_response.json()[
+            "scheduled_visit_date"
+        ]
+        == "2026-08-15"
+    )
+
+    update_response = await client.patch(
+        f"{BASE_URL}/{job_id}",
+        json={
+            "scheduled_visit_date":
+                "2026-08-16",
+        },
+        headers=admin_headers,
+    )
+
+    assert update_response.status_code == 200, (
+        update_response.text
+    )
+
+    assert (
+        update_response.json()[
+            "scheduled_visit_date"
+        ]
+        == "2026-08-16"
+    )
+
+    final_response = await client.get(
+        f"{BASE_URL}/{job_id}",
+        headers=admin_headers,
+    )
+
+    assert final_response.status_code == 200, (
+        final_response.text
+    )
+
+    assert (
+        final_response.json()[
+            "scheduled_visit_date"
+        ]
+        == "2026-08-16"
+    )

@@ -27,6 +27,9 @@ from app.api.v1.documents import (
 from app.api.v1.health import (
     router as health_router,
 )
+from app.api.v1.installments import (
+    router as installments_router,
+)
 from app.api.v1.inventory import (
     router as inventory_router,
 )
@@ -87,6 +90,11 @@ api_router.include_router(
 
 api_router.include_router(
     inventory_router
+)
+
+
+api_router.include_router(
+    installments_router
 )
 
 api_router.include_router(

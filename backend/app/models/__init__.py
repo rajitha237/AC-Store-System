@@ -23,6 +23,14 @@ from app.models.customer import (
     CustomerStatus,
     CustomerType,
 )
+from app.models.installment import (
+    InstallmentFrequency,
+    InstallmentPaymentAllocation,
+    InstallmentPlan,
+    InstallmentPlanStatus,
+    InstallmentSchedule,
+    InstallmentScheduleStatus,
+)
 from app.models.inventory import (
     ProductSerialNumber,
     SerialNumberStatus,
@@ -60,6 +68,11 @@ from app.models.service import (
     ServiceJobStatusHistory,
     ServiceLabourItem,
     ServiceType,
+)
+from app.models.sms_notification import (
+    SmsNotification,
+    SmsNotificationStatus,
+    SmsRecipientType,
 )
 from app.models.supplier import Supplier
 from app.models.user import User, UserRole
@@ -124,6 +137,9 @@ __all__ = [
     "StockItem",
     "StockMovement",
     "StockMovementType",
+    "SmsNotification",
+    "SmsNotificationStatus",
+    "SmsRecipientType",
     "Supplier",
     "UnitOfMeasure",
     "User",
@@ -142,5 +158,12 @@ __all__ = [
     "SupplierInvoiceStatus",
     "SupplierPayment",
     "SupplierPaymentStatus",
+
+    "InstallmentFrequency",
+    "InstallmentPaymentAllocation",
+    "InstallmentPlan",
+    "InstallmentPlanStatus",
+    "InstallmentSchedule",
+    "InstallmentScheduleStatus",
 
 ]

@@ -24,7 +24,7 @@ from app.models import (
 from app.services.documents.base import (
     STYLES,
     money,
-    paragraph,
+    paragraph,    bandara_document_header,    bandara_footer_story,    bandara_page_footer,
 )
 
 
@@ -69,43 +69,39 @@ async def build_payment_receipt_pdf(
 
     story = []
 
-    company_name = (
-        company.name
-        if company is not None
-        else "BANDARA COOL WORLD"
+
+    # UNIFIED_BRANDED_PDF_RECEIPT_V1
+    try:
+        _brand_logo = getattr(
+            company,
+            "logo_path",
+            None,
+        )
+    except Exception:
+        _brand_logo = None
+
+    _document_number = str(
+        getattr(
+            payment,
+            "receipt_number",
+            "",
+        )
+        or ""
     )
 
-    story.append(
-        Paragraph(
-            company_name.upper(),
-            STYLES["heading"],
+    story.extend(
+        bandara_document_header(
+            document_title="Payment Receipt",
+            document_number=_document_number,
+            configured_logo_path=_brand_logo,
         )
     )
 
-    line = Table(
-        [[""]],
-        colWidths=[178 * mm],
-        rowHeights=[1.5 * mm],
-    )
 
-    line.setStyle(
-        TableStyle(
-            [
-                (
-                    "LINEBELOW",
-                    (0, 0),
-                    (-1, -1),
-                    1,
-                    colors.black,
-                    None,
-                    (2, 2),
-                ),
-            ]
-        )
-    )
+    # PDF_LAYOUT_CLEANUP_PHASE4_V2
+    # Company identity is provided by the shared header.
+    # CUSTOMER RECEIPT remains as the receipt-body label.
 
-    story.append(line)
-    story.append(Spacer(1, 5 * mm))
 
     story.append(
         Paragraph(
@@ -744,7 +740,12 @@ async def build_payment_receipt_pdf(
 
     story.append(prepared)
 
-    doc.build(story)
+    story.extend(bandara_footer_story())
+    doc.build(
+        story,
+        onFirstPage=bandara_page_footer,
+        onLaterPages=bandara_page_footer,
+    )
 
     result = buffer.getvalue()
     buffer.close()

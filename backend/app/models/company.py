@@ -41,6 +41,11 @@ class Company(Base):
         nullable=True,
     )
 
+    owner_sms_phone: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
     email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,

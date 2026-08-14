@@ -8,8 +8,10 @@ from app.models import (
     Branch,
     Customer,
     CustomerPayment,
+    ProductSerialNumber,
     SalesInvoice,
     StockItem,
+    StockMovement,
     UnitOfMeasure,
 )
 from app.schemas.sales import (
@@ -566,6 +568,378 @@ async def test_confirm_invoice_deducts_stock_and_adds_customer_balance(
     assert dec(
         customer_row.current_balance
     ) == Decimal("3600.00")
+
+
+@pytest.mark.asyncio
+async def test_confirm_invoice_below_stock_average_cost_rejected(
+    client,
+    admin_headers,
+    db_session,
+):
+    fixture = await create_sales_fixture(
+        client,
+        admin_headers,
+        db_session,
+        suffix="209",
+        quantity="2.000",
+        unit_price="1200.00",
+    )
+
+    invoice = fixture["invoice"]
+    product = fixture["product"]
+    warehouse = fixture["warehouse"]
+
+    stock = (
+        await db_session.execute(
+            select(StockItem)
+            .where(
+                StockItem.product_id
+                == product["id"],
+                StockItem.warehouse_id
+                == warehouse["id"],
+            )
+        )
+    ).scalar_one()
+
+    quantity_before = dec(
+        stock.quantity_on_hand
+    )
+
+    stock.average_cost = Decimal(
+        "1300.00"
+    )
+
+    # Commit the test setup so the separate API request
+    # session can read the updated average cost.
+    # Without this, SQLite keeps the fixture transaction
+    # write-locked and the API session sees stale stock data.
+    await db_session.commit()
+
+    response = await confirm_invoice(
+        client,
+        admin_headers,
+        invoice["id"],
+    )
+
+    assert response.status_code == 409, (
+        response.text
+    )
+
+    assert (
+        response.json()["detail"]
+        == (
+            f"{product['product_code']}: "
+            "sale price 1200.00 is below "
+            "stock average cost 1300.00"
+        )
+    )
+
+    await db_session.refresh(stock)
+
+    assert dec(
+        stock.quantity_on_hand
+    ) == quantity_before
+
+    invoice_row = await db_session.get(
+        SalesInvoice,
+        invoice["id"],
+    )
+
+    assert invoice_row is not None
+    assert invoice_row.invoice_status == "draft"
+
+    customer_row = await db_session.get(
+        Customer,
+        fixture["customer"]["id"],
+    )
+
+    assert customer_row is not None
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("0.00")
+
+
+
+
+@pytest.mark.asyncio
+async def test_confirm_serialized_invoice_below_stock_average_cost_rejected(
+    client,
+    admin_headers,
+    db_session,
+):
+    suffix = "210"
+
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    category = await create_category(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    brand = await create_brand(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    unit_id = await get_unit_id(
+        db_session
+    )
+
+    product_response = await client.post(
+        "/api/v1/catalog/products",
+        headers=admin_headers,
+        json={
+            "barcode":
+                f"SALE-SERIAL-BAR-{suffix}",
+            "category_id":
+                category["id"],
+            "brand_id":
+                brand["id"],
+            "unit_id":
+                unit_id,
+            "name":
+                f"Serialized Sales Product {suffix}",
+            "model_number":
+                f"SALE-SERIAL-MODEL-{suffix}",
+            "description":
+                "Serialized below-cost regression product",
+            "product_type":
+                "equipment",
+            "track_serial_numbers":
+                True,
+            "purchase_cost":
+                "200000.00",
+            "selling_price":
+                "200000.00",
+            "minimum_selling_price":
+                "190000.00",
+            "warranty_months":
+                12,
+            "reorder_level":
+                "1.000",
+            "reorder_quantity":
+                "1.000",
+        },
+    )
+
+    assert product_response.status_code == 201, (
+        product_response.text
+    )
+
+    product = product_response.json()
+
+    warehouse = await get_main_warehouse(
+        client,
+        admin_headers,
+    )
+
+    receive_response = await client.post(
+        "/api/v1/inventory/receive/serialized",
+        headers=admin_headers,
+        json={
+            "product_id":
+                product["id"],
+            "warehouse_id":
+                warehouse["id"],
+            "unit_cost":
+                "200000.00",
+            "reference_type":
+                "opening_balance",
+            "reference_id":
+                f"SALE-SERIAL-OPEN-{suffix}",
+            "notes":
+                "Serialized below-cost regression stock",
+            "serials": [
+                {
+                    "serial_number":
+                        f"SALE-SERIAL-{suffix}",
+                },
+            ],
+        },
+    )
+
+    assert receive_response.status_code == 201, (
+        receive_response.text
+    )
+
+    received = receive_response.json()
+
+    assert received["quantity_received"] == 1
+
+    serial_id = received["serials"][0]["id"]
+
+    branch_id = await get_main_branch_id(
+        db_session
+    )
+
+    invoice_response = await client.post(
+        "/api/v1/sales/invoices",
+        headers=admin_headers,
+        json={
+            "branch_id":
+                branch_id,
+            "customer_id":
+                customer["id"],
+            "invoice_discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+            "notes":
+                "Serialized below-cost regression invoice",
+            "items": [
+                {
+                    "product_id":
+                        product["id"],
+                    "warehouse_id":
+                        warehouse["id"],
+                    "serial_number_id":
+                        serial_id,
+                    "quantity":
+                        "1.000",
+                    "unit_price":
+                        "190000.00",
+                    "discount_amount":
+                        "0.00",
+                    "description":
+                        "Serialized below-cost sale attempt",
+                },
+            ],
+        },
+    )
+
+    assert invoice_response.status_code == 201, (
+        invoice_response.text
+    )
+
+    invoice = invoice_response.json()
+
+    stock = (
+        await db_session.execute(
+            select(StockItem)
+            .where(
+                StockItem.product_id
+                == product["id"],
+                StockItem.warehouse_id
+                == warehouse["id"],
+            )
+        )
+    ).scalar_one()
+
+    serial = await db_session.get(
+        ProductSerialNumber,
+        serial_id,
+    )
+
+    assert serial is not None
+
+    quantity_before = dec(
+        stock.quantity_on_hand
+    )
+
+    warehouse_before = (
+        serial.warehouse_id
+    )
+
+    customer_before = (
+        serial.current_customer_id
+    )
+
+    status_before = serial.status
+    sold_at_before = serial.sold_at
+
+    await db_session.commit()
+
+    response = await confirm_invoice(
+        client,
+        admin_headers,
+        invoice["id"],
+    )
+
+    assert response.status_code == 409, (
+        response.text
+    )
+
+    assert (
+        response.json()["detail"]
+        == (
+            f"{product['product_code']}: "
+            "sale price 190000.00 is below "
+            "stock average cost 200000.00"
+        )
+    )
+
+    await db_session.refresh(stock)
+    await db_session.refresh(serial)
+
+    assert dec(
+        stock.quantity_on_hand
+    ) == quantity_before
+
+    assert (
+        serial.status
+        == status_before
+        == "available"
+    )
+
+    assert (
+        serial.warehouse_id
+        == warehouse_before
+        == warehouse["id"]
+    )
+
+    assert (
+        serial.current_customer_id
+        == customer_before
+        is None
+    )
+
+    assert (
+        serial.sold_at
+        == sold_at_before
+        is None
+    )
+
+    invoice_row = await db_session.get(
+        SalesInvoice,
+        invoice["id"],
+    )
+
+    assert invoice_row is not None
+    assert invoice_row.invoice_status == "draft"
+
+    customer_row = await db_session.get(
+        Customer,
+        customer["id"],
+    )
+
+    assert customer_row is not None
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("0.00")
+
+    movement_count = (
+        await db_session.execute(
+            select(StockMovement)
+            .where(
+                StockMovement.product_id
+                == product["id"],
+                StockMovement.reference_type
+                == "sales_invoice",
+                StockMovement.reference_id
+                == invoice["invoice_number"],
+            )
+        )
+    ).scalars().all()
+
+    assert movement_count == []
+
 
 
 @pytest.mark.asyncio

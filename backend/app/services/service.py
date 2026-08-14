@@ -28,6 +28,7 @@ from app.models import (
 )
 from app.models.customer import CustomerStatus
 from app.models.service import ApprovalStatus
+from app.services.sms import queue_customer_service_status_notification
 from app.schemas.service import (
     ServiceApprovalRequest,
     ServiceJobCreate,
@@ -714,6 +715,9 @@ async def create_job_card(
         expected_completion_date=(
             payload.expected_completion_date
         ),
+        scheduled_visit_date=(
+            payload.scheduled_visit_date
+        ),
         created_by_id=current_user.id,
         updated_by_id=None,
     )
@@ -1121,6 +1125,7 @@ async def update_job_card(
     editable_fields = {
         "technician_id",
         "expected_completion_date",
+        "scheduled_visit_date",
         "reported_issue",
         "technician_diagnosis",
         "work_performed",
@@ -1330,6 +1335,12 @@ async def change_job_status(
 
     session.add(history)
 
+    await queue_customer_service_status_notification(
+        session,
+        job=job,
+        status_value=new_status,
+    )
+
     try:
         await session.commit()
     except Exception:
@@ -1525,6 +1536,9 @@ async def build_job_detail(
         received_at=job.received_at,
         expected_completion_date=(
             job.expected_completion_date
+        ),
+        scheduled_visit_date=(
+            job.scheduled_visit_date
         ),
         approval_at=job.approval_at,
         completed_at=job.completed_at,

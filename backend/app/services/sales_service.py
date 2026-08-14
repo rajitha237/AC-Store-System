@@ -1049,6 +1049,26 @@ async def confirm_invoice(
                         ),
                     )
 
+                average_cost = money(
+                    stock_item.average_cost
+                )
+
+                if (
+                    average_cost > ZERO_2
+                    and money(item.unit_price)
+                    < average_cost
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            f"{product.product_code}: "
+                            "sale price "
+                            f"{money(item.unit_price):.2f} "
+                            "is below stock average cost "
+                            f"{average_cost:.2f}"
+                        ),
+                    )
+
                 stock_item.quantity_on_hand = (
                     Decimal(
                         stock_item.quantity_on_hand
@@ -1186,6 +1206,26 @@ async def confirm_invoice(
                             f"Insufficient stock for "
                             f"{product.product_code}. "
                             f"Available: {available}"
+                        ),
+                    )
+
+                average_cost = money(
+                    stock_item.average_cost
+                )
+
+                if (
+                    average_cost > ZERO_2
+                    and money(item.unit_price)
+                    < average_cost
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            f"{product.product_code}: "
+                            "sale price "
+                            f"{money(item.unit_price):.2f} "
+                            "is below stock average cost "
+                            f"{average_cost:.2f}"
                         ),
                     )
 

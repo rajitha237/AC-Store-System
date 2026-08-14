@@ -25,7 +25,7 @@ from app.services.documents.base import (
     STYLES,
     logo_flowable,
     money,
-    quantity,
+    quantity,    bandara_document_header,    bandara_footer_story,    bandara_page_footer,
 )
 
 
@@ -70,11 +70,34 @@ async def build_sales_invoice_pdf(
 
     story = []
 
-    logo_path = (
-        company.logo_path
-        if company is not None
-        else None
+
+    # UNIFIED_BRANDED_PDF_INVOICE_V1
+    try:
+        _brand_logo = getattr(
+            company,
+            "logo_path",
+            None,
+        )
+    except Exception:
+        _brand_logo = None
+
+    _document_number = str(
+        getattr(
+            invoice,
+            "invoice_number",
+            "",
+        )
+        or ""
     )
+
+    story.extend(
+        bandara_document_header(
+            document_title="Sales Invoice",
+            document_number=_document_number,
+            configured_logo_path=_brand_logo,
+        )
+    )
+
 
     company_name = (
         company.name.upper()
@@ -82,113 +105,13 @@ async def build_sales_invoice_pdf(
         else "BANDARA COOL WORLD"
     )
 
-    company_address = (
-        company.address
-        if company is not None
-        and company.address
-        else "A/3 ,Public Shopping Complex ,Kekirawa"
-    )
 
-    phone = (
-        company.phone
-        if company is not None
-        and company.phone
-        else "077 530 2676 | 074 013 9090"
-    )
+    # PDF_LAYOUT_CLEANUP_PHASE4_V2
+    # company_name is intentionally preserved because it
+    # is reused by the bank-account section.
+    # Duplicate company heading and boxed INVOICE title
+    # are intentionally removed.
 
-    heading = Table(
-        [
-            [
-                logo_flowable(
-                    logo_path,
-                    width=27 * mm,
-                    height=23 * mm,
-                ),
-                Paragraph(
-                    (
-                        f"<b>{company_name}</b><br/>"
-                        f"{company_address}<br/>"
-                        f"{phone}"
-                    ),
-                    STYLES["company_detail"],
-                ),
-                "",
-            ]
-        ],
-        colWidths=[
-            34 * mm,
-            127 * mm,
-            30 * mm,
-        ],
-    )
-
-    heading.setStyle(
-        TableStyle(
-            [
-                (
-                    "VALIGN",
-                    (0, 0),
-                    (-1, -1),
-                    "TOP",
-                ),
-            ]
-        )
-    )
-
-    story.append(heading)
-    story.append(Spacer(1, 5 * mm))
-
-    title = Table(
-        [["INVOICE"]],
-        colWidths=[29 * mm],
-    )
-
-    title.setStyle(
-        TableStyle(
-            [
-                (
-                    "BOX",
-                    (0, 0),
-                    (-1, -1),
-                    0.8,
-                    colors.black,
-                ),
-                (
-                    "FONTNAME",
-                    (0, 0),
-                    (-1, -1),
-                    "Times-Bold",
-                ),
-                (
-                    "FONTSIZE",
-                    (0, 0),
-                    (-1, -1),
-                    13,
-                ),
-                (
-                    "LEFTPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    3,
-                ),
-                (
-                    "TOPPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    3,
-                ),
-                (
-                    "BOTTOMPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    3,
-                ),
-            ]
-        )
-    )
-
-    story.append(title)
-    story.append(Spacer(1, 5 * mm))
 
     display_invoice_number = (
         invoice.invoice_number
@@ -635,7 +558,12 @@ async def build_sales_invoice_pdf(
 
     story.append(bank_table)
 
-    doc.build(story)
+    story.extend(bandara_footer_story())
+    doc.build(
+        story,
+        onFirstPage=bandara_page_footer,
+        onLaterPages=bandara_page_footer,
+    )
 
     result = buffer.getvalue()
     buffer.close()
