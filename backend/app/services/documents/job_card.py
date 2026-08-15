@@ -18,7 +18,7 @@ from reportlab.platypus import (
 
 from app.services.documents.base import (
     STYLES,
-    logo_flowable,
+    bandara_document_header,
     money,
 )
 
@@ -74,71 +74,19 @@ def build_job_card_pdf(
 
     story = []
 
-    header = Table(
-        [
-            [
-                logo_flowable(
-                    data.logo_path,
-                    width=25 * mm,
-                    height=21 * mm,
-                ),
-                Paragraph(
-                    (
-                        f"<b>{data.company_name.upper()}</b><br/>"
-                        f"{data.company_address}<br/>"
-                        f"{data.company_phone}"
-                    ),
-                    STYLES["company_detail"],
-                ),
-            ]
-        ],
-        colWidths=[
-            37 * mm,
-            145 * mm,
-        ],
-    )
-
-    header.setStyle(
-        TableStyle(
-            [
-                (
-                    "VALIGN",
-                    (0, 0),
-                    (-1, -1),
-                    "TOP",
-                ),
-            ]
-        )
-    )
-
-    story.append(header)
-    story.append(Spacer(1, 5 * mm))
-
-    rule = Table(
-        [[""]],
-        colWidths=[183 * mm],
-    )
-
-    rule.setStyle(
-        TableStyle(
-            [
-                (
-                    "LINEBELOW",
-                    (0, 0),
-                    (-1, -1),
-                    1.5,
-                    colors.black,
-                ),
-            ]
-        )
-    )
-
-    story.append(rule)
-
-    story.append(
-        Paragraph(
-            "<b>JOB CARD</b>",
-            STYLES["normal"],
+    # UNIFIED_BRANDED_PDF_JOB_CARD_V1
+    # Uses the same Bandara Cool World identity,
+    # document-number and Code128 barcode header
+    # as the other A4 business documents.
+    story.extend(
+        bandara_document_header(
+            document_title="Job Card",
+            document_number=data.job_number,
+            configured_logo_path=(
+                data.logo_path
+                if data.logo_path
+                else None
+            ),
         )
     )
 

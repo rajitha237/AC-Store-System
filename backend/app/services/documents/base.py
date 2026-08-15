@@ -241,6 +241,12 @@ BANDARA_BLUE = _brand_colors.HexColor(
     "#173F73"
 )
 
+# Header-only bright Bandara Cool World blue.
+# Do not use this for the footer.
+BANDARA_HEADER_BLUE = _brand_colors.HexColor(
+    "#00AFF3"
+)
+
 BANDARA_RED = _brand_colors.HexColor(
     "#D62828"
 )
@@ -467,8 +473,14 @@ def bandara_document_header(
 
     company = _Paragraph(
         (
-            "<font color='#173F73' size='18'>"
-            f"<b>{BANDARA_COMPANY_NAME}</b>"
+            "<font size='18'>"
+            "<b>"
+            "<font color='#000000'>BANDARA</font>"
+            " "
+            "<font color='#00AFF3'>COOL</font>"
+            " "
+            "<font color='#000000'>WORLD</font>"
+            "</b>"
             "</font>"
             "<br/>"
             "<font color='#475569' size='8.5'>"
@@ -766,10 +778,9 @@ def bandara_document_header(
     )
 
     divider = _Table(
-        [["", ""]],
+        [[""]],
         colWidths=[
-            120 * _mm,
-            60 * _mm,
+            180 * _mm,
         ],
         rowHeights=[
             1.6 * _mm,
@@ -781,14 +792,8 @@ def bandara_document_header(
             (
                 "BACKGROUND",
                 (0, 0),
-                (0, 0),
-                BANDARA_BLUE,
-            ),
-            (
-                "BACKGROUND",
-                (1, 0),
-                (1, 0),
-                BANDARA_RED,
+                (-1, -1),
+                BANDARA_HEADER_BLUE,
             ),
             (
                 "LEFTPADDING",
