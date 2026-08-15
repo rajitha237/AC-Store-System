@@ -13,7 +13,6 @@ import {
   EyeOff,
   LockKeyhole,
   ShieldCheck,
-  Snowflake,
   UserRound,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -113,8 +112,12 @@ export default function LoginPage() {
     <main className="login-page">
       <section className="login-brand-panel">
         <div className="brand-badge">
-          <Snowflake size={22} />
-          AC STORE
+          <img
+            src="/bandara-cool-world-logo.png"
+            alt="Bandara Cool World logo"
+            className="login-brand-logo"
+          />
+          BANDARA COOL WORLD
         </div>
 
         <div className="brand-copy">
@@ -124,7 +127,7 @@ export default function LoginPage() {
 
           <h1>
             One system for your
-            entire AC business.
+            entire cooling business.
           </h1>
 
           <p>
@@ -156,8 +159,12 @@ export default function LoginPage() {
       <section className="login-form-panel">
         <div className="login-card">
           <div className="mobile-logo">
-            <Snowflake size={22} />
-            AC STORE
+            <img
+              src="/bandara-cool-world-logo.png"
+              alt="Bandara Cool World logo"
+              className="login-brand-logo"
+            />
+            BANDARA COOL WORLD
           </div>
 
           <div className="login-heading">
@@ -270,7 +277,7 @@ export default function LoginPage() {
           </form>
 
           <p className="login-footer">
-            AC Store Management System
+            Bandara Cool World Management System
             <span>•</span>
             Authorized personnel only
           </p>

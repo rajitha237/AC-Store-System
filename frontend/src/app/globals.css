@@ -138,6 +138,14 @@ a {
   letter-spacing: 0.08em;
 }
 
+.brand-badge .login-brand-logo,
+.mobile-logo .login-brand-logo {
+  display: block;
+  height: 34px;
+  object-fit: contain;
+  width: 34px;
+}
+
 .brand-copy {
   max-width: 570px;
   position: relative;
@@ -398,6 +406,13 @@ a {
   height: 38px;
   justify-content: center;
   width: 38px;
+}
+
+.brand-logo-image {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
 }
 
 .sidebar-logo strong,

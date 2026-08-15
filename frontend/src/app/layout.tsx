@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AC Store Management System",
+  title: "Bandara Cool World Management System",
   description:
-    "Internal sales, inventory, service and accounting management system.",
+    "Bandara Cool World sales, inventory, service and accounting management system.",
 };
 
 export default function RootLayout({

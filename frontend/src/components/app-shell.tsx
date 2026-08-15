@@ -14,7 +14,6 @@ import {
   RotateCcw,
   Settings,
   ShieldCheck,
-  Snowflake,
   UserRound,
   Users,
   Wrench,
@@ -207,12 +206,16 @@ export function AppShell({
         <div className="sidebar-header">
           <div className="sidebar-logo">
             <div className="logo-mark">
-              <Snowflake size={21} />
+              <img
+                src="/bandara-cool-world-logo.png"
+                alt="Bandara Cool World logo"
+                className="brand-logo-image"
+              />
             </div>
 
             <div>
               <strong>
-                AC Store
+                BANDARA COOL WORLD
               </strong>
 
               <span>
@@ -335,7 +338,7 @@ export function AppShell({
 
             <div>
               <p>
-                AC Store Management
+                BANDARA COOL WORLD
               </p>
 
               <span>
