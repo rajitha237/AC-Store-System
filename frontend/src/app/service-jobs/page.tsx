@@ -3544,20 +3544,7 @@ export default function ServiceJobsPage() {
                         </span>
 
                         <strong>
-                          <button
-                    type="button"
-                    onClick={() => {
-                      void printJobCard();
-                    }}
-                  >
-                    <Printer
-                      size={15}
-                    />
-
-                    Print Job Card
-                  </button>
-
-                  {getValidServiceNextStatuses(
+                          {getValidServiceNextStatuses(
                             asStatus(
                               selected.status,
                             ),
@@ -4032,6 +4019,24 @@ export default function ServiceJobsPage() {
                     styles.actionBar
                   }
                 >
+                  <button
+                    type="button"
+                    className={
+                      styles.secondaryButton
+                    }
+                    onClick={() => {
+                      void printJobCard();
+                    }}
+                    title="Open printable job card PDF"
+                  >
+                    <Printer
+                      size={15}
+                      aria-hidden="true"
+                    />
+
+                    Print Job Card
+                  </button>
+
                   {getValidServiceNextStatuses(
                     asStatus(
                       selected.status,
