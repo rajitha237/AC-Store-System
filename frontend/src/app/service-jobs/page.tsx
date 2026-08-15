@@ -14,6 +14,7 @@ import {
   PackagePlus,
   Pencil,
   Plus,
+  Printer,
   RefreshCw,
   Search,
   Settings2,
@@ -43,6 +44,11 @@ import {
   getAccessToken,
   getStoredUser,
 } from "@/lib/auth";
+
+import {
+  downloadServiceJobCardPdf,
+  saveDownloadedDocument,
+} from "@/lib/documents-api";
 
 import {
   getSalesCustomers,
@@ -1804,6 +1810,59 @@ export default function ServiceJobsPage() {
   }
 
 
+  async function printJobCard() {
+    if (!selected) {
+      return;
+    }
+
+    try {
+      setError("");
+
+      const document =
+        await downloadServiceJobCardPdf(
+          selected.id,
+        );
+
+      const pdfUrl =
+        URL.createObjectURL(
+          document.blob,
+        );
+
+      const printWindow =
+        window.open(
+          pdfUrl,
+          "_blank",
+          "noopener,noreferrer",
+        );
+
+      if (!printWindow) {
+        URL.revokeObjectURL(
+          pdfUrl,
+        );
+
+        saveDownloadedDocument(
+          document,
+        );
+
+        return;
+      }
+
+      window.setTimeout(
+        () => {
+          URL.revokeObjectURL(
+            pdfUrl,
+          );
+        },
+        60000,
+      );
+    } catch {
+      setError(
+        "Job Card PDF download failed.",
+      );
+    }
+  }
+
+
   async function submitInvoice() {
     if (!selected) {
       return;
@@ -3485,7 +3544,20 @@ export default function ServiceJobsPage() {
                         </span>
 
                         <strong>
-                          {getValidServiceNextStatuses(
+                          <button
+                    type="button"
+                    onClick={() => {
+                      void printJobCard();
+                    }}
+                  >
+                    <Printer
+                      size={15}
+                    />
+
+                    Print Job Card
+                  </button>
+
+                  {getValidServiceNextStatuses(
                             asStatus(
                               selected.status,
                             ),

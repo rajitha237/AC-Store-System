@@ -139,6 +139,24 @@ downloadSalesInvoicePdf(
 
 
 export async function
+downloadServiceJobCardPdf(
+  jobId:
+    number,
+): Promise<
+  DownloadedDocument
+> {
+  return downloadPdf(
+    (
+      "/documents/"
+      + "service-jobs/"
+      + `${jobId}/pdf`
+    ),
+    `job-card-${jobId}.pdf`,
+  );
+}
+
+
+export async function
 downloadPaymentReceiptPdf(
   paymentId:
     number,
