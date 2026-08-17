@@ -167,3 +167,8 @@ __all__ = [
     "InstallmentScheduleStatus",
 
 ]
+
+from app.models.legacy_service_job import (
+    LegacyServiceJob,
+    LegacyServiceJobLine,
+)

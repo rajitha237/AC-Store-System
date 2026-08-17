@@ -300,3 +300,60 @@ async def create_invoice_for_service_job(
         invoice,
     )
 
+
+
+
+# ===== LEGACY SERVICE JOB HISTORY ROUTES =====
+
+@router.get(
+    "/legacy-jobs",
+)
+async def read_legacy_service_jobs(
+    session: DatabaseSession,
+    _: CanViewJobs,
+    page: int = Query(
+        default=1,
+        ge=1,
+    ),
+    page_size: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+    ),
+    search: str | None = Query(
+        default=None,
+        max_length=150,
+    ),
+    cancelled: bool | None = Query(
+        default=None,
+    ),
+):
+    from app.services.service import (
+        list_legacy_service_jobs,
+    )
+
+    return await list_legacy_service_jobs(
+        session=session,
+        page=page,
+        page_size=page_size,
+        search=search,
+        cancelled=cancelled,
+    )
+
+
+@router.get(
+    "/legacy-jobs/{legacy_job_id}",
+)
+async def read_legacy_service_job(
+    legacy_job_id: int,
+    session: DatabaseSession,
+    _: CanViewJobs,
+):
+    from app.services.service import (
+        get_legacy_service_job,
+    )
+
+    return await get_legacy_service_job(
+        session=session,
+        legacy_job_id=legacy_job_id,
+    )

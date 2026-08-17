@@ -1741,3 +1741,186 @@ async def list_job_cards(
             else 0
         ),
     )
+
+
+
+# ===== LEGACY SERVICE JOB HISTORY SERVICE =====
+
+async def list_legacy_service_jobs(
+    session,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+    search: str | None = None,
+    cancelled: bool | None = None,
+):
+    from math import ceil
+
+    from sqlalchemy import (
+        String,
+        cast,
+        func,
+        or_,
+        select,
+    )
+
+    from app.models.legacy_service_job import (
+        LegacyServiceJob,
+    )
+    from app.schemas.service import (
+        LegacyServiceJobHistoryListResponse,
+        LegacyServiceJobListItemResponse,
+    )
+
+    filters = []
+
+    if search:
+        term = f"%{search.strip()}%"
+
+        filters.append(
+            or_(
+                cast(
+                    LegacyServiceJob.legacy_job_id,
+                    String,
+                ).ilike(term),
+                LegacyServiceJob.invoice_code.ilike(term),
+                LegacyServiceJob.reference_no.ilike(term),
+                LegacyServiceJob.customer_name.ilike(term),
+                LegacyServiceJob.customer_phone.ilike(term),
+                LegacyServiceJob.customer_address.ilike(term),
+                LegacyServiceJob.legacy_user_name.ilike(term),
+            )
+        )
+
+    if cancelled is not None:
+        filters.append(
+            LegacyServiceJob.is_cancelled == cancelled
+        )
+
+    count_stmt = (
+        select(func.count(LegacyServiceJob.id))
+        .where(*filters)
+    )
+
+    total = (
+        await session.execute(count_stmt)
+    ).scalar_one()
+
+    offset = (page - 1) * page_size
+
+    stmt = (
+        select(LegacyServiceJob)
+        .where(*filters)
+        .order_by(
+            LegacyServiceJob.job_date.desc(),
+            LegacyServiceJob.job_time.desc(),
+            LegacyServiceJob.legacy_job_id.desc(),
+        )
+        .offset(offset)
+        .limit(page_size)
+    )
+
+    rows = (
+        await session.execute(stmt)
+    ).scalars().all()
+
+    items = [
+        LegacyServiceJobListItemResponse.model_validate(
+            row
+        )
+        for row in rows
+    ]
+
+    pages = (
+        ceil(total / page_size)
+        if total
+        else 0
+    )
+
+    return LegacyServiceJobHistoryListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages,
+    )
+
+
+async def get_legacy_service_job(
+    session,
+    legacy_job_id: int,
+):
+    from fastapi import HTTPException
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.models.legacy_service_job import (
+        LegacyServiceJob,
+    )
+    from app.schemas.service import (
+        LegacyServiceJobDetailResponse,
+    )
+
+    stmt = (
+        select(LegacyServiceJob)
+        .options(
+            selectinload(
+                LegacyServiceJob.lines
+            )
+        )
+        .where(
+            LegacyServiceJob.legacy_job_id
+            == legacy_job_id
+        )
+    )
+
+    job = (
+        await session.execute(stmt)
+    ).scalar_one_or_none()
+
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Legacy service job not found",
+        )
+
+    ordered_lines = sorted(
+        job.lines,
+        key=lambda line: line.line_number,
+    )
+
+    return LegacyServiceJobDetailResponse(
+        id=job.id,
+        legacy_job_id=job.legacy_job_id,
+        invoice_code=job.invoice_code,
+        job_date=job.job_date,
+        job_time=job.job_time,
+        reference_no=job.reference_no,
+        sale_type=job.sale_type,
+        legacy_customer_id=job.legacy_customer_id,
+        customer_name=job.customer_name,
+        customer_phone=job.customer_phone,
+        customer_address=job.customer_address,
+        bill_discount=job.bill_discount,
+        bill_discount_value=job.bill_discount_value,
+        source_total=job.source_total,
+        net_amount=job.net_amount,
+        gross_amount=job.gross_amount,
+        profit=job.profit,
+        pay_amount=job.pay_amount,
+        rest_amount=job.rest_amount,
+        cash_amount=job.cash_amount,
+        credit_amount=job.credit_amount,
+        cheque_amount=job.cheque_amount,
+        card_amount=job.card_amount,
+        bank_amount=job.bank_amount,
+        over_balance_amount=job.over_balance_amount,
+        balance_amount=job.balance_amount,
+        is_cancelled=job.is_cancelled,
+        legacy_user_id=job.legacy_user_id,
+        legacy_user_name=job.legacy_user_name,
+        legacy_service_date=job.legacy_service_date,
+        legacy_warranty_period=job.legacy_warranty_period,
+        migration_notes=job.migration_notes,
+        lines=ordered_lines,
+    )

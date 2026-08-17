@@ -61,6 +61,8 @@ import {
   addServicePart,
   createServiceInvoice,
   createServiceJob,
+  getLegacyServiceJob,
+  getLegacyServiceJobs,
   getServiceJob,
   getServiceJobs,
   updateServiceApproval,
@@ -93,6 +95,8 @@ import type {
 
 import type {
   ApprovalStatus,
+  LegacyServiceJobDetailResponse,
+  LegacyServiceJobListItemResponse,
   ServiceJobCreate,
   ServiceJobDetailResponse,
   ServiceJobPriority,
@@ -577,6 +581,85 @@ export default function ServiceJobsPage() {
 
 
   const [
+    viewMode,
+    setViewMode,
+  ] =
+    useState<
+      "active" | "legacy"
+    >(
+      "active",
+    );
+
+  const [
+    legacyJobs,
+    setLegacyJobs,
+  ] =
+    useState<
+      LegacyServiceJobListItemResponse[]
+    >(
+      [],
+    );
+
+  const [
+    legacyTotal,
+    setLegacyTotal,
+  ] =
+    useState(0);
+
+  const [
+    legacyPage,
+    setLegacyPage,
+  ] =
+    useState(1);
+
+  const [
+    legacyTotalPages,
+    setLegacyTotalPages,
+  ] =
+    useState(1);
+
+  const [
+    legacySearchInput,
+    setLegacySearchInput,
+  ] =
+    useState("");
+
+  const [
+    legacySearch,
+    setLegacySearch,
+  ] =
+    useState("");
+
+  const [
+    legacyLoading,
+    setLegacyLoading,
+  ] =
+    useState(false);
+
+  const [
+    legacySelected,
+    setLegacySelected,
+  ] =
+    useState<
+      LegacyServiceJobDetailResponse | null
+    >(
+      null,
+    );
+
+  const [
+    legacyDetailOpen,
+    setLegacyDetailOpen,
+  ] =
+    useState(false);
+
+  const [
+    legacyDetailLoading,
+    setLegacyDetailLoading,
+  ] =
+    useState(false);
+
+
+  const [
     selected,
     setSelected,
   ] =
@@ -993,6 +1076,151 @@ export default function ServiceJobsPage() {
       }),
       [jobs],
     );
+
+
+  const loadLegacyJobs =
+    useCallback(
+      async () => {
+        setLegacyLoading(
+          true,
+        );
+
+        setError("");
+
+        try {
+          const result =
+            await getLegacyServiceJobs({
+              page:
+                legacyPage,
+
+              pageSize:
+                PAGE_SIZE,
+
+              search:
+                legacySearch
+                || undefined,
+            });
+
+          setLegacyJobs(
+            result.items,
+          );
+
+          setLegacyTotal(
+            result.total,
+          );
+
+          setLegacyTotalPages(
+            result.pages,
+          );
+        } catch (
+          requestError
+        ) {
+          setError(
+            apiError(
+              requestError,
+            ),
+          );
+        } finally {
+          setLegacyLoading(
+            false,
+          );
+        }
+      },
+      [
+        legacyPage,
+        legacySearch,
+      ],
+    );
+
+
+  useEffect(() => {
+    if (
+      authLoading
+      || viewMode !== "legacy"
+    ) {
+      return;
+    }
+
+    const timer =
+      window.setTimeout(
+        () => {
+          void loadLegacyJobs();
+        },
+        0,
+      );
+
+    return () => {
+      window.clearTimeout(
+        timer,
+      );
+    };
+  }, [
+    authLoading,
+    viewMode,
+    loadLegacyJobs,
+  ]);
+
+
+  function submitLegacySearch(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    setLegacyPage(1);
+
+    setLegacySearch(
+      legacySearchInput
+        .trim()
+        .slice(
+          0,
+          100,
+        ),
+    );
+  }
+
+
+  async function openLegacyDetail(
+    legacyJobId:
+      number,
+  ) {
+    setLegacyDetailOpen(
+      true,
+    );
+
+    setLegacyDetailLoading(
+      true,
+    );
+
+    setLegacySelected(
+      null,
+    );
+
+    setError("");
+
+    try {
+      const detail =
+        await getLegacyServiceJob(
+          legacyJobId,
+        );
+
+      setLegacySelected(
+        detail,
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    } finally {
+      setLegacyDetailLoading(
+        false,
+      );
+    }
+  }
 
 
   async function loadLookups() {
@@ -1996,6 +2224,52 @@ export default function ServiceJobsPage() {
 
       <section
         className={
+          styles.historyTabs
+        }
+      >
+        <button
+          type="button"
+          className={
+            viewMode === "active"
+              ? styles.historyTabActive
+              : styles.historyTab
+          }
+          onClick={() => {
+            setViewMode(
+              "active",
+            );
+          }}
+        >
+          Active service jobs
+        </button>
+
+        <button
+          type="button"
+          className={
+            viewMode === "legacy"
+              ? styles.historyTabActive
+              : styles.historyTab
+          }
+          onClick={() => {
+            setViewMode(
+              "legacy",
+            );
+
+            setLegacyPage(1);
+          }}
+        >
+          Legacy history
+          <span>
+            {legacyTotal || 462}
+          </span>
+        </button>
+      </section>
+
+
+      {viewMode === "active" && (
+        <>
+      <section
+        className={
           styles.summaryGrid
         }
       >
@@ -2511,6 +2785,638 @@ export default function ServiceJobsPage() {
           </button>
         </footer>
       </section>
+
+
+        </>
+      )}
+
+
+      {viewMode === "legacy" && (
+        <>
+          <section
+            className={
+              styles.legacyIntro
+            }
+          >
+            <div>
+              <p className="eyebrow">
+                HISTORICAL DATA
+              </p>
+
+              <h2>
+                Legacy service job history
+              </h2>
+
+              <p>
+                Read-only service records imported
+                from the previous system.
+              </p>
+            </div>
+
+            <strong>
+              {legacyTotal || 462}
+              {" jobs"}
+            </strong>
+          </section>
+
+
+          <section
+            className={
+              styles.filters
+            }
+          >
+            <form
+              className={
+                styles.searchForm
+              }
+              onSubmit={
+                submitLegacySearch
+              }
+            >
+              <Search size={16} />
+
+              <input
+                value={
+                  legacySearchInput
+                }
+                placeholder={
+                  "Invoice, customer, phone, reference..."
+                }
+                onChange={
+                  (event) =>
+                    setLegacySearchInput(
+                      event.target.value,
+                    )
+                }
+              />
+
+              <button type="submit">
+                Search
+              </button>
+            </form>
+          </section>
+
+
+          <section
+            className={
+              styles.tableCard
+            }
+          >
+            {legacyLoading ? (
+              <div
+                className={
+                  styles.emptyState
+                }
+              >
+                <Loader2
+                  size={23}
+                  className={
+                    styles.spin
+                  }
+                />
+
+                Loading legacy history...
+              </div>
+            ) : legacyJobs.length === 0 ? (
+              <div
+                className={
+                  styles.emptyState
+                }
+              >
+                <FileText size={29} />
+
+                <strong>
+                  No legacy service jobs found
+                </strong>
+              </div>
+            ) : (
+              <div
+                className={
+                  styles.tableWrap
+                }
+              >
+                <table>
+                  <thead>
+                    <tr>
+                      <th>
+                        Invoice
+                      </th>
+
+                      <th>
+                        Date
+                      </th>
+
+                      <th>
+                        Customer
+                      </th>
+
+                      <th>
+                        Type
+                      </th>
+
+                      <th>
+                        Net
+                      </th>
+
+                      <th>
+                        Paid
+                      </th>
+
+                      <th>
+                        Balance
+                      </th>
+
+                      <th>
+                        Status
+                      </th>
+
+                      <th />
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {legacyJobs.map(
+                      (job) => (
+                        <tr
+                          key={
+                            job.legacy_job_id
+                          }
+                        >
+                          <td>
+                            <strong>
+                              {job.invoice_code
+                                || `#${job.legacy_job_id}`}
+                            </strong>
+
+                            <small>
+                              {job.reference_no
+                                || `Legacy ID ${job.legacy_job_id}`}
+                            </small>
+                          </td>
+
+                          <td>
+                            <span>
+                              {job.job_date}
+                            </span>
+
+                            <small>
+                              {job.job_time
+                                || "—"}
+                            </small>
+                          </td>
+
+                          <td>
+                            <strong>
+                              {job.customer_name
+                                || "Walk-in customer"}
+                            </strong>
+
+                            <small>
+                              {job.customer_phone
+                                || "—"}
+                            </small>
+                          </td>
+
+                          <td>
+                            {job.sale_type
+                              || "Service"}
+                          </td>
+
+                          <td>
+                            <strong>
+                              {money(
+                                job.net_amount,
+                              )}
+                            </strong>
+                          </td>
+
+                          <td>
+                            <strong>
+                              {money(
+                                job.pay_amount,
+                              )}
+                            </strong>
+                          </td>
+
+                          <td>
+                            <strong>
+                              {money(
+                                job.rest_amount,
+                              )}
+                            </strong>
+                          </td>
+
+                          <td>
+                            <span
+                              className={
+                                job.is_cancelled
+                                  ? styles.legacyCancelled
+                                  : styles.legacyCompleted
+                              }
+                            >
+                              {job.is_cancelled
+                                ? "Cancelled"
+                                : "Historical"}
+                            </span>
+                          </td>
+
+                          <td>
+                            <button
+                              type="button"
+                              className={
+                                styles.iconButton
+                              }
+                              onClick={() =>
+                                void openLegacyDetail(
+                                  job.legacy_job_id,
+                                )
+                              }
+                              title={
+                                "View legacy job"
+                              }
+                            >
+                              <Eye
+                                size={16}
+                              />
+                            </button>
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <footer
+              className={
+                styles.pagination
+              }
+            >
+              <button
+                type="button"
+                disabled={
+                  legacyPage <= 1
+                }
+                onClick={() =>
+                  setLegacyPage(
+                    (current) =>
+                      Math.max(
+                        1,
+                        current - 1,
+                      ),
+                  )
+                }
+              >
+                <ChevronLeft
+                  size={15}
+                />
+
+                Previous
+              </button>
+
+              <span>
+                Page {legacyPage}
+                {" of "}
+                {Math.max(
+                  1,
+                  legacyTotalPages,
+                )}
+              </span>
+
+              <button
+                type="button"
+                disabled={
+                  legacyPage
+                    >= legacyTotalPages
+                  || legacyTotalPages === 0
+                }
+                onClick={() =>
+                  setLegacyPage(
+                    (current) =>
+                      current + 1,
+                  )
+                }
+              >
+                Next
+
+                <ChevronRight
+                  size={15}
+                />
+              </button>
+            </footer>
+          </section>
+        </>
+      )}
+
+
+      {legacyDetailOpen && (
+        <div
+          className={
+            styles.backdrop
+          }
+        >
+          <aside
+            className={
+              styles.detailDrawer
+            }
+          >
+            <header
+              className={
+                styles.modalHeader
+              }
+            >
+              <div>
+                <p className="eyebrow">
+                  LEGACY SERVICE HISTORY
+                </p>
+
+                <h2>
+                  {legacySelected
+                    ?.invoice_code
+                    || (
+                      legacySelected
+                        ?.legacy_job_id
+                        ? `Legacy job #${legacySelected.legacy_job_id}`
+                        : "Legacy service job"
+                    )}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                className={
+                  styles.iconButton
+                }
+                onClick={() => {
+                  setLegacyDetailOpen(
+                    false,
+                  );
+
+                  setLegacySelected(
+                    null,
+                  );
+                }}
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            {legacyDetailLoading ? (
+              <div
+                className={
+                  styles.emptyState
+                }
+              >
+                <Loader2
+                  className={
+                    styles.spin
+                  }
+                  size={22}
+                />
+
+                Loading legacy job...
+              </div>
+            ) : legacySelected && (
+              <div
+                className={
+                  styles.detailBody
+                }
+              >
+                <section
+                  className={
+                    styles.heroGrid
+                  }
+                >
+                  <div>
+                    <span>
+                      Customer
+                    </span>
+
+                    <strong>
+                      {legacySelected.customer_name
+                        || "Walk-in customer"}
+                    </strong>
+
+                    <small>
+                      {legacySelected.customer_phone
+                        || "—"}
+                    </small>
+                  </div>
+
+                  <div>
+                    <span>
+                      Job date
+                    </span>
+
+                    <strong>
+                      {legacySelected.job_date}
+                    </strong>
+
+                    <small>
+                      {legacySelected.job_time
+                        || "—"}
+                    </small>
+                  </div>
+
+                  <div>
+                    <span>
+                      Net amount
+                    </span>
+
+                    <strong>
+                      {money(
+                        legacySelected.net_amount,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Balance
+                    </span>
+
+                    <strong>
+                      {money(
+                        legacySelected.rest_amount,
+                      )}
+                    </strong>
+                  </div>
+                </section>
+
+                <section
+                  className={
+                    styles.legacyFinance
+                  }
+                >
+                  <div>
+                    <span>
+                      Gross
+                    </span>
+
+                    <strong>
+                      {money(
+                        legacySelected.gross_amount,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Paid
+                    </span>
+
+                    <strong>
+                      {money(
+                        legacySelected.pay_amount,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Cash
+                    </span>
+
+                    <strong>
+                      {money(
+                        legacySelected.cash_amount,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Credit
+                    </span>
+
+                    <strong>
+                      {money(
+                        legacySelected.credit_amount,
+                      )}
+                    </strong>
+                  </div>
+                </section>
+
+                <section
+                  className={
+                    styles.legacySection
+                  }
+                >
+                  <div
+                    className={
+                      styles.legacySectionHeader
+                    }
+                  >
+                    <div>
+                      <span>
+                        DETAIL LINES
+                      </span>
+
+                      <strong>
+                        Historical service
+                        and item lines
+                      </strong>
+                    </div>
+
+                    <strong>
+                      {legacySelected.lines.length}
+                    </strong>
+                  </div>
+
+                  {legacySelected.lines.length
+                    === 0 ? (
+                    <div
+                      className={
+                        styles.emptyState
+                      }
+                    >
+                      No detail lines
+                    </div>
+                  ) : (
+                    legacySelected.lines.map(
+                      (line) => (
+                        <div
+                          key={
+                            line.id
+                          }
+                          className={
+                            styles.lineCard
+                          }
+                        >
+                          <div>
+                            <strong>
+                              {line.name
+                                || line.legacy_code
+                                || "Legacy line"}
+                            </strong>
+
+                            <small>
+                              {line.line_type}
+                              {" • Qty "}
+                              {line.quantity}
+                              {line.unit
+                                ? ` ${line.unit}`
+                                : ""}
+                            </small>
+
+                            {line.serial_no && (
+                              <small>
+                                Serial:{" "}
+                                {line.serial_no}
+                              </small>
+                            )}
+                          </div>
+
+                          <div>
+                            <strong>
+                              {money(
+                                line.line_total,
+                              )}
+                            </strong>
+
+                            <small>
+                              Rate{" "}
+                              {money(
+                                line.rate,
+                              )}
+                            </small>
+                          </div>
+                        </div>
+                      ),
+                    )
+                  )}
+                </section>
+
+                <section
+                  className={
+                    styles.infoBox
+                  }
+                >
+                  <ShieldCheck
+                    size={18}
+                  />
+
+                  <div>
+                    <strong>
+                      Read-only historical record
+                    </strong>
+
+                    <p>
+                      This record was imported from
+                      the legacy system. Viewing it
+                      does not change stock,
+                      payments, invoices, supplier
+                      balances or current service
+                      workflow.
+                    </p>
+                  </div>
+                </section>
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
 
 
       {createOpen && (

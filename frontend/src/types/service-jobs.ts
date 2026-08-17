@@ -490,3 +490,89 @@ export type ServiceJobListParams = {
   warrantyOnly?:
     boolean;
 };
+
+// ============================================================
+// LEGACY SERVICE JOB HISTORY
+// ============================================================
+
+export type LegacyServiceJobLineResponse = {
+  id: number;
+  line_number: number;
+  legacy_code: string | null;
+  name: string | null;
+  line_type: string;
+  quantity: string;
+  rate: string;
+  discount: string;
+  discount_value: string;
+  line_total: string;
+  unit: string | null;
+  serial_no: string | null;
+};
+
+export type LegacyServiceJobListItemResponse = {
+  id: number;
+  legacy_job_id: number;
+  invoice_code: string | null;
+
+  job_date: string;
+  job_time: string | null;
+
+  reference_no: string | null;
+  sale_type: string | null;
+
+  legacy_customer_id: number | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_address: string | null;
+
+  source_total: string;
+  net_amount: string;
+  pay_amount: string;
+  rest_amount: string;
+
+  cash_amount: string;
+  credit_amount: string;
+  cheque_amount: string;
+  card_amount: string;
+  bank_amount: string;
+
+  is_cancelled: boolean;
+
+  legacy_user_id: number | null;
+  legacy_user_name: string | null;
+
+  legacy_service_date: string | null;
+  legacy_warranty_period: string | null;
+};
+
+export type LegacyServiceJobDetailResponse =
+  LegacyServiceJobListItemResponse & {
+    bill_discount: string;
+    bill_discount_value: string;
+
+    gross_amount: string;
+    profit: string;
+
+    over_balance_amount: string;
+    balance_amount: string;
+
+    migration_notes: string | null;
+
+    lines: LegacyServiceJobLineResponse[];
+  };
+
+export type LegacyServiceJobHistoryListResponse = {
+  items: LegacyServiceJobListItemResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
+export type LegacyServiceJobListParams = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  cancelled?: boolean;
+};

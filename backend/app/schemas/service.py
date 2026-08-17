@@ -1,3 +1,4 @@
+from datetime import date, time
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -361,3 +362,89 @@ class ServiceJobListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+
+# ===== LEGACY SERVICE JOB HISTORY API =====
+
+class LegacyServiceJobLineResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    line_number: int
+    legacy_code: str | None = None
+    name: str | None = None
+    line_type: str
+
+    quantity: Decimal
+    rate: Decimal
+    discount: Decimal
+    discount_value: Decimal
+    line_total: Decimal
+
+    unit: str | None = None
+    serial_no: str | None = None
+
+
+class LegacyServiceJobListItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    legacy_job_id: int
+    invoice_code: str | None = None
+
+    job_date: date
+    job_time: time | None = None
+
+    reference_no: str | None = None
+    sale_type: str | None = None
+
+    legacy_customer_id: int | None = None
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    customer_address: str | None = None
+
+    source_total: Decimal
+    net_amount: Decimal
+    pay_amount: Decimal
+    rest_amount: Decimal
+
+    cash_amount: Decimal
+    credit_amount: Decimal
+    cheque_amount: Decimal
+    card_amount: Decimal
+    bank_amount: Decimal
+
+    is_cancelled: bool
+
+    legacy_user_id: int | None = None
+    legacy_user_name: str | None = None
+
+    legacy_service_date: date | None = None
+    legacy_warranty_period: str | None = None
+
+
+class LegacyServiceJobDetailResponse(
+    LegacyServiceJobListItemResponse
+):
+    bill_discount: Decimal
+    bill_discount_value: Decimal
+
+    gross_amount: Decimal
+    profit: Decimal
+
+    over_balance_amount: Decimal
+    balance_amount: Decimal
+
+    migration_notes: str | None = None
+
+    lines: list[LegacyServiceJobLineResponse]
+
+
+class LegacyServiceJobHistoryListResponse(BaseModel):
+    items: list[LegacyServiceJobListItemResponse]
+
+    total: int
+    page: int
+    page_size: int
+    pages: int

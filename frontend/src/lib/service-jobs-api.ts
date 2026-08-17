@@ -1,3 +1,10 @@
+// LEGACY SERVICE JOB HISTORY TYPE IMPORT
+import type {
+  LegacyServiceJobDetailResponse,
+  LegacyServiceJobHistoryListResponse,
+  LegacyServiceJobListParams,
+} from "@/types/service-jobs";
+
 import {
   api,
 } from "@/lib/api";
@@ -215,6 +222,48 @@ export async function createServiceInvoice(
   const response =
     await api.post(
       `/service/jobs/${jobId}/invoice`,
+    );
+
+  return response.data;
+}
+
+// ============================================================
+// LEGACY SERVICE JOB HISTORY API
+// ============================================================
+
+export async function getLegacyServiceJobs(
+  params: LegacyServiceJobListParams = {},
+): Promise<LegacyServiceJobHistoryListResponse> {
+  const response =
+    await api.get<LegacyServiceJobHistoryListResponse>(
+      "/service/legacy-jobs",
+      {
+        params: {
+          page:
+            params.page ?? 1,
+
+          page_size:
+            params.pageSize ?? 20,
+
+          search:
+            params.search || undefined,
+
+          cancelled:
+            params.cancelled,
+        },
+      },
+    );
+
+  return response.data;
+}
+
+
+export async function getLegacyServiceJob(
+  legacyJobId: number,
+): Promise<LegacyServiceJobDetailResponse> {
+  const response =
+    await api.get<LegacyServiceJobDetailResponse>(
+      `/service/legacy-jobs/${legacyJobId}`,
     );
 
   return response.data;
