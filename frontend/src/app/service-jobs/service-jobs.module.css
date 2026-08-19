@@ -1281,3 +1281,33 @@
   font-size: 13px;
   font-weight: 600;
 }
+
+/* Phase 56.8D — Additional part invoice print action */
+.additionalSalePrintButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-top: 8px;
+  min-height: 34px;
+  padding: 8px 14px;
+
+  border: 0;
+  border-radius: 9px;
+
+  background: #1467d8;
+  color: #ffffff;
+
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.additionalSalePrintButton:hover {
+  opacity: 0.92;
+}
+
+.additionalSalePrintButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

@@ -219,14 +219,27 @@ async def build_sales_invoice_pdf(
             item.product_id,
         )
 
-        description = (
-            item.description
-            or (
+        if product is not None:
+            product_name = (
                 product.name
-                if product is not None
-                else "Product"
+                or "Product"
             )
-        )
+
+            product_code = (
+                product.product_code
+                or ""
+            ).strip()
+
+            description = (
+                f"{product_name} ({product_code})"
+                if product_code
+                else product_name
+            )
+        else:
+            description = (
+                item.description
+                or "Product"
+            )
 
         if item.serial_number_id is not None:
             serial = await session.get(

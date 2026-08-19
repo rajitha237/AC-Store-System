@@ -551,6 +551,31 @@ export type LegacyServiceJobListItemResponse = {
   status_updated_by_id: number | null;
 };
 
+export type LegacyAdditionalSaleItemResponse = {
+  product_id: number | null;
+  product_code: string | null;
+  product_name: string | null;
+  warehouse_id: number | null;
+  warehouse_code: string | null;
+  warehouse_name: string | null;
+  quantity: string;
+  unit_price: string;
+  line_total: string;
+};
+
+export type LegacyAdditionalSaleResponse = {
+  id: number;
+  invoice_number: string;
+  grand_total: string;
+  paid_amount: string;
+  balance_amount: string;
+  payment_status: string;
+  invoice_status: string;
+  created_at: string;
+  items: LegacyAdditionalSaleItemResponse[];
+};
+
+
 export type LegacyServiceJobDetailResponse =
   LegacyServiceJobListItemResponse & {
     bill_discount: string;
@@ -565,6 +590,7 @@ export type LegacyServiceJobDetailResponse =
     migration_notes: string | null;
 
     lines: LegacyServiceJobLineResponse[];
+    additional_sales: LegacyAdditionalSaleResponse[];
   };
 
 export type LegacyServiceJobHistoryListResponse = {

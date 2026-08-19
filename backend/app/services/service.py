@@ -1889,6 +1889,125 @@ async def get_legacy_service_job(
         key=lambda line: line.line_number,
     )
 
+    from app.models.sales import (
+        InvoiceSourceType,
+        SalesInvoice,
+    )
+    from app.models.catalog import Product
+    from app.models.inventory import Warehouse
+
+    additional_invoice_result = await session.execute(
+        select(SalesInvoice)
+        .options(
+            selectinload(
+                SalesInvoice.items
+            )
+        )
+        .where(
+            SalesInvoice.source_type
+            == InvoiceSourceType.LEGACY_SERVICE_JOB.value,
+            SalesInvoice.source_id
+            == job.legacy_job_id,
+        )
+        .order_by(
+            SalesInvoice.created_at,
+            SalesInvoice.id,
+        )
+    )
+
+    additional_invoices = (
+        additional_invoice_result
+        .scalars()
+        .unique()
+        .all()
+    )
+
+    additional_sales = []
+
+    for invoice in additional_invoices:
+        additional_items = []
+
+        for item in invoice.items:
+            product = (
+                await session.get(
+                    Product,
+                    item.product_id,
+                )
+                if item.product_id is not None
+                else None
+            )
+
+            warehouse = (
+                await session.get(
+                    Warehouse,
+                    item.warehouse_id,
+                )
+                if item.warehouse_id is not None
+                else None
+            )
+
+            additional_items.append(
+                {
+                    "product_id":
+                        item.product_id,
+                    "product_code":
+                        (
+                            product.product_code
+                            if product is not None
+                            else None
+                        ),
+                    "product_name":
+                        (
+                            product.name
+                            if product is not None
+                            else item.description
+                        ),
+                    "warehouse_id":
+                        item.warehouse_id,
+                    "warehouse_code":
+                        (
+                            warehouse.code
+                            if warehouse is not None
+                            else None
+                        ),
+                    "warehouse_name":
+                        (
+                            warehouse.name
+                            if warehouse is not None
+                            else None
+                        ),
+                    "quantity":
+                        item.quantity,
+                    "unit_price":
+                        item.unit_price,
+                    "line_total":
+                        item.line_total,
+                }
+            )
+
+        additional_sales.append(
+            {
+                "id":
+                    invoice.id,
+                "invoice_number":
+                    invoice.invoice_number,
+                "grand_total":
+                    invoice.grand_total,
+                "paid_amount":
+                    invoice.paid_amount,
+                "balance_amount":
+                    invoice.balance_amount,
+                "payment_status":
+                    invoice.payment_status,
+                "invoice_status":
+                    invoice.invoice_status,
+                "created_at":
+                    invoice.created_at,
+                "items":
+                    additional_items,
+            }
+        )
+
     return LegacyServiceJobDetailResponse(
         id=job.id,
         legacy_job_id=job.legacy_job_id,
@@ -1927,6 +2046,7 @@ async def get_legacy_service_job(
         status_updated_by_id=job.status_updated_by_id,
         migration_notes=job.migration_notes,
         lines=ordered_lines,
+        additional_sales=additional_sales,
     )
 
 

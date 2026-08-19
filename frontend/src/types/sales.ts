@@ -38,6 +38,8 @@ export type SalesInvoiceCreate = {
   invoice_discount_amount: string;
   tax_amount: string;
   notes?: string | null;
+  source_type?: "legacy_service_job" | null;
+  source_id?: number | null;
   items: SalesItemCreate[];
 };
 

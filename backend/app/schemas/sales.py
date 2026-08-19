@@ -108,6 +108,12 @@ class SalesInvoiceCreate(BaseModel):
 
     notes: str | None = None
 
+    source_type: str | None = None
+    source_id: int | None = Field(
+        default=None,
+        ge=1,
+    )
+
     items: list[SalesItemCreate] = Field(
         min_length=1,
         max_length=100,

@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 from io import BytesIO
+from xml.sax.saxutils import escape
 from decimal import Decimal
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     Paragraph,
@@ -221,25 +223,81 @@ def build_job_card_pdf(
     story.append(info)
     story.append(Spacer(1, 3 * mm))
 
+    detail_value_style = ParagraphStyle(
+        "JobCardDetailValue",
+        fontName="Helvetica",
+        fontSize=7.5,
+        leading=10,
+        spaceBefore=0,
+        spaceAfter=0,
+        wordWrap="CJK",
+    )
+
+    def detail_value(value: object) -> Paragraph:
+        text_value = (
+            ""
+            if value is None
+            else str(value)
+        )
+
+        return Paragraph(
+            escape(text_value),
+            detail_value_style,
+        )
+
     details = [
-        ["Brand:", data.brand or "None"],
-        ["Model:", data.model or ""],
-        ["Color:", data.color or ""],
-        ["Common", data.common or ""],
-        ["Problems:", data.problems],
-        ["IMI Number:", data.imei_number or ""],
-        ["Serial Number:", data.serial_number or ""],
+        [
+            "Brand:",
+            detail_value(data.brand or "None"),
+        ],
+        [
+            "Model:",
+            detail_value(data.model or ""),
+        ],
+        [
+            "Color:",
+            detail_value(data.color or ""),
+        ],
+        [
+            "Common",
+            detail_value(data.common or ""),
+        ],
+        [
+            "Problems:",
+            detail_value(data.problems),
+        ],
+        [
+            "IMI Number:",
+            detail_value(
+                data.imei_number or ""
+            ),
+        ],
+        [
+            "Serial Number:",
+            detail_value(
+                data.serial_number or ""
+            ),
+        ],
         [
             "Battery Condition:",
-            data.battery_condition or "",
+            detail_value(
+                data.battery_condition or ""
+            ),
         ],
-        ["Special Note:", data.special_note or ""],
+        [
+            "Special Note:",
+            detail_value(
+                data.special_note or ""
+            ),
+        ],
         [
             "Estimate Cost:",
-            (
-                f"Rs. {money(data.estimate_cost)}"
-                if data.estimate_cost is not None
-                else ""
+            detail_value(
+                (
+                    f"Rs. {money(data.estimate_cost)}"
+                    if data.estimate_cost is not None
+                    else ""
+                )
             ),
         ],
     ]
@@ -249,18 +307,6 @@ def build_job_card_pdf(
         colWidths=[
             34 * mm,
             148 * mm,
-        ],
-        rowHeights=[
-            7 * mm,
-            7 * mm,
-            7 * mm,
-            7 * mm,
-            8 * mm,
-            7 * mm,
-            7 * mm,
-            7 * mm,
-            7 * mm,
-            7 * mm,
         ],
     )
 

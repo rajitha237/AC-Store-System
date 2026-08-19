@@ -429,6 +429,30 @@ class LegacyServiceJobListItemResponse(BaseModel):
     status_updated_by_id: int | None = None
 
 
+class LegacyAdditionalSaleItemResponse(BaseModel):
+    product_id: int | None = None
+    product_code: str | None = None
+    product_name: str | None = None
+    warehouse_id: int | None = None
+    warehouse_code: str | None = None
+    warehouse_name: str | None = None
+    quantity: Decimal
+    unit_price: Decimal
+    line_total: Decimal
+
+
+class LegacyAdditionalSaleResponse(BaseModel):
+    id: int
+    invoice_number: str
+    grand_total: Decimal
+    paid_amount: Decimal
+    balance_amount: Decimal
+    payment_status: str
+    invoice_status: str
+    created_at: datetime
+    items: list[LegacyAdditionalSaleItemResponse]
+
+
 class LegacyServiceJobDetailResponse(
     LegacyServiceJobListItemResponse
 ):
@@ -444,6 +468,7 @@ class LegacyServiceJobDetailResponse(
     migration_notes: str | None = None
 
     lines: list[LegacyServiceJobLineResponse]
+    additional_sales: list[LegacyAdditionalSaleResponse]
 
 
 class LegacyServiceJobStatusUpdateRequest(BaseModel):

@@ -40,6 +40,10 @@ import {
 } from "@/components/app-shell";
 
 import {
+  downloadSalesInvoicePdf,
+} from "@/lib/documents-api";
+
+import {
   clearAuthSession,
   getAccessToken,
   getStoredUser,
@@ -1496,7 +1500,20 @@ export default function ServiceJobsPage() {
       );
 
       setAdditionalPartProductId("");
-      setAdditionalPartWarehouseId("");
+      const mainWarehouse =
+      warehouseOptions.find(
+        (warehouse) =>
+          warehouse.code
+            .trim()
+            .toUpperCase()
+          === "MAIN",
+      );
+
+    setAdditionalPartWarehouseId(
+      mainWarehouse
+        ? String(mainWarehouse.id)
+        : "",
+    );
       setAdditionalPartQuantity("1");
       setAdditionalPartUnitPrice("");
       setAdditionalPartPaymentEnabled(false);
@@ -1653,6 +1670,12 @@ export default function ServiceJobsPage() {
 
           tax_amount:
             "0.00",
+
+          source_type:
+            "legacy_service_job",
+
+          source_id:
+            legacySelected.legacy_job_id,
 
           notes:
             additionalPartNotes
@@ -1811,6 +1834,52 @@ export default function ServiceJobsPage() {
     setWarehouses(
       warehouseData,
     );
+  }
+
+
+  async function searchCustomerOptions(
+    query: string,
+  ) {
+    try {
+      const results =
+        await getSalesCustomers(
+          query,
+        );
+
+      setCustomers(
+        results,
+      );
+    } catch (
+      requestError
+    ) {
+      console.error(
+        "Customer search failed",
+        requestError,
+      );
+    }
+  }
+
+
+  async function searchProductOptions(
+    query: string,
+  ) {
+    try {
+      const results =
+        await getSalesProducts(
+          query,
+        );
+
+      setProducts(
+        results,
+      );
+    } catch (
+      requestError
+    ) {
+      console.error(
+        "Product search failed",
+        requestError,
+      );
+    }
   }
 
 
@@ -4493,6 +4562,186 @@ export default function ServiceJobsPage() {
                   >
                     <div>
                       <span>
+                        ADDED PART SALES
+                      </span>
+
+                      <strong>
+                        Additional catalog parts
+                      </strong>
+                    </div>
+
+                    <strong>
+                      {
+                        (
+                          legacySelected
+                            .additional_sales
+                          ?? []
+                        ).length
+                      }
+                    </strong>
+                  </div>
+
+                  {(
+                    legacySelected
+                      .additional_sales
+                    ?? []
+                  ).length === 0 ? (
+                    <div
+                      className={
+                        styles.emptyState
+                      }
+                    >
+                      No additional part sales
+                    </div>
+                  ) : (
+                    (
+                      legacySelected
+                        .additional_sales
+                      ?? []
+                    ).map(
+                        (sale) => (
+                          <div
+                            key={sale.id}
+                            className={
+                              styles.lineCard
+                            }
+                          >
+                            <div>
+                              <strong>
+                                {
+                                  sale.invoice_number
+                                }
+                              </strong>
+
+                              <button
+                                type="button"
+                                className={
+                                  styles.additionalSalePrintButton
+                                }
+                                onClick={async () => {
+                                  try {
+                                    const document =
+                                      await downloadSalesInvoicePdf(
+                                        sale.id,
+                                      );
+
+                                    saveDownloadedDocument(
+                                      document,
+                                    );
+                                  } catch (error) {
+                                    console.error(
+                                      "Failed to download additional part invoice",
+                                      error,
+                                    );
+                                  }
+                                }}
+                              >
+                                Print invoice
+                              </button>
+
+                              <small>
+                                {
+                                  sale.payment_status
+                                }
+                                {" • "}
+                                {
+                                  sale.invoice_status
+                                }
+                              </small>
+                            </div>
+
+                            <div>
+                              <strong>
+                                Total{" "}
+                                {money(
+                                  sale.grand_total,
+                                )}
+                              </strong>
+
+                              <small>
+                                Paid{" "}
+                                {money(
+                                  sale.paid_amount,
+                                )}
+                                {" • "}
+                                Balance{" "}
+                                {money(
+                                  sale.balance_amount,
+                                )}
+                              </small>
+                            </div>
+
+                            {sale.items.map(
+                              (item, index) => (
+                                <div
+                                  key={
+                                    `${sale.id}-${index}`
+                                  }
+                                  className={
+                                    styles.lineCard
+                                  }
+                                >
+                                  <div>
+                                    <strong>
+                                      {
+                                        item.product_name
+                                        || item.product_code
+                                        || "Catalog part"
+                                      }
+                                    </strong>
+
+                                    <small>
+                                      {
+                                        item.product_code
+                                      }
+                                      {item.warehouse_code
+                                        ? ` • ${item.warehouse_code}`
+                                        : ""}
+                                    </small>
+                                  </div>
+
+                                  <div>
+                                    <strong>
+                                      Qty{" "}
+                                      {
+                                        item.quantity
+                                      }
+                                    </strong>
+
+                                    <small>
+                                      Unit{" "}
+                                      {money(
+                                        item.unit_price,
+                                      )}
+                                      {" • "}
+                                      Total{" "}
+                                      {money(
+                                        item.line_total,
+                                      )}
+                                    </small>
+                                  </div>
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        ),
+                      )
+                  )}
+                </section>
+
+
+                <section
+                  className={
+                    styles.legacySection
+                  }
+                >
+                  <div
+                    className={
+                      styles.legacySectionHeader
+                    }
+                  >
+                    <div>
+                      <span>
                         DETAIL LINES
                       </span>
 
@@ -4709,13 +4958,25 @@ export default function ServiceJobsPage() {
                           setCustomerSearchOpen(
                             true,
                           );
+
+                          void searchCustomerOptions(
+                            "",
+                          );
                         }}
                         onChange={(event) => {
+                          const value =
+                            event.target.value;
+
                           setCustomerSearch(
-                            event.target.value,
+                            value,
                           );
+
                           setCustomerSearchOpen(
                             true,
+                          );
+
+                          void searchCustomerOptions(
+                            value,
                           );
 
                           if (
@@ -4912,13 +5173,25 @@ export default function ServiceJobsPage() {
                           setProductSearchOpen(
                             true,
                           );
+
+                          void searchProductOptions(
+                            "",
+                          );
                         }}
                         onChange={(event) => {
+                          const value =
+                            event.target.value;
+
                           setProductSearch(
-                            event.target.value,
+                            value,
                           );
+
                           setProductSearchOpen(
                             true,
+                          );
+
+                          void searchProductOptions(
+                            value,
                           );
 
                           if (
@@ -5464,11 +5737,9 @@ export default function ServiceJobsPage() {
                             ...createForm,
 
                             reported_issue:
-                              optionalText(
-                                event
-                                  .target
-                                  .value,
-                              ),
+                              event
+                                .target
+                                .value,
                           })
                       }
                     />
@@ -5490,11 +5761,9 @@ export default function ServiceJobsPage() {
                             ...createForm,
 
                             accessories_received:
-                              optionalText(
-                                event
-                                  .target
-                                  .value,
-                              ),
+                              event
+                                .target
+                                .value,
                           })
                       }
                     />
@@ -5516,11 +5785,9 @@ export default function ServiceJobsPage() {
                             ...createForm,
 
                             physical_condition:
-                              optionalText(
-                                event
-                                  .target
-                                  .value,
-                              ),
+                              event
+                                .target
+                                .value,
                           })
                       }
                     />
@@ -5546,11 +5813,9 @@ export default function ServiceJobsPage() {
                             ...createForm,
 
                             special_notes:
-                              optionalText(
-                                event
-                                  .target
-                                  .value,
-                              ),
+                              event
+                                .target
+                                .value,
                           })
                       }
                     />

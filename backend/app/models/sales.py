@@ -45,6 +45,7 @@ class PaymentMethod(str, Enum):
 class InvoiceSourceType(str, Enum):
     SALES = "sales"
     SERVICE_JOB = "service_job"
+    LEGACY_SERVICE_JOB = "legacy_service_job"
 
 
 class InvoiceItemType(str, Enum):

@@ -333,6 +333,89 @@ async def create_draft_invoice(
             detail="Branch belongs to another company",
         )
 
+    invoice_source_type = (
+        InvoiceSourceType.SALES.value
+    )
+    invoice_source_id = None
+
+    if payload.source_type is not None:
+        requested_source_type = (
+            payload.source_type
+            .strip()
+            .lower()
+        )
+
+        if (
+            requested_source_type
+            != InvoiceSourceType
+            .LEGACY_SERVICE_JOB
+            .value
+        ):
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail=(
+                    "Unsupported sales invoice source type"
+                ),
+            )
+
+        if payload.source_id is None:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail=(
+                    "Legacy service job source_id "
+                    "is required"
+                ),
+            )
+
+        from app.models.legacy_service_job import (
+            LegacyServiceJob,
+        )
+
+        legacy_source = (
+            await session.execute(
+                select(
+                    LegacyServiceJob
+                ).where(
+                    LegacyServiceJob.legacy_job_id
+                    == payload.source_id
+                )
+            )
+        ).scalar_one_or_none()
+
+        if legacy_source is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    "Legacy service job source "
+                    "was not found"
+                ),
+            )
+
+        invoice_source_type = (
+            InvoiceSourceType
+            .LEGACY_SERVICE_JOB
+            .value
+        )
+
+        invoice_source_id = (
+            legacy_source.legacy_job_id
+        )
+
+    elif payload.source_id is not None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "source_type is required "
+                "when source_id is supplied"
+            ),
+        )
+
     subtotal = ZERO_2
     prepared_items = []
 
@@ -453,10 +536,8 @@ async def create_draft_invoice(
         branch_id=branch.id,
         invoice_number=None,
         customer_id=customer.id,
-        source_type=(
-            InvoiceSourceType.SALES.value
-        ),
-        source_id=None,
+        source_type=invoice_source_type,
+        source_id=invoice_source_id,
         subtotal=subtotal,
         discount_amount=(
             payload.invoice_discount_amount

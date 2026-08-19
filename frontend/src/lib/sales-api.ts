@@ -178,8 +178,9 @@ export async function confirmSalesInvoice(
 }
 
 
-export async function getSalesCustomers():
-Promise<SalesCustomerOption[]> {
+export async function getSalesCustomers(
+  search?: string,
+): Promise<SalesCustomerOption[]> {
   const response =
     await api.get<unknown>(
       "/customers",
@@ -188,6 +189,9 @@ Promise<SalesCustomerOption[]> {
           page: 1,
           page_size: 100,
           is_active: true,
+          search:
+            search?.trim()
+            || undefined,
         },
       },
     );
@@ -266,8 +270,9 @@ Promise<SalesCustomerOption[]> {
 }
 
 
-export async function getSalesProducts():
-Promise<SalesProductOption[]> {
+export async function getSalesProducts(
+  search?: string,
+): Promise<SalesProductOption[]> {
   const response =
     await api.get<unknown>(
       "/catalog/products",
@@ -276,6 +281,9 @@ Promise<SalesProductOption[]> {
           page: 1,
           page_size: 100,
           is_active: true,
+          search:
+            search?.trim()
+            || undefined,
         },
       },
     );
