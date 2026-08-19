@@ -247,6 +247,31 @@ class LegacyServiceJob(Base):
         nullable=True,
     )
 
+    # Operational management metadata only.
+    # These fields do NOT replace or rewrite the legacy source history.
+    management_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="received",
+        server_default="received",
+        index=True,
+    )
+
+    status_remarks: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    status_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    status_updated_by_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

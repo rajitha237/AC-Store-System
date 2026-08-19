@@ -3,6 +3,8 @@ import type {
   LegacyServiceJobDetailResponse,
   LegacyServiceJobHistoryListResponse,
   LegacyServiceJobListParams,
+  LegacyServiceJobStatusUpdateRequest,
+  LegacyServiceJobStatusUpdateResponse,
 } from "@/types/service-jobs";
 
 import {
@@ -264,6 +266,21 @@ export async function getLegacyServiceJob(
   const response =
     await api.get<LegacyServiceJobDetailResponse>(
       `/service/legacy-jobs/${legacyJobId}`,
+    );
+
+  return response.data;
+}
+
+
+
+export async function updateLegacyServiceJobStatus(
+  legacyJobId: number,
+  payload: LegacyServiceJobStatusUpdateRequest,
+): Promise<LegacyServiceJobStatusUpdateResponse> {
+  const response =
+    await api.patch<LegacyServiceJobStatusUpdateResponse>(
+      `/service/legacy-jobs/${legacyJobId}/status`,
+      payload,
     );
 
   return response.data;

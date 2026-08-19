@@ -491,6 +491,7 @@ async def create_draft_invoice(
             SalesInvoiceItem(
                 invoice_id=invoice.id,
                 product_id=product.id,
+                warehouse_id=item.warehouse_id,
                 item_type=(
                     InvoiceItemType.PRODUCT.value
                 ),
@@ -1138,30 +1139,32 @@ async def confirm_invoice(
                 )
 
             else:
-                warehouse_result = (
-                    await session.execute(
-                        select(Warehouse)
-                        .where(
-                            Warehouse.branch_id
-                            == invoice.branch_id,
-                            Warehouse.code == "MAIN",
-                            Warehouse.is_active.is_(
-                                True
-                            ),
-                        )
-                        .order_by(Warehouse.id)
-                    )
-                )
-
-                warehouse = (
-                    warehouse_result.scalars().first()
-                )
-
-                if warehouse is None:
+                if item.warehouse_id is None:
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail=(
-                            "MAIN warehouse is not configured"
+                            f"{product.product_code}: "
+                            "invoice item has no warehouse"
+                        ),
+                    )
+
+                warehouse = await session.get(
+                    Warehouse,
+                    item.warehouse_id,
+                )
+
+                if (
+                    warehouse is None
+                    or warehouse.branch_id
+                    != invoice.branch_id
+                    or not warehouse.is_active
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            f"{product.product_code}: "
+                            "selected warehouse is invalid "
+                            "or inactive"
                         ),
                     )
 

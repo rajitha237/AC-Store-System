@@ -53,6 +53,10 @@ from app.api.v1.purchasing import (
     router as purchasing_router,
 )
 
+from app.api.v1.legacy_grns import (
+    router as legacy_grns_router,
+)
+
 
 api_router = APIRouter()
 
@@ -123,5 +127,10 @@ api_router.include_router(
 
 api_router.include_router(
     purchasing_router
+)
+
+
+api_router.include_router(
+    legacy_grns_router
 )
 

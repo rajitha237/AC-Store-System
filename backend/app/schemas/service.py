@@ -423,6 +423,11 @@ class LegacyServiceJobListItemResponse(BaseModel):
     legacy_service_date: date | None = None
     legacy_warranty_period: str | None = None
 
+    management_status: str = "received"
+    status_remarks: str | None = None
+    status_updated_at: datetime | None = None
+    status_updated_by_id: int | None = None
+
 
 class LegacyServiceJobDetailResponse(
     LegacyServiceJobListItemResponse
@@ -439,6 +444,20 @@ class LegacyServiceJobDetailResponse(
     migration_notes: str | None = None
 
     lines: list[LegacyServiceJobLineResponse]
+
+
+class LegacyServiceJobStatusUpdateRequest(BaseModel):
+    status: str
+    remarks: str | None = None
+
+
+class LegacyServiceJobStatusUpdateResponse(BaseModel):
+    legacy_job_id: int
+    management_status: str
+    status_remarks: str | None = None
+    status_updated_at: datetime
+    status_updated_by_id: int | None = None
+
 
 
 class LegacyServiceJobHistoryListResponse(BaseModel):

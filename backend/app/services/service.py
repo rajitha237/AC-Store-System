@@ -1921,6 +1921,121 @@ async def get_legacy_service_job(
         legacy_user_name=job.legacy_user_name,
         legacy_service_date=job.legacy_service_date,
         legacy_warranty_period=job.legacy_warranty_period,
+        management_status=job.management_status,
+        status_remarks=job.status_remarks,
+        status_updated_at=job.status_updated_at,
+        status_updated_by_id=job.status_updated_by_id,
         migration_notes=job.migration_notes,
         lines=ordered_lines,
+    )
+
+
+
+# ===== LEGACY SERVICE JOB STATUS MANAGEMENT =====
+
+LEGACY_SERVICE_MANAGEMENT_STATUSES = {
+    "received",
+    "inspection",
+    "waiting_approval",
+    "approved",
+    "repairing",
+    "testing",
+    "ready",
+    "delivered",
+    "cancelled",
+}
+
+
+async def update_legacy_service_job_status(
+    session,
+    *,
+    legacy_job_id: int,
+    status: str,
+    remarks: str | None,
+    user_id: int | None,
+):
+    from datetime import UTC, datetime
+
+    from fastapi import HTTPException
+    from sqlalchemy import select
+
+    from app.models.legacy_service_job import (
+        LegacyServiceJob,
+    )
+    from app.schemas.service import (
+        LegacyServiceJobStatusUpdateResponse,
+    )
+
+    normalized_status = (
+        status.strip().lower()
+    )
+
+    if (
+        normalized_status
+        not in LEGACY_SERVICE_MANAGEMENT_STATUSES
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Invalid legacy service management status"
+            ),
+        )
+
+    stmt = (
+        select(LegacyServiceJob)
+        .where(
+            LegacyServiceJob.legacy_job_id
+            == legacy_job_id
+        )
+    )
+
+    job = (
+        await session.execute(stmt)
+    ).scalar_one_or_none()
+
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Legacy service job not found",
+        )
+
+    cleaned_remarks = (
+        remarks.strip()
+        if remarks
+        else None
+    )
+
+    if cleaned_remarks:
+        cleaned_remarks = (
+            cleaned_remarks[:1000]
+        )
+
+    now = datetime.now(UTC)
+
+    job.management_status = (
+        normalized_status
+    )
+    job.status_remarks = (
+        cleaned_remarks
+    )
+    job.status_updated_at = now
+    job.status_updated_by_id = user_id
+
+    await session.flush()
+    await session.commit()
+    await session.refresh(job)
+
+    return LegacyServiceJobStatusUpdateResponse(
+        legacy_job_id=job.legacy_job_id,
+        management_status=(
+            job.management_status
+        ),
+        status_remarks=job.status_remarks,
+        status_updated_at=(
+            job.status_updated_at
+            or now
+        ),
+        status_updated_by_id=(
+            job.status_updated_by_id
+        ),
     )

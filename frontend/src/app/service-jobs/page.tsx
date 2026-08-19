@@ -51,6 +51,8 @@ import {
 } from "@/lib/documents-api";
 
 import {
+  createSalesInvoice,
+  confirmSalesInvoice,
   getSalesCustomers,
   getSalesProducts,
   getSalesWarehouses,
@@ -63,6 +65,7 @@ import {
   createServiceJob,
   getLegacyServiceJob,
   getLegacyServiceJobs,
+  updateLegacyServiceJobStatus,
   getServiceJob,
   getServiceJobs,
   updateServiceApproval,
@@ -88,6 +91,7 @@ import type {
 } from "@/types/auth";
 
 import type {
+  InitialPaymentCreate,
   SalesCustomerOption,
   SalesProductOption,
   SalesWarehouseOption,
@@ -658,6 +662,96 @@ export default function ServiceJobsPage() {
   ] =
     useState(false);
 
+  const [
+    legacyStatus,
+    setLegacyStatus,
+  ] =
+    useState("received");
+
+  const [
+    legacyStatusRemarks,
+    setLegacyStatusRemarks,
+  ] =
+    useState("");
+
+  const [
+    legacyStatusSaving,
+    setLegacyStatusSaving,
+  ] =
+    useState(false);
+
+
+
+  const [
+    additionalPartSaleOpen,
+    setAdditionalPartSaleOpen,
+  ] = useState(false);
+
+  const [
+    additionalPartCustomerId,
+    setAdditionalPartCustomerId,
+  ] = useState("");
+
+  const [
+    additionalPartProductId,
+    setAdditionalPartProductId,
+  ] = useState("");
+
+  const [
+    additionalPartWarehouseId,
+    setAdditionalPartWarehouseId,
+  ] = useState("");
+
+  const [
+    additionalPartQuantity,
+    setAdditionalPartQuantity,
+  ] = useState("1");
+
+  const [
+    additionalPartUnitPrice,
+    setAdditionalPartUnitPrice,
+  ] = useState("");
+
+  const [
+    additionalPartPaymentEnabled,
+    setAdditionalPartPaymentEnabled,
+  ] = useState(false);
+
+  const [
+    additionalPartPaymentAmount,
+    setAdditionalPartPaymentAmount,
+  ] = useState("");
+
+  const [
+    additionalPartPaymentMethod,
+    setAdditionalPartPaymentMethod,
+  ] = useState("cash");
+
+  const [
+    additionalPartReference,
+    setAdditionalPartReference,
+  ] = useState("");
+
+  const [
+    additionalPartNotes,
+    setAdditionalPartNotes,
+  ] = useState("");
+
+  const [
+    additionalPartSaving,
+    setAdditionalPartSaving,
+  ] = useState(false);
+
+
+  const [
+    additionalPartError,
+    setAdditionalPartError,
+  ] = useState("");
+
+  const [
+    additionalPartSuccess,
+    setAdditionalPartSuccess,
+  ] = useState("");
 
   const [
     selected,
@@ -692,6 +786,27 @@ export default function ServiceJobsPage() {
     >(
       [],
     );
+
+  const [
+    customerSearch,
+    setCustomerSearch,
+  ] = useState("");
+
+  const [
+    customerSearchOpen,
+    setCustomerSearchOpen,
+  ] = useState(false);
+
+  const [
+    productSearch,
+    setProductSearch,
+  ] = useState("");
+
+  const [
+    productSearchOpen,
+    setProductSearchOpen,
+  ] = useState(false);
+
 
   const [
     products,
@@ -1207,6 +1322,16 @@ export default function ServiceJobsPage() {
       setLegacySelected(
         detail,
       );
+
+      setLegacyStatus(
+        detail.management_status
+        || "received",
+      );
+
+      setLegacyStatusRemarks(
+        detail.status_remarks
+        || "",
+      );
     } catch (
       requestError
     ) {
@@ -1217,6 +1342,446 @@ export default function ServiceJobsPage() {
       );
     } finally {
       setLegacyDetailLoading(
+        false,
+      );
+    }
+  }
+
+
+
+  async function openAdditionalPartSale() {
+    if (!legacySelected) {
+      return;
+    }
+
+    setError("");
+    setAdditionalPartError("");
+    setAdditionalPartSuccess("");
+
+    try {
+      let customerOptions =
+        customers;
+
+      let productOptions =
+        products;
+
+      let warehouseOptions =
+        warehouses;
+
+      if (
+        customerOptions.length === 0
+        || productOptions.length === 0
+        || warehouseOptions.length === 0
+      ) {
+        const [
+          loadedCustomers,
+          loadedProducts,
+          loadedWarehouses,
+        ] = await Promise.all([
+          getSalesCustomers(),
+          getSalesProducts(),
+          getSalesWarehouses(),
+        ]);
+
+        customerOptions =
+          loadedCustomers;
+
+        productOptions =
+          loadedProducts;
+
+        warehouseOptions =
+          loadedWarehouses;
+
+        setCustomers(
+          loadedCustomers,
+        );
+
+        setProducts(
+          loadedProducts,
+        );
+
+        setWarehouses(
+          loadedWarehouses,
+        );
+      }
+
+      const normalizePhone = (
+        value:
+          string
+          | null
+          | undefined,
+      ) =>
+        (value || "")
+          .replace(
+            /\D/g,
+            "",
+          );
+
+      const normalizeName = (
+        value:
+          string
+          | null
+          | undefined,
+      ) =>
+        (value || "")
+          .trim()
+          .replace(
+            /\s+/g,
+            " ",
+          )
+          .toUpperCase();
+
+      const legacyPhone =
+        normalizePhone(
+          legacySelected
+            .customer_phone,
+        );
+
+      const legacyName =
+        normalizeName(
+          legacySelected
+            .customer_name,
+        );
+
+      let matchedCustomer =
+        legacyPhone
+          ? customerOptions.find(
+              (customer) => {
+                const phone =
+                  normalizePhone(
+                    customer.phone,
+                  );
+
+                const mobile =
+                  normalizePhone(
+                    customer
+                      .mobile_number,
+                  );
+
+                return (
+                  phone === legacyPhone
+                  || mobile === legacyPhone
+                );
+              },
+            )
+          : undefined;
+
+      if (
+        !matchedCustomer
+        && legacyName
+      ) {
+        const nameMatches =
+          customerOptions.filter(
+            (customer) =>
+              normalizeName(
+                customer.full_name,
+              )
+              === legacyName,
+          );
+
+        if (
+          nameMatches.length === 1
+        ) {
+          matchedCustomer =
+            nameMatches[0];
+        }
+      }
+
+      setAdditionalPartCustomerId(
+        matchedCustomer
+          ? String(
+              matchedCustomer.id,
+            )
+          : "",
+      );
+
+      setAdditionalPartProductId("");
+      setAdditionalPartWarehouseId("");
+      setAdditionalPartQuantity("1");
+      setAdditionalPartUnitPrice("");
+      setAdditionalPartPaymentEnabled(false);
+      setAdditionalPartPaymentAmount("");
+      setAdditionalPartPaymentMethod("cash");
+      setAdditionalPartReference("");
+
+      setAdditionalPartNotes(
+        `Additional part for legacy service job ${
+          legacySelected.invoice_code
+          || legacySelected.legacy_job_id
+        }`,
+      );
+
+      setAdditionalPartSaleOpen(
+        true,
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    }
+  }
+
+
+  async function saveAdditionalPartSale() {
+    if (!legacySelected) {
+      return;
+    }
+
+    setAdditionalPartError("");
+    setAdditionalPartSuccess("");
+
+    const customerId =
+      Number(additionalPartCustomerId);
+
+    const productId =
+      Number(additionalPartProductId);
+
+    const warehouseId =
+      Number(additionalPartWarehouseId);
+
+    const quantity =
+      Number(additionalPartQuantity);
+
+    const unitPrice =
+      Number(additionalPartUnitPrice);
+
+    if (!customerId) {
+      setAdditionalPartError(
+        "Select the customer for this additional part sale.",
+      );
+      return;
+    }
+
+    if (!productId) {
+      setAdditionalPartError(
+        "Select a catalog product.",
+      );
+      return;
+    }
+
+    if (!warehouseId) {
+      setAdditionalPartError(
+        "Select a warehouse.",
+      );
+      return;
+    }
+
+    if (
+      !Number.isFinite(quantity)
+      || quantity <= 0
+    ) {
+      setAdditionalPartError(
+        "Quantity must be greater than zero.",
+      );
+      return;
+    }
+
+    if (
+      !Number.isFinite(unitPrice)
+      || unitPrice <= 0
+    ) {
+      setAdditionalPartError(
+        "Unit price must be greater than zero.",
+      );
+      return;
+    }
+
+    const total =
+      quantity * unitPrice;
+
+    let initialPayment:
+      InitialPaymentCreate
+      | null = null;
+
+    if (additionalPartPaymentEnabled) {
+      const paymentAmount =
+        Number(
+          additionalPartPaymentAmount,
+        );
+
+      if (
+        !Number.isFinite(paymentAmount)
+        || paymentAmount <= 0
+      ) {
+        setAdditionalPartError(
+          "Payment amount must be greater than zero.",
+        );
+        return;
+      }
+
+      if (paymentAmount > total) {
+        setAdditionalPartError(
+          "Payment cannot exceed the additional part total.",
+        );
+        return;
+      }
+
+      initialPayment = {
+        amount:
+          paymentAmount.toFixed(2),
+
+        payment_method:
+          additionalPartPaymentMethod,
+
+        reference_number:
+          additionalPartReference
+            .trim()
+            || null,
+
+        notes:
+          additionalPartNotes
+            .trim()
+            || null,
+      };
+    }
+
+    setAdditionalPartSaving(true);
+    setError("");
+
+    try {
+      const created =
+        await createSalesInvoice({
+          customer_id:
+            customerId,
+
+          invoice_discount_amount:
+            "0.00",
+
+          tax_amount:
+            "0.00",
+
+          notes:
+            additionalPartNotes
+              .trim()
+              || null,
+
+          items: [
+            {
+              product_id:
+                productId,
+
+              warehouse_id:
+                warehouseId,
+
+              serial_number_id:
+                null,
+
+              quantity:
+                quantity.toString(),
+
+              unit_price:
+                unitPrice.toFixed(2),
+
+              discount_amount:
+                "0.00",
+
+              description:
+                `Legacy service job ${
+                  legacySelected.invoice_code
+                  || legacySelected.legacy_job_id
+                } additional part`,
+            },
+          ],
+        });
+
+      const confirmed =
+        await confirmSalesInvoice(
+          created.id,
+          {
+            initial_payment:
+              initialPayment,
+          },
+        );
+
+      setAdditionalPartSuccess(
+        `Sale ${
+          confirmed.invoice_number
+          || created.invoice_number
+          || `#${created.id}`
+        } created successfully.`,
+      );
+
+      await openLegacyDetail(
+        legacySelected.legacy_job_id,
+      );
+    } catch (requestError) {
+      const message =
+        apiError(
+          requestError,
+        );
+
+      setAdditionalPartError(
+        message,
+      );
+
+      setError(
+        message,
+      );
+    } finally {
+      setAdditionalPartSaving(false);
+    }
+  }
+
+
+  async function saveLegacyStatus() {
+    if (!legacySelected) {
+      return;
+    }
+
+    setLegacyStatusSaving(
+      true,
+    );
+
+    setError("");
+
+    try {
+      await updateLegacyServiceJobStatus(
+        legacySelected.legacy_job_id,
+        {
+          status:
+            legacyStatus,
+
+          remarks:
+            legacyStatusRemarks
+              .trim()
+              || null,
+        },
+      );
+
+      const refreshed =
+        await getLegacyServiceJob(
+          legacySelected.legacy_job_id,
+        );
+
+      setLegacySelected(
+        refreshed,
+      );
+
+      setLegacyStatus(
+        refreshed.management_status
+        || "received",
+      );
+
+      setLegacyStatusRemarks(
+        refreshed.status_remarks
+        || "",
+      );
+
+      await loadLegacyJobs();
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    } finally {
+      setLegacyStatusSaving(
         false,
       );
     }
@@ -3014,9 +3579,18 @@ export default function ServiceJobsPage() {
                                   : styles.legacyCompleted
                               }
                             >
-                              {job.is_cancelled
-                                ? "Cancelled"
-                                : "Historical"}
+                              {(
+                                job.management_status
+                                || (
+                                  job.is_cancelled
+                                    ? "cancelled"
+                                    : "received"
+                                )
+                              )
+                                .replaceAll(
+                                  "_",
+                                  " ",
+                                )}
                             </span>
                           </td>
 
@@ -3107,6 +3681,434 @@ export default function ServiceJobsPage() {
             </footer>
           </section>
         </>
+      )}
+
+
+
+      {additionalPartSaleOpen && (
+        <div
+          className={
+            styles.modalBackdrop
+          }
+        >
+          <div
+            className={
+              styles.additionalPartModal
+            }
+          >
+            <div
+              className={
+                styles.legacySectionHeader
+              }
+            >
+              <div>
+                <span>
+                  ADDITIONAL PART SALE
+                </span>
+
+                <strong>
+                  Add catalog part
+                </strong>
+
+                <small>
+                  Legacy job{" "}
+                  {legacySelected?.invoice_code
+                    || legacySelected?.legacy_job_id}
+                </small>
+              </div>
+
+              <button
+                type="button"
+                className={
+                  styles.secondaryButton
+                }
+                disabled={
+                  additionalPartSaving
+                }
+                onClick={() =>
+                  setAdditionalPartSaleOpen(
+                    false,
+                  )
+                }
+              >
+                Close
+              </button>
+            </div>
+
+            <div
+              className={
+                styles.additionalPartGrid
+              }
+            >
+              <label>
+                Customer *
+
+                <select
+                  value={
+                    additionalPartCustomerId
+                  }
+                  onChange={
+                    (event) =>
+                      setAdditionalPartCustomerId(
+                        event.target.value,
+                      )
+                  }
+                >
+                  <option value="">
+                    Select customer
+                  </option>
+
+                  {customers.map(
+                    (customer) => (
+                      <option
+                        key={
+                          customer.id
+                        }
+                        value={
+                          customer.id
+                        }
+                      >
+                        {customer.full_name}
+                        {customer.customer_code
+                          ? ` • ${customer.customer_code}`
+                          : ""}
+                        {customer.mobile_number
+                          ? ` • ${customer.mobile_number}`
+                          : ""}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+
+              <label>
+                Catalog product *
+
+                <select
+                  value={
+                    additionalPartProductId
+                  }
+                  onChange={
+                    (event) => {
+                      const value =
+                        event.target.value;
+
+                      setAdditionalPartProductId(
+                        value,
+                      );
+
+                      const product =
+                        products.find(
+                          (item) =>
+                            String(item.id)
+                            === value,
+                        );
+
+                      if (product) {
+                        const rawPrice =
+                          product.selling_price;
+
+                        const price =
+                          typeof rawPrice === "number"
+                            ? rawPrice
+                            : Number.parseFloat(
+                                String(
+                                  rawPrice ?? "",
+                                ),
+                              );
+
+                        setAdditionalPartUnitPrice(
+                          Number.isFinite(price)
+                            ? price.toFixed(2)
+                            : "",
+                        );
+
+                        setAdditionalPartError(
+                          Number.isFinite(price)
+                            && price > 0
+                            ? ""
+                            : "This product does not have a valid selling price.",
+                        );
+                      } else {
+                        setAdditionalPartUnitPrice(
+                          "",
+                        );
+                      }
+                    }
+                  }
+                >
+                  <option value="">
+                    Select product
+                  </option>
+
+                  {products.map(
+                    (product) => (
+                      <option
+                        key={
+                          product.id
+                        }
+                        value={
+                          product.id
+                        }
+                      >
+                        {product.product_code}
+                        {" • "}
+                        {product.name}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+
+              <label>
+                Warehouse *
+
+                <select
+                  value={
+                    additionalPartWarehouseId
+                  }
+                  onChange={
+                    (event) =>
+                      setAdditionalPartWarehouseId(
+                        event.target.value,
+                      )
+                  }
+                >
+                  <option value="">
+                    Select warehouse
+                  </option>
+
+                  {warehouses.map(
+                    (warehouse) => (
+                      <option
+                        key={
+                          warehouse.id
+                        }
+                        value={
+                          warehouse.id
+                        }
+                      >
+                        {warehouse.code}
+                        {" • "}
+                        {warehouse.name}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+
+              <label>
+                Quantity *
+
+                <input
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  value={
+                    additionalPartQuantity
+                  }
+                  onChange={
+                    (event) =>
+                      setAdditionalPartQuantity(
+                        event.target.value,
+                      )
+                  }
+                />
+              </label>
+
+              <label>
+                Unit price *
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={
+                    additionalPartUnitPrice
+                  }
+                  onChange={
+                    (event) =>
+                      setAdditionalPartUnitPrice(
+                        event.target.value,
+                      )
+                  }
+                />
+              </label>
+            </div>
+
+            <label
+              className={
+                styles.additionalPaymentToggle
+              }
+            >
+              <input
+                type="checkbox"
+                checked={
+                  additionalPartPaymentEnabled
+                }
+                onChange={
+                  (event) =>
+                    setAdditionalPartPaymentEnabled(
+                      event.target.checked,
+                    )
+                }
+              />
+
+              Receive payment now
+            </label>
+
+            {additionalPartPaymentEnabled && (
+              <div
+                className={
+                  styles.additionalPartGrid
+                }
+              >
+                <label>
+                  Payment amount *
+
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={
+                      additionalPartPaymentAmount
+                    }
+                    onChange={
+                      (event) =>
+                        setAdditionalPartPaymentAmount(
+                          event.target.value,
+                        )
+                    }
+                  />
+                </label>
+
+                <label>
+                  Payment method
+
+                  <select
+                    value={
+                      additionalPartPaymentMethod
+                    }
+                    onChange={
+                      (event) =>
+                        setAdditionalPartPaymentMethod(
+                          event.target.value,
+                        )
+                    }
+                  >
+                    <option value="cash">
+                      Cash
+                    </option>
+
+                    <option value="card">
+                      Card
+                    </option>
+
+                    <option value="bank_transfer">
+                      Bank transfer
+                    </option>
+
+                    <option value="cheque">
+                      Cheque
+                    </option>
+
+                    <option value="mobile_payment">
+                      Mobile payment
+                    </option>
+                  </select>
+                </label>
+
+                <label>
+                  Reference
+
+                  <input
+                    value={
+                      additionalPartReference
+                    }
+                    onChange={
+                      (event) =>
+                        setAdditionalPartReference(
+                          event.target.value,
+                        )
+                    }
+                  />
+                </label>
+              </div>
+            )}
+
+            <label
+              className={
+                styles.additionalPartNotes
+              }
+            >
+              Notes
+
+              <textarea
+                rows={3}
+                maxLength={1000}
+                value={
+                  additionalPartNotes
+                }
+                onChange={
+                  (event) =>
+                    setAdditionalPartNotes(
+                      event.target.value,
+                    )
+                }
+              />
+            </label>
+
+            {additionalPartError && (
+              <div
+                className={
+                  styles.additionalPartError
+                }
+              >
+                {additionalPartError}
+              </div>
+            )}
+
+            {additionalPartSuccess && (
+              <div
+                className={
+                  styles.additionalPartSuccess
+                }
+              >
+                {additionalPartSuccess}
+              </div>
+            )}
+
+            <div
+              className={
+                styles.additionalPartActions
+              }
+            >
+              <small>
+                Confirming this sale uses the
+                existing Sales workflow. Stock
+                and payment records are created
+                only by that workflow.
+              </small>
+
+              <button
+                type="button"
+                className={
+                  styles.primaryButton
+                }
+                disabled={
+                  additionalPartSaving
+                }
+                onClick={() =>
+                  void saveAdditionalPartSale()
+                }
+              >
+                {additionalPartSaving
+                  ? "Saving..."
+                  : "Create sale"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
 
@@ -3298,6 +4300,187 @@ export default function ServiceJobsPage() {
                   </div>
                 </section>
 
+
+                <section
+                  className={
+                    styles.additionalPartCard
+                  }
+                >
+                  <div>
+                    <span>
+                      ADDITIONAL PARTS
+                    </span>
+
+                    <strong>
+                      Add a new catalog part
+                    </strong>
+
+                    <small>
+                      Creates a new sales invoice linked
+                      operationally to this legacy job.
+                      Historical legacy lines remain unchanged.
+                    </small>
+                  </div>
+
+                  <button
+                    type="button"
+                    className={
+                      styles.primaryButton
+                    }
+                    onClick={
+                      openAdditionalPartSale
+                    }
+                  >
+                    Add additional part
+                  </button>
+                </section>
+
+
+                <section
+                  className={
+                    styles.legacyStatusPanel
+                  }
+                >
+                  <div
+                    className={
+                      styles.legacySectionHeader
+                    }
+                  >
+                    <div>
+                      <span>
+                        MANAGEMENT STATUS
+                      </span>
+
+                      <strong>
+                        Update service progress
+                      </strong>
+                    </div>
+
+                    <span
+                      className={
+                        styles.legacyStatusCurrent
+                      }
+                    >
+                      {legacySelected
+                        .management_status
+                        .replaceAll(
+                          "_",
+                          " ",
+                        )}
+                    </span>
+                  </div>
+
+                  <div
+                    className={
+                      styles.legacyStatusGrid
+                    }
+                  >
+                    <label>
+                      Status
+
+                      <select
+                        value={
+                          legacyStatus
+                        }
+                        onChange={
+                          (event) =>
+                            setLegacyStatus(
+                              event.target.value,
+                            )
+                        }
+                      >
+                        <option value="received">
+                          Received
+                        </option>
+
+                        <option value="inspection">
+                          Inspection
+                        </option>
+
+                        <option value="waiting_approval">
+                          Waiting approval
+                        </option>
+
+                        <option value="approved">
+                          Approved
+                        </option>
+
+                        <option value="repairing">
+                          Repairing
+                        </option>
+
+                        <option value="testing">
+                          Testing
+                        </option>
+
+                        <option value="ready">
+                          Ready
+                        </option>
+
+                        <option value="delivered">
+                          Delivered
+                        </option>
+
+                        <option value="cancelled">
+                          Cancelled
+                        </option>
+                      </select>
+                    </label>
+
+                    <label>
+                      Remarks
+
+                      <textarea
+                        rows={3}
+                        maxLength={1000}
+                        value={
+                          legacyStatusRemarks
+                        }
+                        placeholder={
+                          "Optional status note..."
+                        }
+                        onChange={
+                          (event) =>
+                            setLegacyStatusRemarks(
+                              event.target.value,
+                            )
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  <div
+                    className={
+                      styles.legacyStatusActions
+                    }
+                  >
+                    <small>
+                      Only management status is
+                      changed. Legacy financials,
+                      source history and stock
+                      remain untouched.
+                    </small>
+
+                    <button
+                      type="button"
+                      className={
+                        styles.primaryButton
+                      }
+                      disabled={
+                        legacyStatusSaving
+                      }
+                      onClick={() =>
+                        void saveLegacyStatus()
+                      }
+                    >
+                      {legacyStatusSaving
+                        ? "Saving..."
+                        : "Update status"}
+                    </button>
+                  </div>
+                </section>
+
+
                 <section
                   className={
                     styles.legacySection
@@ -3485,108 +4668,383 @@ export default function ServiceJobsPage() {
                   <label>
                     Customer *
 
-                    <select
-                      required
-                      value={
-                        createForm
-                          .customer_id
-                      }
-                      onChange={
-                        (event) =>
-                          setCreateForm({
-                            ...createForm,
-
-                            customer_id:
-                              Number(
-                                event
-                                  .target
-                                  .value,
-                              ),
-                          })
+                    <div
+                      className={
+                        styles.searchableSelect
                       }
                     >
-                      <option value={0}>
-                        Select customer
-                      </option>
+                      <input
+                        required
+                        type="text"
+                        autoComplete="off"
+                        placeholder="Search name, code, phone or NIC..."
+                        value={
+                          customerSearchOpen
+                            ? customerSearch
+                            : (
+                                customers.find(
+                                  (customer) =>
+                                    customer.id ===
+                                    createForm.customer_id,
+                                )
+                                  ? `${
+                                      customers.find(
+                                        (customer) =>
+                                          customer.id ===
+                                          createForm.customer_id,
+                                      )?.customer_code ??
+                                      `#${createForm.customer_id}`
+                                    } — ${
+                                      customers.find(
+                                        (customer) =>
+                                          customer.id ===
+                                          createForm.customer_id,
+                                      )?.full_name ?? ""
+                                    }`
+                                  : ""
+                              )
+                        }
+                        onFocus={() => {
+                          setCustomerSearch("");
+                          setCustomerSearchOpen(
+                            true,
+                          );
+                        }}
+                        onChange={(event) => {
+                          setCustomerSearch(
+                            event.target.value,
+                          );
+                          setCustomerSearchOpen(
+                            true,
+                          );
 
-                      {customers.map(
-                        (customer) => (
-                          <option
-                            key={
-                              customer.id
-                            }
-                            value={
-                              customer.id
-                            }
-                          >
-                            {"#"}
-                            {
-                              customer.id
-                            }
-                            {" — "}
-                            {
-                              customer
-                                .full_name
-                            }
-                          </option>
-                        ),
+                          if (
+                            createForm.customer_id
+                          ) {
+                            setCreateForm({
+                              ...createForm,
+                              customer_id: 0,
+                            });
+                          }
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(
+                            () =>
+                              setCustomerSearchOpen(
+                                false,
+                              ),
+                            150,
+                          );
+                        }}
+                      />
+
+                      {customerSearchOpen && (
+                        <div
+                          className={
+                            styles.searchableMenu
+                          }
+                        >
+                          {customers
+                            .filter((customer) => {
+                              const query =
+                                customerSearch
+                                  .trim()
+                                  .toLowerCase();
+
+                              if (!query) {
+                                return true;
+                              }
+
+                              return [
+                                customer.customer_code,
+                                customer.full_name,
+                                customer.phone,
+                                customer.mobile_number,
+                                customer.nic_number,
+                                String(customer.id),
+                              ]
+                                .filter(Boolean)
+                                .some((value) =>
+                                  String(value)
+                                    .toLowerCase()
+                                    .includes(query),
+                                );
+                            })
+                            .slice(0, 50)
+                            .map((customer) => (
+                              <button
+                                key={customer.id}
+                                type="button"
+                                className={
+                                  styles.searchableOption
+                                }
+                                onMouseDown={(
+                                  event,
+                                ) => {
+                                  event.preventDefault();
+
+                                  setCreateForm({
+                                    ...createForm,
+                                    customer_id:
+                                      customer.id,
+                                  });
+
+                                  setCustomerSearch(
+                                    "",
+                                  );
+
+                                  setCustomerSearchOpen(
+                                    false,
+                                  );
+                                }}
+                              >
+                                <strong>
+                                  {
+                                    customer.full_name
+                                  }
+                                </strong>
+
+                                <span>
+                                  {customer.customer_code ??
+                                    `#${customer.id}`}
+                                  {customer.mobile_number ||
+                                  customer.phone
+                                    ? ` • ${
+                                        customer.mobile_number ??
+                                        customer.phone
+                                      }`
+                                    : ""}
+                                  {customer.nic_number
+                                    ? ` • NIC ${customer.nic_number}`
+                                    : ""}
+                                </span>
+                              </button>
+                            ))}
+
+                          {customers.filter(
+                            (customer) => {
+                              const query =
+                                customerSearch
+                                  .trim()
+                                  .toLowerCase();
+
+                              if (!query) {
+                                return true;
+                              }
+
+                              return [
+                                customer.customer_code,
+                                customer.full_name,
+                                customer.phone,
+                                customer.mobile_number,
+                                customer.nic_number,
+                                String(customer.id),
+                              ]
+                                .filter(Boolean)
+                                .some((value) =>
+                                  String(value)
+                                    .toLowerCase()
+                                    .includes(query),
+                                );
+                            },
+                          ).length === 0 && (
+                            <div
+                              className={
+                                styles.searchableEmpty
+                              }
+                            >
+                              No matching customer
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </select>
+                    </div>
+
+                    <input
+                      type="hidden"
+                      required
+                      value={
+                        createForm.customer_id ||
+                        ""
+                      }
+                    />
                   </label>
 
                   <label>
                     Catalog product
 
-                    <select
-                      value={
-                        createForm
-                          .product_id
-                        ?? ""
-                      }
-                      onChange={
-                        (event) => {
-                          const value =
-                            optionalPositiveId(
-                              event
-                                .target
-                                .value,
-                            );
-
-                          setCreateForm({
-                            ...createForm,
-
-                            product_id:
-                              value,
-                          });
-                        }
+                    <div
+                      className={
+                        styles.searchableSelect
                       }
                     >
-                      <option value="">
-                        Uncatalogued item
-                      </option>
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        placeholder="Search product name or code..."
+                        value={
+                          productSearchOpen
+                            ? productSearch
+                            : (
+                                products.find(
+                                  (product) =>
+                                    product.id ===
+                                    createForm.product_id,
+                                )
+                                  ? `${
+                                      products.find(
+                                        (product) =>
+                                          product.id ===
+                                          createForm.product_id,
+                                      )?.product_code ?? ""
+                                    } — ${
+                                      products.find(
+                                        (product) =>
+                                          product.id ===
+                                          createForm.product_id,
+                                      )?.name ?? ""
+                                    }`
+                                  : ""
+                              )
+                        }
+                        onFocus={() => {
+                          setProductSearch("");
+                          setProductSearchOpen(
+                            true,
+                          );
+                        }}
+                        onChange={(event) => {
+                          setProductSearch(
+                            event.target.value,
+                          );
+                          setProductSearchOpen(
+                            true,
+                          );
 
-                      {products.map(
-                        (product) => (
-                          <option
-                            key={
-                              product.id
-                            }
-                            value={
-                              product.id
-                            }
-                          >
-                            {
-                              product
-                                .product_code
-                            }
-                            {" — "}
-                            {
-                              product.name
-                            }
-                          </option>
-                        ),
+                          if (
+                            createForm.product_id
+                          ) {
+                            setCreateForm({
+                              ...createForm,
+                              product_id: null,
+                            });
+                          }
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(
+                            () =>
+                              setProductSearchOpen(
+                                false,
+                              ),
+                            150,
+                          );
+                        }}
+                      />
+
+                      {productSearchOpen && (
+                        <div
+                          className={
+                            styles.searchableMenu
+                          }
+                        >
+                          {products
+                            .filter((product) => {
+                              const query =
+                                productSearch
+                                  .trim()
+                                  .toLowerCase();
+
+                              if (!query) {
+                                return true;
+                              }
+
+                              return [
+                                product.product_code,
+                                product.name,
+                                String(product.id),
+                              ]
+                                .filter(Boolean)
+                                .some((value) =>
+                                  String(value)
+                                    .toLowerCase()
+                                    .includes(query),
+                                );
+                            })
+                            .slice(0, 50)
+                            .map((product) => (
+                              <button
+                                key={product.id}
+                                type="button"
+                                className={
+                                  styles.searchableOption
+                                }
+                                onMouseDown={(
+                                  event,
+                                ) => {
+                                  event.preventDefault();
+
+                                  setCreateForm({
+                                    ...createForm,
+                                    product_id:
+                                      product.id,
+                                  });
+
+                                  setProductSearch(
+                                    "",
+                                  );
+
+                                  setProductSearchOpen(
+                                    false,
+                                  );
+                                }}
+                              >
+                                <strong>
+                                  {product.name}
+                                </strong>
+
+                                <span>
+                                  {
+                                    product.product_code
+                                  }
+                                </span>
+                              </button>
+                            ))}
+
+                          {products.filter(
+                            (product) => {
+                              const query =
+                                productSearch
+                                  .trim()
+                                  .toLowerCase();
+
+                              if (!query) {
+                                return true;
+                              }
+
+                              return [
+                                product.product_code,
+                                product.name,
+                                String(product.id),
+                              ]
+                                .filter(Boolean)
+                                .some((value) =>
+                                  String(value)
+                                    .toLowerCase()
+                                    .includes(query),
+                                );
+                            },
+                          ).length === 0 && (
+                            <div
+                              className={
+                                styles.searchableEmpty
+                              }
+                            >
+                              No matching product
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </select>
+                    </div>
                   </label>
 
                   <label>

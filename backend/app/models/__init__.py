@@ -168,6 +168,11 @@ __all__ = [
 
 ]
 
+from app.models.legacy_grn import (
+    LegacyGoodsReceipt,
+    LegacyGoodsReceiptItem,
+)
+
 from app.models.legacy_service_job import (
     LegacyServiceJob,
     LegacyServiceJobLine,

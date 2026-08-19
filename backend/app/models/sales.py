@@ -304,6 +304,16 @@ class SalesInvoiceItem(Base):
         index=True,
     )
 
+
+    warehouse_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "warehouses.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+        index=True,
+    )
+
     item_type: Mapped[str] = mapped_column(
         String(30),
         default=InvoiceItemType.PRODUCT.value,

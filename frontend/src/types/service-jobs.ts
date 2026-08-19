@@ -544,6 +544,11 @@ export type LegacyServiceJobListItemResponse = {
 
   legacy_service_date: string | null;
   legacy_warranty_period: string | null;
+
+  management_status: string;
+  status_remarks: string | null;
+  status_updated_at: string | null;
+  status_updated_by_id: number | null;
 };
 
 export type LegacyServiceJobDetailResponse =
@@ -575,4 +580,20 @@ export type LegacyServiceJobListParams = {
   pageSize?: number;
   search?: string;
   cancelled?: boolean;
+};
+
+
+
+export type LegacyServiceJobStatusUpdateRequest = {
+  status: string;
+  remarks?: string | null;
+};
+
+
+export type LegacyServiceJobStatusUpdateResponse = {
+  legacy_job_id: number;
+  management_status: string;
+  status_remarks: string | null;
+  status_updated_at: string;
+  status_updated_by_id: number | null;
 };

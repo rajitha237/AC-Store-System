@@ -988,3 +988,296 @@
   }
 }
 
+
+
+/* ===== SERVICE JOB SEARCHABLE SELECTORS ===== */
+
+.searchableSelect {
+  position: relative;
+  width: 100%;
+}
+
+.searchableSelect > input {
+  padding-right: 34px;
+}
+
+.searchableMenu {
+  background: #fff;
+  border: 1px solid #d8dfe8;
+  border-radius: 9px;
+  box-shadow:
+    0 12px 30px rgba(16, 24, 40, .14);
+  left: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 5px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 80;
+}
+
+.searchableOption {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  display: block;
+  padding: 8px 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.searchableOption:hover,
+.searchableOption:focus {
+  background: #f3f6fa;
+  outline: 0;
+}
+
+.searchableOption strong {
+  color: #344054;
+  display: block;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.searchableOption span {
+  color: #8a94a4;
+  display: block;
+  font-size: 8px;
+  font-weight: 500;
+  margin-top: 3px;
+}
+
+.searchableEmpty {
+  color: #8a94a4;
+  font-size: 9px;
+  padding: 12px 10px;
+  text-align: center;
+}
+
+
+
+/* ===== LEGACY SERVICE JOB MANAGEMENT STATUS ===== */
+
+.legacyStatusPanel {
+  background: #f8fafc;
+  border: 1px solid #dde4ec;
+  border-radius: 10px;
+  margin-top: 15px;
+  padding: 12px;
+}
+
+.legacyStatusGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns:
+    minmax(170px, .7fr)
+    minmax(0, 1.3fr);
+  margin-top: 10px;
+}
+
+.legacyStatusGrid label {
+  color: #667085;
+  display: grid;
+  font-size: 8px;
+  font-weight: 700;
+  gap: 5px;
+}
+
+.legacyStatusGrid select,
+.legacyStatusGrid textarea {
+  background: #fff;
+  border: 1px solid #d8dfe8;
+  border-radius: 8px;
+  color: #344054;
+  font-size: 9px;
+  outline: 0;
+  padding: 9px;
+  width: 100%;
+}
+
+.legacyStatusGrid select {
+  min-height: 38px;
+}
+
+.legacyStatusGrid textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.legacyStatusCurrent {
+  background: #edf4ff;
+  border-radius: 999px;
+  color: #315f9f;
+  font-size: 7px;
+  font-weight: 750;
+  padding: 5px 8px;
+  text-transform: capitalize;
+}
+
+.legacyStatusActions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.legacyStatusActions small {
+  color: #8a94a4;
+  font-size: 7px;
+  line-height: 1.5;
+  max-width: 320px;
+}
+
+@media (max-width: 700px) {
+  .legacyStatusGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .legacyStatusActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+
+
+/* Phase 56.4C — Additional part modal overlay */
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(2px);
+
+  overflow-y: auto;
+}
+
+
+/* Phase 56.4A — Legacy additional part sale */
+
+.additionalPartCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.additionalPartCard > div {
+  display: grid;
+  gap: 4px;
+}
+
+.additionalPartCard span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.additionalPartCard small {
+  opacity: 0.72;
+}
+
+.additionalPartModal {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: 18px;
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+
+.additionalPartGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.additionalPartGrid label,
+.additionalPartNotes {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.additionalPartGrid input,
+.additionalPartGrid select,
+.additionalPartNotes textarea {
+  width: 100%;
+}
+
+.additionalPaymentToggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 20px;
+  font-weight: 600;
+}
+
+.additionalPartNotes {
+  margin-top: 18px;
+}
+
+.additionalPartActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 22px;
+}
+
+.additionalPartActions small {
+  max-width: 430px;
+  opacity: 0.7;
+}
+
+@media (max-width: 700px) {
+  .additionalPartGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .additionalPartCard,
+  .additionalPartActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* Phase 56.6A — Additional part local feedback */
+
+.additionalPartError {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  border-radius: 10px;
+  background: rgba(220, 38, 38, 0.07);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.additionalPartSuccess {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(22, 163, 74, 0.3);
+  border-radius: 10px;
+  background: rgba(22, 163, 74, 0.07);
+  font-size: 13px;
+  font-weight: 600;
+}

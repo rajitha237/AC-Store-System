@@ -29,6 +29,8 @@ from app.schemas.service import (
     ServiceLabourCreate,
     ServicePartCreate,
     ServiceStatusChangeRequest,
+    LegacyServiceJobStatusUpdateRequest,
+    LegacyServiceJobStatusUpdateResponse,
 )
 from app.services.sales_service import (
     create_service_job_invoice,
@@ -356,4 +358,30 @@ async def read_legacy_service_job(
     return await get_legacy_service_job(
         session=session,
         legacy_job_id=legacy_job_id,
+    )
+
+
+
+# ===== LEGACY SERVICE JOB STATUS ROUTE =====
+
+@router.patch(
+    "/legacy-jobs/{legacy_job_id}/status",
+    response_model=LegacyServiceJobStatusUpdateResponse,
+)
+async def change_legacy_service_job_status(
+    legacy_job_id: int,
+    payload: LegacyServiceJobStatusUpdateRequest,
+    session: DatabaseSession,
+    current_user: CanUpdateJobs,
+):
+    from app.services.service import (
+        update_legacy_service_job_status,
+    )
+
+    return await update_legacy_service_job_status(
+        session=session,
+        legacy_job_id=legacy_job_id,
+        status=payload.status,
+        remarks=payload.remarks,
+        user_id=current_user.id,
     )

@@ -199,6 +199,7 @@ class SalesInvoiceItemResponse(BaseModel):
     invoice_id: int
 
     product_id: int | None
+    warehouse_id: int | None
     item_type: str
 
     serial_number_id: int | None
