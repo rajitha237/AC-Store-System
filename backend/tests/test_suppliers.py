@@ -1,4 +1,9 @@
+import json
+
 import pytest
+from sqlalchemy import select
+
+from app.models import AuditLog
 
 
 BASE_URL = "/api/v1/suppliers"
@@ -504,3 +509,166 @@ async def test_supplier_not_found(
         response.json()["detail"]
         == "Supplier record was not found"
     )
+
+
+@pytest.mark.asyncio
+async def test_supplier_audit_actions_and_snapshots(
+    client,
+    admin_headers,
+    db_session,
+):
+    create_response = await client.post(
+        BASE_URL,
+        json=supplier_payload(
+            company_name="Audit Supplier Lanka",
+            phone="0772999911",
+            email="audit@supplier.lk",
+        ),
+        headers=admin_headers,
+    )
+
+    assert create_response.status_code == 201
+
+    created = create_response.json()
+    supplier_id = created["id"]
+    supplier_code = created["supplier_code"]
+
+    update_response = await client.patch(
+        f"{BASE_URL}/{supplier_id}",
+        json={
+            "company_name":
+                "Audit Supplier Lanka Updated",
+            "payment_terms_days": 60,
+        },
+        headers=admin_headers,
+    )
+
+    assert update_response.status_code == 200
+
+    deactivate_response = await client.delete(
+        f"{BASE_URL}/{supplier_id}",
+        headers=admin_headers,
+    )
+
+    assert deactivate_response.status_code == 200
+    assert (
+        deactivate_response.json()["is_active"]
+        is False
+    )
+
+    activate_response = await client.patch(
+        f"{BASE_URL}/{supplier_id}",
+        json={
+            "is_active": True,
+        },
+        headers=admin_headers,
+    )
+
+    assert activate_response.status_code == 200
+    assert (
+        activate_response.json()["is_active"]
+        is True
+    )
+
+    result = await db_session.execute(
+        select(AuditLog)
+        .where(
+            AuditLog.module == "suppliers",
+            AuditLog.entity_type == "supplier",
+            AuditLog.entity_id == supplier_id,
+        )
+        .order_by(AuditLog.id)
+    )
+
+    logs = result.scalars().all()
+
+    assert len(logs) == 4
+
+    assert [
+        row.action
+        for row in logs
+    ] == [
+        "suppliers.supplier_created",
+        "suppliers.supplier_updated",
+        "suppliers.supplier_deactivated",
+        "suppliers.supplier_activated",
+    ]
+
+    assert all(
+        row.entity_reference == supplier_code
+        for row in logs
+    )
+
+    created_log = logs[0]
+    updated_log = logs[1]
+    deactivated_log = logs[2]
+    activated_log = logs[3]
+
+    assert created_log.before_data is None
+
+    created_after = json.loads(
+        created_log.after_data
+    )
+
+    assert (
+        created_after["company_name"]
+        == "Audit Supplier Lanka"
+    )
+    assert created_after["is_active"] is True
+
+    updated_before = json.loads(
+        updated_log.before_data
+    )
+    updated_after = json.loads(
+        updated_log.after_data
+    )
+
+    assert (
+        updated_before["company_name"]
+        == "Audit Supplier Lanka"
+    )
+    assert (
+        updated_after["company_name"]
+        == "Audit Supplier Lanka Updated"
+    )
+    assert (
+        updated_before["payment_terms_days"]
+        == 30
+    )
+    assert (
+        updated_after["payment_terms_days"]
+        == 60
+    )
+
+    deactivated_before = json.loads(
+        deactivated_log.before_data
+    )
+    deactivated_after = json.loads(
+        deactivated_log.after_data
+    )
+
+    assert (
+        deactivated_before["is_active"]
+        is True
+    )
+    assert (
+        deactivated_after["is_active"]
+        is False
+    )
+
+    activated_before = json.loads(
+        activated_log.before_data
+    )
+    activated_after = json.loads(
+        activated_log.after_data
+    )
+
+    assert (
+        activated_before["is_active"]
+        is False
+    )
+    assert (
+        activated_after["is_active"]
+        is True
+    )
+

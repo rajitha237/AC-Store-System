@@ -12,6 +12,40 @@ from app.schemas.supplier import (
     SupplierResponse,
     SupplierUpdate,
 )
+from app.services.audit import create_audit_log
+
+
+
+def supplier_audit_snapshot(
+    supplier: Supplier,
+) -> dict:
+    return {
+        "id": supplier.id,
+        "supplier_code": supplier.supplier_code,
+        "company_id": supplier.company_id,
+        "company_name": supplier.company_name,
+        "contact_person": supplier.contact_person,
+        "phone": supplier.phone,
+        "secondary_phone": supplier.secondary_phone,
+        "email": supplier.email,
+        "address_line_1": supplier.address_line_1,
+        "address_line_2": supplier.address_line_2,
+        "city": supplier.city,
+        "registration_number":
+            supplier.registration_number,
+        "tax_number": supplier.tax_number,
+        "credit_limit": supplier.credit_limit,
+        "payment_terms_days":
+            supplier.payment_terms_days,
+        "current_payable":
+            supplier.current_payable,
+        "notes": supplier.notes,
+        "is_active": supplier.is_active,
+        "created_by_id":
+            supplier.created_by_id,
+        "updated_by_id":
+            supplier.updated_by_id,
+    }
 
 
 async def get_default_company(
@@ -155,6 +189,23 @@ async def create_supplier(
             f"SUP-{supplier.id:06d}"
         )
 
+        await session.flush()
+
+        await create_audit_log(
+            session=session,
+            user_id=current_user.id,
+            action="suppliers.supplier_created",
+            module="suppliers",
+            entity_type="supplier",
+            entity_id=supplier.id,
+            entity_reference=supplier.supplier_code,
+            description="Supplier created",
+            before_data=None,
+            after_data=supplier_audit_snapshot(
+                supplier
+            ),
+        )
+
         await session.commit()
         await session.refresh(supplier)
     except IntegrityError as exc:
@@ -268,6 +319,10 @@ async def update_supplier(
         exclude_unset=True
     )
 
+    before = supplier_audit_snapshot(
+        supplier
+    )
+
     company_name = update_data.get(
         "company_name",
         supplier.company_name,
@@ -295,7 +350,39 @@ async def update_supplier(
 
     supplier.updated_by_id = current_user.id
 
+    after = supplier_audit_snapshot(
+        supplier
+    )
+
+    before_active = before["is_active"]
+    after_active = after["is_active"]
+
+    if before_active is True and after_active is False:
+        audit_action = "suppliers.supplier_deactivated"
+        audit_description = "Supplier deactivated"
+    elif before_active is False and after_active is True:
+        audit_action = "suppliers.supplier_activated"
+        audit_description = "Supplier activated"
+    else:
+        audit_action = "suppliers.supplier_updated"
+        audit_description = "Supplier updated"
+
     try:
+        await session.flush()
+
+        await create_audit_log(
+            session=session,
+            user_id=current_user.id,
+            action=audit_action,
+            module="suppliers",
+            entity_type="supplier",
+            entity_id=supplier.id,
+            entity_reference=supplier.supplier_code,
+            description=audit_description,
+            before_data=before,
+            after_data=after,
+        )
+
         await session.commit()
         await session.refresh(supplier)
     except IntegrityError as exc:
