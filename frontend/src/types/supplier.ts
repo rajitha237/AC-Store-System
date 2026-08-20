@@ -181,3 +181,57 @@ export type SupplierUpdatePayload = {
   is_active?:
     boolean;
 };
+
+export type SupplierInvoice = {
+  id: number;
+  invoice_number: string;
+
+  supplier_id: number;
+  supplier_name: string;
+
+  purchase_order_id: number | null;
+  purchase_order_number: string | null;
+
+  goods_receipt_id: number | null;
+  grn_number: string | null;
+
+  supplier_invoice_number: string;
+
+  invoice_date: string;
+  due_date: string | null;
+
+  subtotal: number | string;
+  discount_amount: number | string;
+  tax_amount: number | string;
+  grand_total: number | string;
+
+  paid_amount: number | string;
+  balance_amount: number | string;
+
+  is_overdue: boolean;
+  days_overdue: number;
+  aging_bucket: string;
+
+  status: string;
+
+  notes: string | null;
+
+  is_reversed: boolean;
+
+  created_at: string;
+};
+
+export type SupplierInvoiceListResponse = {
+  items: SupplierInvoice[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+};
+
+export type SupplierInvoiceListParams = {
+  page?: number;
+  pageSize?: number;
+  supplierId?: number;
+  status?: string;
+};

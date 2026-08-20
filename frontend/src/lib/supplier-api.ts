@@ -5,6 +5,8 @@ import {
 import type {
   Supplier,
   SupplierCreatePayload,
+  SupplierInvoiceListParams,
+  SupplierInvoiceListResponse,
   SupplierListParams,
   SupplierListResponse,
   SupplierUpdatePayload,
@@ -114,4 +116,38 @@ export async function activateSupplier(
         true,
     },
   );
+}
+
+export async function listSupplierInvoices(
+  params:
+    SupplierInvoiceListParams = {},
+): Promise<
+  SupplierInvoiceListResponse
+> {
+  const response =
+    await api.get<
+      SupplierInvoiceListResponse
+    >(
+      "/purchase-orders/supplier-invoices",
+      {
+        params: {
+          page:
+            params.page
+            ?? 1,
+
+          page_size:
+            params.pageSize
+            ?? 20,
+
+          supplier_id:
+            params.supplierId,
+
+          status:
+            params.status
+            || undefined,
+        },
+      },
+    );
+
+  return response.data;
 }

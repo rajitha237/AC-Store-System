@@ -224,25 +224,6 @@ async def read_goods_receipt(
         goods_receipt_id=goods_receipt_id,
     )
 
-@router.get(
-    "/{purchase_order_id}",
-    response_model=(
-        PurchaseOrderDetailResponse
-    ),
-)
-async def read_purchase_order(
-    purchase_order_id: int,
-    session: DatabaseSession,
-    _: CanViewPurchasing,
-) -> PurchaseOrderDetailResponse:
-    return await get_purchase_order(
-        session,
-        purchase_order_id=(
-            purchase_order_id
-        ),
-    )
-
-
 @router.patch(
     "/{purchase_order_id}",
     response_model=(
@@ -479,3 +460,21 @@ async def reverse_supplier_payment_record(
         current_user=current_user,
     )
 
+
+@router.get(
+    "/{purchase_order_id}",
+    response_model=(
+        PurchaseOrderDetailResponse
+    ),
+)
+async def read_purchase_order(
+    purchase_order_id: int,
+    session: DatabaseSession,
+    _: CanViewPurchasing,
+) -> PurchaseOrderDetailResponse:
+    return await get_purchase_order(
+        session,
+        purchase_order_id=(
+            purchase_order_id
+        ),
+    )

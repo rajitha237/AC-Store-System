@@ -5,10 +5,16 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import (
+    async_engine_from_config,
+    create_async_engine,
+)
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.db.ipv4_resolver import (
+    build_neon_async_creator,
+)
 from app.models import (
     AuditLog,
     Branch,
@@ -85,17 +91,30 @@ def do_run_migrations(connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(
-            config.config_ini_section,
-            {},
-        ),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
+    async_creator = build_neon_async_creator(
+        settings.database_url,
     )
 
+    if async_creator is not None:
+        connectable = create_async_engine(
+            settings.database_url,
+            poolclass=pool.NullPool,
+            async_creator=async_creator,
+        )
+    else:
+        connectable = async_engine_from_config(
+            config.get_section(
+                config.config_ini_section,
+                {},
+            ),
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+        )
+
     async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
+        await connection.run_sync(
+            do_run_migrations
+        )
 
     await connectable.dispose()
 

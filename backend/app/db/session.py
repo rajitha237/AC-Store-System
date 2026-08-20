@@ -7,16 +7,32 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import get_settings
+from app.db.ipv4_resolver import (
+    build_neon_async_creator,
+)
 
 settings = get_settings()
 
-engine = create_async_engine(
+async_creator = build_neon_async_creator(
     settings.database_url,
-    echo=(
+)
+
+engine_options = {
+    "echo": (
         settings.debug
         and not settings.is_production
     ),
-    pool_pre_ping=True,
+    "pool_pre_ping": True,
+}
+
+if async_creator is not None:
+    engine_options[
+        "async_creator"
+    ] = async_creator
+
+engine = create_async_engine(
+    settings.database_url,
+    **engine_options,
 )
 
 AsyncSessionLocal = async_sessionmaker(
