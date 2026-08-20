@@ -2950,6 +2950,54 @@ async def _get_supplier_payment_or_404(
     return payment
 
 
+def supplier_invoice_aging(
+    invoice: SupplierInvoice,
+    *,
+    today: date | None = None,
+) -> tuple[bool, int, str]:
+    current_date = (
+        today
+        if today is not None
+        else date.today()
+    )
+
+    balance = money(
+        invoice.balance_amount
+    )
+
+    if (
+        invoice.is_reversed
+        or balance <= Decimal("0.00")
+        or invoice.due_date is None
+        or invoice.due_date >= current_date
+    ):
+        return (
+            False,
+            0,
+            "Current",
+        )
+
+    days_overdue = (
+        current_date
+        - invoice.due_date
+    ).days
+
+    if days_overdue <= 30:
+        aging_bucket = "1-30 days"
+    elif days_overdue <= 60:
+        aging_bucket = "31-60 days"
+    elif days_overdue <= 90:
+        aging_bucket = "61-90 days"
+    else:
+        aging_bucket = "90+ days"
+
+    return (
+        True,
+        days_overdue,
+        aging_bucket,
+    )
+
+
 async def _build_supplier_invoice_response(
     session: AsyncSession,
     *,
@@ -3001,6 +3049,14 @@ async def _build_supplier_invoice_response(
             "Supplier invoice number missing"
         )
 
+    (
+        is_overdue,
+        days_overdue,
+        aging_bucket,
+    ) = supplier_invoice_aging(
+        invoice
+    )
+
     return SupplierInvoiceResponse(
         id=invoice.id,
         invoice_number=(
@@ -3041,6 +3097,9 @@ async def _build_supplier_invoice_response(
         balance_amount=money(
             invoice.balance_amount
         ),
+        is_overdue=is_overdue,
+        days_overdue=days_overdue,
+        aging_bucket=aging_bucket,
         status=invoice.status,
         notes=invoice.notes,
         is_reversed=(

@@ -396,6 +396,10 @@ class SupplierInvoiceResponse(
     paid_amount: Decimal
     balance_amount: Decimal
 
+    is_overdue: bool
+    days_overdue: int
+    aging_bucket: str
+
     status: str
 
     notes: str | None
