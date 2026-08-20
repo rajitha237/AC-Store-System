@@ -6,6 +6,7 @@ import type {
   LegacyServiceJobStatusUpdateRequest,
   LegacyServiceJobStatusUpdateResponse,
 } from "@/types/service-jobs";
+import type { SalesInvoiceDetailResponse } from "@/types/sales";
 
 import {
   api,
@@ -74,6 +75,15 @@ export async function getServiceJobs(
     );
 
   return response.data;
+}
+
+
+export async function deleteServiceJob(
+  jobId: number,
+): Promise<void> {
+  await api.delete(
+    `/service/jobs/${jobId}`,
+  );
 }
 
 
@@ -218,12 +228,19 @@ export async function addServicePart(
 
 
 export async function createServiceInvoice(
-  jobId:
-    number,
-): Promise<unknown> {
+  jobId: number,
+  payload?: {
+    due_date?: string | null;
+  },
+): Promise<
+  SalesInvoiceDetailResponse
+> {
   const response =
-    await api.post(
+    await api.post<
+      SalesInvoiceDetailResponse
+    >(
       `/service/jobs/${jobId}/invoice`,
+      payload,
     );
 
   return response.data;

@@ -1311,3 +1311,158 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+
+/* Service completion workflow */
+.jobTabs {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.jobTab,
+.jobTabActive {
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 750;
+  min-height: 36px;
+  padding: 0 14px;
+}
+
+.jobTab {
+  background: #ffffff;
+  border: 1px solid #d8dfe8;
+  color: #536174;
+}
+
+.jobTabActive {
+  background: #1765d8;
+  border: 1px solid #1765d8;
+  color: #ffffff;
+}
+
+.dangerButton {
+  background: #fff1f0 !important;
+  border: 1px solid #ffd1cc !important;
+  color: #b42318 !important;
+}
+
+
+/* ============================================================
+   SERVICE RECEIVABLE TRACKING
+   ============================================================ */
+
+.receivableCard {
+  background: #fbfcfe;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.receivableHeader {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 11px;
+}
+
+.receivableHeader small {
+  color: #8a96a8;
+  display: block;
+  font-size: 7px;
+  font-weight: 750;
+  letter-spacing: .07em;
+}
+
+.receivableHeader h3 {
+  color: #3d495d;
+  font-size: 12px;
+  margin: 2px 0 0;
+}
+
+.receivableGrid,
+.paymentSummary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+}
+
+.receivableGrid > div,
+.paymentSummary > div {
+  background: #fff;
+  border: 1px solid #e4e9ef;
+  border-radius: 9px;
+  padding: 10px;
+}
+
+.receivableGrid span,
+.receivableGrid strong,
+.paymentSummary span,
+.paymentSummary strong {
+  display: block;
+}
+
+.receivableGrid span,
+.paymentSummary span {
+  color: #929baa;
+  font-size: 7px;
+}
+
+.receivableGrid strong,
+.paymentSummary strong {
+  color: #3d495d;
+  font-size: 9px;
+  margin-top: 3px;
+}
+
+.paymentButton {
+  align-items: center;
+  background: #eef7f1;
+  border: 1px solid #bddfc7;
+  border-radius: 8px;
+  color: #287044;
+  display: inline-flex;
+  font-size: 9px;
+  font-weight: 750;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.paymentButton:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.paymentModal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow:
+    0 24px 70px rgba(15, 23, 42, .22);
+  max-height: calc(100vh - 32px);
+  max-width: 650px;
+  overflow: auto;
+  width: 100%;
+}
+
+.paymentSummary {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 720px) {
+  .receivableGrid,
+  .paymentSummary {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .receivableHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

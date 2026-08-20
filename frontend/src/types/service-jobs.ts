@@ -138,6 +138,9 @@ export type ServiceJobUpdate = {
 
   expected_completion_date?:
     string | null;
+  scheduled_visit_date?:
+    string | null;
+
 };
 
 
@@ -283,6 +286,9 @@ export type ServicePartResponse = {
 
 
 export type ServiceJobDetailResponse = {
+  scheduled_visit_date?:
+    string | null;
+
   id:
     number;
 

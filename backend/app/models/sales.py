@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from enum import Enum
 
 from sqlalchemy import (
+    Date,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -181,6 +182,12 @@ class SalesInvoice(Base):
         Numeric(18, 2),
         default=Decimal("0.00"),
         nullable=False,
+    )
+
+    due_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        index=True,
     )
 
     balance_amount: Mapped[Decimal] = mapped_column(

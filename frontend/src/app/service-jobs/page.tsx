@@ -4,6 +4,7 @@ import axios from "axios";
 
 import {
   BadgeCheck,
+  Banknote,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -55,8 +56,13 @@ import {
 } from "@/lib/documents-api";
 
 import {
+  receivePayment,
+} from "@/lib/payments-api";
+
+import {
   createSalesInvoice,
   confirmSalesInvoice,
+  getSalesInvoice,
   getSalesCustomers,
   getSalesProducts,
   getSalesWarehouses,
@@ -67,6 +73,7 @@ import {
   addServicePart,
   createServiceInvoice,
   createServiceJob,
+  deleteServiceJob,
   getLegacyServiceJob,
   getLegacyServiceJobs,
   updateLegacyServiceJobStatus,
@@ -95,7 +102,12 @@ import type {
 } from "@/types/auth";
 
 import type {
+  PaymentMethod,
+} from "@/types/payments";
+
+import type {
   InitialPaymentCreate,
+  SalesInvoiceDetailResponse,
   SalesCustomerOption,
   SalesProductOption,
   SalesWarehouseOption,
@@ -921,6 +933,13 @@ export default function ServiceJobsPage() {
 
 
   const [
+    editNextServiceDate,
+    setEditNextServiceDate,
+  ] =
+    useState("");
+
+
+  const [
     nextStatus,
     setNextStatus,
   ] =
@@ -948,6 +967,14 @@ export default function ServiceJobsPage() {
     setApprovalRemarks,
   ] =
     useState("");
+
+
+  const [
+    jobBucket,
+    setJobBucket,
+  ] = useState<
+    "active" | "completed"
+  >("active");
 
 
   const [
@@ -1937,6 +1964,22 @@ export default function ServiceJobsPage() {
       setSelected(
         detail,
       );
+
+      if (
+        detail.related_invoice_id
+      ) {
+        await loadServiceInvoice(
+          detail.related_invoice_id,
+        );
+      } else {
+        setServiceInvoice(
+          null,
+        );
+
+        setServiceInvoiceOverdue(
+          false,
+        );
+      }
     } catch (
       requestError
     ) {
@@ -1951,6 +1994,65 @@ export default function ServiceJobsPage() {
       );
     }
   }
+
+
+  const [
+    serviceInvoice,
+    setServiceInvoice,
+  ] = useState<
+    SalesInvoiceDetailResponse | null
+  >(
+    null,
+  );
+
+  const [
+    serviceInvoiceLoading,
+    setServiceInvoiceLoading,
+  ] = useState(
+    false,
+  );
+
+  const [
+    serviceInvoiceOverdue,
+    setServiceInvoiceOverdue,
+  ] = useState(
+    false,
+  );
+
+  const [
+    receivePaymentOpen,
+    setReceivePaymentOpen,
+  ] = useState(
+    false,
+  );
+
+  const [
+    servicePaymentAmount,
+    setServicePaymentAmount,
+  ] = useState(
+    "",
+  );
+
+  const [
+    servicePaymentMethod,
+    setServicePaymentMethod,
+  ] = useState<PaymentMethod>(
+    "cash",
+  );
+
+  const [
+    servicePaymentReference,
+    setServicePaymentReference,
+  ] = useState(
+    "",
+  );
+
+  const [
+    servicePaymentNotes,
+    setServicePaymentNotes,
+  ] = useState(
+    "",
+  );
 
 
   async function refreshDetail(
@@ -2121,6 +2223,11 @@ export default function ServiceJobsPage() {
       ?? "",
     );
 
+    setEditNextServiceDate(
+      selected.scheduled_visit_date
+      ?? "",
+    );
+
     setActionMode(
       "edit",
     );
@@ -2172,6 +2279,11 @@ export default function ServiceJobsPage() {
       expected_completion_date:
         optionalText(
           editExpectedDate,
+        ),
+
+      scheduled_visit_date:
+        optionalText(
+          editNextServiceDate,
         ),
     };
 
@@ -2295,6 +2407,20 @@ export default function ServiceJobsPage() {
     setError("");
 
     try {
+      if (
+        nextStatus === "delivered"
+      ) {
+        await updateServiceJob(
+          selected.id,
+          {
+            scheduled_visit_date:
+              optionalText(
+                editNextServiceDate,
+              ),
+          },
+        );
+      }
+
       const result =
         await updateServiceStatus(
           selected.id,
@@ -2484,9 +2610,11 @@ export default function ServiceJobsPage() {
               ).toFixed(2),
 
             amount:
-              numberValue(
-                labourAmount,
-              ).toFixed(2),
+              selected.is_warranty_job
+                ? "0.00"
+                : numberValue(
+                    labourAmount,
+                  ).toFixed(2),
 
             notes:
               optionalText(
@@ -2725,6 +2853,435 @@ export default function ServiceJobsPage() {
   }
 
 
+  async function loadServiceInvoice(
+    invoiceId: number,
+  ) {
+    setServiceInvoiceLoading(
+      true,
+    );
+
+    try {
+      const invoice =
+        await getSalesInvoice(
+          invoiceId,
+        );
+
+      setServiceInvoice(
+        invoice,
+      );
+
+      const now =
+        new Date();
+
+      const todayKey =
+        `${now.getFullYear()}-`
+        + `${String(
+          now.getMonth() + 1,
+        ).padStart(
+          2,
+          "0",
+        )}-`
+        + `${String(
+          now.getDate(),
+        ).padStart(
+          2,
+          "0",
+        )}`;
+
+      setServiceInvoiceOverdue(
+        Boolean(
+          invoice.due_date
+          && numberValue(
+            invoice.balance_amount,
+          ) > 0
+          && invoice.due_date
+            < todayKey
+        ),
+      );
+
+      return invoice;
+    } catch (
+      requestError
+    ) {
+      setServiceInvoice(
+        null,
+      );
+
+      setServiceInvoiceOverdue(
+        false,
+      );
+
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+
+      return null;
+    } finally {
+      setServiceInvoiceLoading(
+        false,
+      );
+    }
+  }
+
+
+  function openServicePayment() {
+    if (
+      !serviceInvoice
+      || numberValue(
+        serviceInvoice
+          .balance_amount,
+      ) <= 0
+    ) {
+      return;
+    }
+
+    setServicePaymentAmount(
+      numberValue(
+        serviceInvoice
+          .balance_amount,
+      ).toFixed(
+        2,
+      ),
+    );
+
+    setServicePaymentMethod(
+      "cash",
+    );
+
+    setServicePaymentReference(
+      "",
+    );
+
+    setServicePaymentNotes(
+      "",
+    );
+
+    setError(
+      "",
+    );
+
+    setReceivePaymentOpen(
+      true,
+    );
+  }
+
+
+  async function submitServicePayment(
+    event: FormEvent,
+  ) {
+    event.preventDefault();
+
+    if (
+      !selected
+      || !serviceInvoice
+    ) {
+      return;
+    }
+
+    const amount =
+      Number(
+        servicePaymentAmount,
+      );
+
+    const outstanding =
+      numberValue(
+        serviceInvoice
+          .balance_amount,
+      );
+
+    if (
+      !Number.isFinite(
+        amount,
+      )
+      || amount <= 0
+    ) {
+      setError(
+        "Payment amount must be greater than zero.",
+      );
+
+      return;
+    }
+
+    if (
+      amount > outstanding
+    ) {
+      setError(
+        "Payment amount cannot exceed the outstanding balance.",
+      );
+
+      return;
+    }
+
+    setActionLoading(
+      true,
+    );
+
+    setError(
+      "",
+    );
+
+    try {
+      await receivePayment({
+        invoice_id:
+          serviceInvoice.id,
+
+        amount:
+          amount.toFixed(
+            2,
+          ),
+
+        payment_method:
+          servicePaymentMethod,
+
+        reference_number:
+          servicePaymentReference
+            .trim()
+          || null,
+
+        notes:
+          servicePaymentNotes
+            .trim()
+          || null,
+      });
+
+      await loadServiceInvoice(
+        serviceInvoice.id,
+      );
+
+      await refreshDetail(
+        selected.id,
+      );
+
+      setReceivePaymentOpen(
+        false,
+      );
+
+      setServicePaymentAmount(
+        "",
+      );
+
+      setServicePaymentReference(
+        "",
+      );
+
+      setServicePaymentNotes(
+        "",
+      );
+
+      await loadJobs(
+        true,
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    } finally {
+      setActionLoading(
+        false,
+      );
+    }
+  }
+
+
+  async function deleteSelectedJob() {
+    if (!selected) {
+      return;
+    }
+
+    const requiresArchive =
+      Boolean(
+        selected.related_invoice_id,
+      )
+      || selected.parts.length > 0
+      || selected.labour_items.length > 0;
+
+    if (
+      selected.status === "delivered"
+      || selected.status === "cancelled"
+    ) {
+      setError(
+        "Completed or cancelled service jobs cannot be deleted.",
+      );
+
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        requiresArchive
+          ? (
+            `Remove ${selected.job_number} from active jobs? `
+            + "This job has linked service records, so it will "
+            + "be safely cancelled instead of permanently deleted."
+          )
+          : (
+            `Delete ${selected.job_number}? `
+            + "This action cannot be undone."
+          ),
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setActionLoading(
+      true,
+    );
+
+    setError("");
+
+    try {
+      if (requiresArchive) {
+        await updateServiceStatus(
+          selected.id,
+          {
+            new_status: "cancelled",
+            remarks:
+              "Service job removed using safe delete/archive action.",
+          },
+        );
+      } else {
+        await deleteServiceJob(
+          selected.id,
+        );
+      }
+
+      setSelected(
+        null,
+      );
+
+      await loadJobs(
+        true,
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    } finally {
+      setActionLoading(
+        false,
+      );
+    }
+  }
+
+  async function printServiceInvoice(
+    invoiceId: number,
+  ) {
+    try {
+      const document =
+        await downloadSalesInvoicePdf(
+          invoiceId,
+        );
+
+      const pdfUrl =
+        URL.createObjectURL(
+          document.blob,
+        );
+
+      const printWindow =
+        window.open(
+          pdfUrl,
+          "_blank",
+          "noopener,noreferrer",
+        );
+
+      if (!printWindow) {
+        URL.revokeObjectURL(
+          pdfUrl,
+        );
+
+        saveDownloadedDocument(
+          document,
+        );
+
+        return;
+      }
+
+      window.setTimeout(
+        () => {
+          URL.revokeObjectURL(
+            pdfUrl,
+          );
+        },
+        60000,
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    }
+  }
+
+
+  const [
+    serviceInvoiceTerms,
+    setServiceInvoiceTerms,
+  ] = useState<
+    "now"
+    | "7"
+    | "14"
+    | "30"
+    | "custom"
+  >(
+    "now",
+  );
+
+  const [
+    serviceInvoiceCustomDueDate,
+    setServiceInvoiceCustomDueDate,
+  ] = useState(
+    "",
+  );
+
+
+  function serviceInvoiceDueDate(
+    daysFromToday: number,
+  ): string {
+    const date =
+      new Date();
+
+    date.setDate(
+      date.getDate()
+      + daysFromToday,
+    );
+
+    const year =
+      date.getFullYear();
+
+    const month =
+      String(
+        date.getMonth() + 1,
+      ).padStart(
+        2,
+        "0",
+      );
+
+    const day =
+      String(
+        date.getDate(),
+      ).padStart(
+        2,
+        "0",
+      );
+
+    return `${year}-${month}-${day}`;
+  }
+
+
   async function submitInvoice() {
     if (!selected) {
       return;
@@ -2737,8 +3294,45 @@ export default function ServiceJobsPage() {
     setError("");
 
     try {
-      await createServiceInvoice(
-        selected.id,
+      const dueDate =
+        serviceInvoiceTerms
+          === "now"
+          ? null
+          : serviceInvoiceTerms
+              === "custom"
+            ? (
+              serviceInvoiceCustomDueDate
+              || null
+            )
+            : serviceInvoiceDueDate(
+              Number(
+                serviceInvoiceTerms,
+              ),
+            );
+
+      if (
+        serviceInvoiceTerms
+          === "custom"
+        && !dueDate
+      ) {
+        setError(
+          "Select the invoice due date.",
+        );
+
+        return;
+      }
+
+      const invoice =
+        await createServiceInvoice(
+          selected.id,
+          {
+            due_date:
+              dueDate,
+          },
+        );
+
+      await printServiceInvoice(
+        invoice.id,
       );
 
       await refreshDetail(
@@ -2766,6 +3360,18 @@ export default function ServiceJobsPage() {
       );
     }
   }
+
+
+  const visibleJobs =
+    jobs.filter(
+      (job) =>
+        jobBucket === "completed"
+          ? job.status === "delivered"
+          : (
+            job.status !== "delivered"
+            && job.status !== "cancelled"
+          ),
+    );
 
 
   if (
@@ -3173,6 +3779,44 @@ export default function ServiceJobsPage() {
       )}
 
 
+      <div
+        className={
+          styles.jobTabs
+        }
+      >
+        <button
+          type="button"
+          className={
+            jobBucket === "active"
+              ? styles.jobTabActive
+              : styles.jobTab
+          }
+          onClick={() => {
+            setJobBucket(
+              "active",
+            );
+          }}
+        >
+          Active Jobs
+        </button>
+
+        <button
+          type="button"
+          className={
+            jobBucket === "completed"
+              ? styles.jobTabActive
+              : styles.jobTab
+          }
+          onClick={() => {
+            setJobBucket(
+              "completed",
+            );
+          }}
+        >
+          Completed Jobs
+        </button>
+      </div>
+
       <section
         className={
           styles.tableCard
@@ -3193,7 +3837,7 @@ export default function ServiceJobsPage() {
 
             Loading service jobs...
           </div>
-        ) : jobs.length === 0 ? (
+        ) : visibleJobs.length === 0 ? (
           <div
             className={
               styles.emptyState
@@ -3247,7 +3891,7 @@ export default function ServiceJobsPage() {
               </thead>
 
               <tbody>
-                {jobs.map(
+                {visibleJobs.map(
                   (job) => (
                     <tr
                       key={job.id}
@@ -6133,6 +6777,178 @@ export default function ServiceJobsPage() {
                   </section>
 
 
+                  {selected
+                    .related_invoice_id && (
+                    <section
+                      className={
+                        styles.receivableCard
+                      }
+                    >
+                      <div
+                        className={
+                          styles.receivableHeader
+                        }
+                      >
+                        <div>
+                          <small>
+                            SERVICE RECEIVABLE
+                          </small>
+
+                          <h3>
+                            Payment tracking
+                          </h3>
+                        </div>
+
+                        {serviceInvoice
+                          && numberValue(
+                            serviceInvoice
+                              .balance_amount,
+                          ) > 0 && (
+                          <button
+                            type="button"
+                            className={
+                              styles.paymentButton
+                            }
+                            disabled={
+                              actionLoading
+                              || serviceInvoiceLoading
+                            }
+                            onClick={
+                              openServicePayment
+                            }
+                          >
+                            <Banknote
+                              size={15}
+                            />
+
+                            Receive Payment
+                          </button>
+                        )}
+                      </div>
+
+                      {serviceInvoiceLoading
+                        ? (
+                          <p>
+                            Loading invoice...
+                          </p>
+                        )
+                        : serviceInvoice
+                          ? (
+                            <div
+                              className={
+                                styles.receivableGrid
+                              }
+                            >
+                              <div>
+                                <span>
+                                  Invoice
+                                </span>
+
+                                <strong>
+                                  {
+                                    serviceInvoice
+                                      .invoice_number
+                                  }
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>
+                                  Total
+                                </span>
+
+                                <strong>
+                                  {money(
+                                    serviceInvoice
+                                      .grand_total,
+                                  )}
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>
+                                  Paid
+                                </span>
+
+                                <strong>
+                                  {money(
+                                    serviceInvoice
+                                      .paid_amount,
+                                  )}
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>
+                                  Outstanding
+                                </span>
+
+                                <strong>
+                                  {money(
+                                    serviceInvoice
+                                      .balance_amount,
+                                  )}
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>
+                                  Payment
+                                </span>
+
+                                <strong>
+                                  {readable(
+                                    serviceInvoice
+                                      .payment_status,
+                                  )}
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>
+                                  Due date
+                                </span>
+
+                                <strong>
+                                  {serviceInvoice
+                                    .due_date
+                                    || "Due now"
+                                  }
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>
+                                  Collection
+                                </span>
+
+                                <strong>
+                                  {numberValue(
+                                    serviceInvoice
+                                      .balance_amount,
+                                  ) <= 0
+                                    ? "Settled"
+                                    : serviceInvoiceOverdue
+                                      ? "Overdue"
+                                      : serviceInvoice
+                                          .due_date
+                                        ? "Outstanding"
+                                        : "Due now"
+                                  }
+                                </strong>
+                              </div>
+                            </div>
+                          )
+                          : (
+                            <p>
+                              Linked invoice could not be loaded.
+                            </p>
+                          )
+                      }
+                    </section>
+                  )}
+
+
                   <section
                     className={
                       styles.workflowCard
@@ -6666,6 +7482,49 @@ export default function ServiceJobsPage() {
                     Print Job Card
                   </button>
 
+
+                  {selected
+                    .related_invoice_id && (
+                    <button
+                      type="button"
+                      className={
+                        styles.secondaryButton
+                      }
+                      onClick={() =>
+                        void printServiceInvoice(
+                          selected
+                            .related_invoice_id!,
+                        )
+                      }
+                    >
+                      <Printer
+                        size={15}
+                      />
+
+                      Print Invoice
+                    </button>
+                  )}
+
+                  {selected.status
+                    !== "delivered"
+                    && selected.status
+                      !== "cancelled" && (
+                    <button
+                      type="button"
+                      className={
+                        styles.dangerButton
+                      }
+                      disabled={
+                        actionLoading
+                      }
+                      onClick={() =>
+                        void deleteSelectedJob()
+                      }
+                    >
+                      Delete Job
+                    </button>
+                  )}
+
                   {getValidServiceNextStatuses(
                     asStatus(
                       selected.status,
@@ -6964,6 +7823,25 @@ export default function ServiceJobsPage() {
                       }
                     />
                   </label>
+
+                  <label>
+                    Next service date
+
+                    <input
+                      type="date"
+                      value={
+                        editNextServiceDate
+                      }
+                      onChange={
+                        (event) =>
+                          setEditNextServiceDate(
+                            event
+                              .target
+                              .value,
+                          )
+                      }
+                    />
+                  </label>
                 </>
               )}
 
@@ -7007,6 +7885,28 @@ export default function ServiceJobsPage() {
                       )}
                     </select>
                   </label>
+
+                  {nextStatus
+                    === "delivered" && (
+                    <label>
+                      Next service date after completion
+
+                      <input
+                        type="date"
+                        value={
+                          editNextServiceDate
+                        }
+                        onChange={
+                          (event) =>
+                            setEditNextServiceDate(
+                              event
+                                .target
+                                .value,
+                            )
+                        }
+                      />
+                    </label>
+                  )}
 
                   <label>
                     Remarks
@@ -7142,8 +8042,15 @@ export default function ServiceJobsPage() {
                         type="number"
                         min="0"
                         step="0.01"
+                        disabled={
+                          selected
+                            .is_warranty_job
+                        }
                         value={
-                          labourAmount
+                          selected
+                            .is_warranty_job
+                            ? "0.00"
+                            : labourAmount
                         }
                         onChange={
                           (event) =>
@@ -7154,6 +8061,13 @@ export default function ServiceJobsPage() {
                             )
                         }
                       />
+
+                      {selected
+                        .is_warranty_job && (
+                        <small>
+                          Warranty job — labour/service fee is free.
+                        </small>
+                      )}
                     </label>
                   </div>
 
@@ -7411,6 +8325,107 @@ export default function ServiceJobsPage() {
             </div>
 
 
+              {actionMode
+                === "invoice" && (
+                <section>
+                  <label>
+                    Payment terms
+
+                    <select
+                      value={
+                        serviceInvoiceTerms
+                      }
+                      onChange={(event) => {
+                        const value =
+                          event.target.value as
+                            | "now"
+                            | "7"
+                            | "14"
+                            | "30"
+                            | "custom";
+
+                        setServiceInvoiceTerms(
+                          value,
+                        );
+
+                        if (
+                          value
+                          !== "custom"
+                        ) {
+                          setServiceInvoiceCustomDueDate(
+                            "",
+                          );
+                        }
+                      }}
+                    >
+                      <option value="now">
+                        Pay now
+                      </option>
+
+                      <option value="7">
+                        Due in 7 days
+                      </option>
+
+                      <option value="14">
+                        Due in 14 days
+                      </option>
+
+                      <option value="30">
+                        Due in 30 days
+                      </option>
+
+                      <option value="custom">
+                        Custom due date
+                      </option>
+                    </select>
+                  </label>
+
+                  {serviceInvoiceTerms
+                    === "custom" && (
+                    <label>
+                      Due date
+
+                      <input
+                        type="date"
+                        value={
+                          serviceInvoiceCustomDueDate
+                        }
+                        min={
+                          serviceInvoiceDueDate(
+                            0,
+                          )
+                        }
+                        onChange={(event) =>
+                          setServiceInvoiceCustomDueDate(
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </label>
+                  )}
+
+                  <p>
+                    {serviceInvoiceTerms
+                      === "now"
+                      ? (
+                        "Payment is expected immediately."
+                      )
+                      : serviceInvoiceTerms
+                          === "custom"
+                        ? (
+                          serviceInvoiceCustomDueDate
+                            ? `Payment due ${serviceInvoiceCustomDueDate}.`
+                            : "Choose the agreed payment due date."
+                        )
+                        : (
+                          `Payment due in ${serviceInvoiceTerms} days.`
+                        )
+                    }
+                  </p>
+                </section>
+              )}
+
+
             <footer
               className={
                 styles.modalFooter
@@ -7547,6 +8562,285 @@ export default function ServiceJobsPage() {
           </section>
         </div>
       )}
+      {receivePaymentOpen
+        && serviceInvoice && (
+        <div
+          className={
+            styles.actionBackdrop
+          }
+        >
+          <form
+            className={
+              styles.paymentModal
+            }
+            onSubmit={
+              submitServicePayment
+            }
+          >
+            <header
+              className={
+                styles.modalHeader
+              }
+            >
+              <div>
+                <p className="eyebrow">
+                  SERVICE RECEIVABLE
+                </p>
+
+                <h2>
+                  Receive Payment
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                className={
+                  styles.iconButton
+                }
+                disabled={
+                  actionLoading
+                }
+                onClick={() =>
+                  setReceivePaymentOpen(
+                    false,
+                  )
+                }
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <div
+              className={
+                styles.modalBody
+              }
+            >
+              <section
+                className={
+                  styles.paymentSummary
+                }
+              >
+                <div>
+                  <span>
+                    Invoice
+                  </span>
+
+                  <strong>
+                    {
+                      serviceInvoice
+                        .invoice_number
+                    }
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Total
+                  </span>
+
+                  <strong>
+                    {money(
+                      serviceInvoice
+                        .grand_total,
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Paid
+                  </span>
+
+                  <strong>
+                    {money(
+                      serviceInvoice
+                        .paid_amount,
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Outstanding
+                  </span>
+
+                  <strong>
+                    {money(
+                      serviceInvoice
+                        .balance_amount,
+                    )}
+                  </strong>
+                </div>
+              </section>
+
+              <div
+                className={
+                  styles.formGrid
+                }
+              >
+                <label>
+                  Amount
+
+                  <input
+                    required
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    max={
+                      numberValue(
+                        serviceInvoice
+                          .balance_amount,
+                      )
+                    }
+                    value={
+                      servicePaymentAmount
+                    }
+                    onChange={
+                      (event) =>
+                        setServicePaymentAmount(
+                          event.target.value,
+                        )
+                    }
+                  />
+                </label>
+
+                <label>
+                  Payment method
+
+                  <select
+                    value={
+                      servicePaymentMethod
+                    }
+                    onChange={
+                      (event) =>
+                        setServicePaymentMethod(
+                          event.target.value,
+                        )
+                    }
+                  >
+                    <option value="cash">
+                      Cash
+                    </option>
+
+                    <option value="card">
+                      Card
+                    </option>
+
+                    <option value="bank_transfer">
+                      Bank transfer
+                    </option>
+
+                    <option value="cheque">
+                      Cheque
+                    </option>
+
+                    <option value="online">
+                      Online
+                    </option>
+
+                    <option value="other">
+                      Other
+                    </option>
+                  </select>
+                </label>
+
+                <label>
+                  Reference
+
+                  <input
+                    type="text"
+                    value={
+                      servicePaymentReference
+                    }
+                    onChange={
+                      (event) =>
+                        setServicePaymentReference(
+                          event.target.value,
+                        )
+                    }
+                    placeholder="Optional"
+                  />
+                </label>
+
+                <label
+                  className={
+                    styles.fullField
+                  }
+                >
+                  Notes
+
+                  <textarea
+                    value={
+                      servicePaymentNotes
+                    }
+                    onChange={
+                      (event) =>
+                        setServicePaymentNotes(
+                          event.target.value,
+                        )
+                    }
+                    placeholder="Optional payment notes"
+                  />
+                </label>
+              </div>
+
+              {error && (
+                <div
+                  className={
+                    styles.errorBanner
+                  }
+                >
+                  <CircleAlert
+                    size={17}
+                  />
+
+                  {error}
+                </div>
+              )}
+            </div>
+
+            <footer
+              className={
+                styles.modalFooter
+              }
+            >
+              <button
+                type="button"
+                disabled={
+                  actionLoading
+                }
+                onClick={() =>
+                  setReceivePaymentOpen(
+                    false,
+                  )
+                }
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                className={
+                  styles.paymentButton
+                }
+                disabled={
+                  actionLoading
+                }
+              >
+                <Banknote
+                  size={15}
+                />
+
+                {actionLoading
+                  ? "Receiving..."
+                  : "Receive Payment"
+                }
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
     </AppShell>
   );
 }

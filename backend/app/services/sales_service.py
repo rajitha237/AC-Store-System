@@ -643,6 +643,7 @@ async def create_service_job_invoice(
     session: AsyncSession,
     job_id: int,
     current_user: User,
+    due_date: date | None = None,
 ) -> SalesInvoice:
     job = await get_service_job(
         session,
@@ -737,13 +738,17 @@ async def create_service_job_invoice(
         )
     )
 
-    labour_total = money(
-        sum(
-            (
-                Decimal(labour.amount)
-                for labour in job.labour_items
-            ),
-            ZERO_2,
+    labour_total = (
+        ZERO_2
+        if job.is_warranty_job
+        else money(
+            sum(
+                (
+                    Decimal(labour.amount)
+                    for labour in job.labour_items
+                ),
+                ZERO_2,
+            )
         )
     )
 
@@ -804,6 +809,7 @@ async def create_service_job_invoice(
         grand_total=grand_total,
         paid_amount=ZERO_2,
         balance_amount=grand_total,
+        due_date=due_date,
         payment_status=(
             PaymentStatus.UNPAID.value
         ),
@@ -858,7 +864,11 @@ async def create_service_job_invoice(
                 )
             )
 
-        for labour in job.labour_items:
+        for labour in (
+            []
+            if job.is_warranty_job
+            else job.labour_items
+        ):
             description = labour.description
 
             if (

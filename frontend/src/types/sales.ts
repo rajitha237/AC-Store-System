@@ -105,6 +105,7 @@ export type SalesInvoiceResponse = {
   source_type: string;
   source_id: number | null;
   invoice_date: string;
+  due_date?: string | null;
 
   subtotal: string;
   discount_amount: string;

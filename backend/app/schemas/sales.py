@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 
 from pydantic import (
@@ -82,6 +82,10 @@ class SalesItemCreate(BaseModel):
             )
 
         return self
+
+
+class ServiceInvoiceCreateRequest(BaseModel):
+    due_date: date | None = None
 
 
 class SalesInvoiceCreate(BaseModel):
@@ -277,6 +281,7 @@ class SalesInvoiceResponse(BaseModel):
     balance_amount: Decimal
 
     payment_status: str
+    due_date: date | None = None
     invoice_status: str
 
     notes: str | None

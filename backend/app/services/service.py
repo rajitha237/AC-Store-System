@@ -125,8 +125,14 @@ def quantity(
 def calculate_final_amount(
     job: ServiceJobCard,
 ) -> Decimal:
+    billable_labour = (
+        MONEY_ZERO
+        if job.is_warranty_job
+        else Decimal(job.labour_total)
+    )
+
     gross = (
-        Decimal(job.labour_total)
+        billable_labour
         + Decimal(job.parts_total)
     )
 
@@ -757,6 +763,61 @@ async def create_job_card(
     )
 
 
+async def delete_service_job(
+    session: AsyncSession,
+    job_id: int,
+    current_user: User,
+) -> None:
+    job = await get_job_card(
+        session,
+        job_id,
+    )
+
+    if job.related_invoice_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Service job cannot be deleted because "
+                "an invoice is already linked to it"
+            ),
+        )
+
+    if job.status == ServiceJobStatus.DELIVERED.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Completed/delivered service jobs "
+                "cannot be deleted"
+            ),
+        )
+
+    if job.parts:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Service job cannot be deleted because "
+                "parts have already been issued"
+            ),
+        )
+
+    if job.labour_items:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Service job cannot be deleted because "
+                "labour records already exist"
+            ),
+        )
+
+    try:
+        await session.delete(job)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+
+
 async def get_job_card(
     session: AsyncSession,
     job_id: int,
@@ -845,8 +906,13 @@ async def recalculate_service_totals(
         parts_total or MONEY_ZERO
     )
 
-    job.labour_total = money(
-        labour_total or MONEY_ZERO
+    # Warranty jobs must not carry a labour/service fee.
+    # Labour records may remain as work-history records, but
+    # their monetary contribution is always zero.
+    job.labour_total = (
+        MONEY_ZERO
+        if job.is_warranty_job
+        else money(labour_total or MONEY_ZERO)
     )
 
     job.final_amount = (

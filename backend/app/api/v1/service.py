@@ -19,6 +19,7 @@ from app.models.service import (
 )
 from app.schemas.sales import (
     SalesInvoiceDetailResponse,
+    ServiceInvoiceCreateRequest,
 )
 from app.schemas.service import (
     ServiceApprovalRequest,
@@ -42,6 +43,7 @@ from app.services.service import (
     build_job_detail,
     change_job_status,
     create_job_card,
+    delete_service_job,
     get_job_card,
     list_job_cards,
     update_approval,
@@ -160,6 +162,22 @@ async def read_service_jobs(
         technician_id=technician_id,
         customer_id=customer_id,
         warranty_only=warranty_only,
+    )
+
+
+@router.delete(
+    "/jobs/{job_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_service_job_record(
+    job_id: int,
+    session: DatabaseSession,
+    current_user: CanUpdateJobs,
+) -> None:
+    await delete_service_job(
+        session,
+        job_id=job_id,
+        current_user=current_user,
     )
 
 
@@ -290,11 +308,17 @@ async def create_invoice_for_service_job(
     job_id: int,
     session: DatabaseSession,
     current_user: CanUpdateJobs,
+    payload: ServiceInvoiceCreateRequest | None = None,
 ) -> SalesInvoiceDetailResponse:
     invoice = await create_service_job_invoice(
         session=session,
         job_id=job_id,
         current_user=current_user,
+        due_date=(
+            payload.due_date
+            if payload is not None
+            else None
+        ),
     )
 
     return await invoice_detail_response(
