@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -164,6 +165,7 @@ class LegacyGoodsReceipt(Base):
         DateTime(timezone=True),
         nullable=False,
         default=utc_now,
+        server_default=text("CURRENT_TIMESTAMP"),
     )
 
     items: Mapped[list["LegacyGoodsReceiptItem"]] = relationship(
@@ -313,6 +315,7 @@ class LegacyGoodsReceiptItem(Base):
         DateTime(timezone=True),
         nullable=False,
         default=utc_now,
+        server_default=text("CURRENT_TIMESTAMP"),
     )
 
     legacy_goods_receipt: Mapped["LegacyGoodsReceipt"] = relationship(
