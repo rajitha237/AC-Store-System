@@ -608,3 +608,253 @@ async def test_supplier_finance_requires_authentication(
     )
 
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_supplier_invoice_allows_zero_credit_limit(
+    client,
+    admin_headers,
+    db_session,
+):
+    fixture = await create_po_fixture(
+        client,
+        admin_headers,
+        db_session,
+        suffix="990",
+        quantity="1.000",
+        unit_cost="500.00",
+        discount="0.00",
+        tax="0.00",
+    )
+
+    supplier = await db_session.get(
+        Supplier,
+        fixture["supplier"]["id"],
+    )
+
+    supplier.credit_limit = Decimal("0.00")
+    await db_session.commit()
+
+    response = await client.post(
+        f"{BASE_URL}/supplier-invoices",
+        headers=admin_headers,
+        json={
+            "supplier_id":
+                fixture["supplier"]["id"],
+            "supplier_invoice_number":
+                "SUP-INV-CREDIT-ZERO",
+            "subtotal":
+                "500.00",
+            "discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+        },
+    )
+
+    assert response.status_code == 201, (
+        response.text
+    )
+
+    await db_session.refresh(supplier)
+
+    assert dec(
+        supplier.current_payable
+    ) == Decimal("500.00")
+
+
+@pytest.mark.asyncio
+async def test_supplier_invoice_allows_below_credit_limit(
+    client,
+    admin_headers,
+    db_session,
+):
+    fixture = await create_po_fixture(
+        client,
+        admin_headers,
+        db_session,
+        suffix="991",
+        quantity="1.000",
+        unit_cost="500.00",
+        discount="0.00",
+        tax="0.00",
+    )
+
+    supplier = await db_session.get(
+        Supplier,
+        fixture["supplier"]["id"],
+    )
+
+    supplier.credit_limit = Decimal("1000.00")
+    await db_session.commit()
+
+    response = await client.post(
+        f"{BASE_URL}/supplier-invoices",
+        headers=admin_headers,
+        json={
+            "supplier_id":
+                fixture["supplier"]["id"],
+            "supplier_invoice_number":
+                "SUP-INV-CREDIT-BELOW",
+            "subtotal":
+                "600.00",
+            "discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+        },
+    )
+
+    assert response.status_code == 201, (
+        response.text
+    )
+
+    await db_session.refresh(supplier)
+
+    assert dec(
+        supplier.current_payable
+    ) == Decimal("600.00")
+
+
+@pytest.mark.asyncio
+async def test_supplier_invoice_allows_exact_credit_limit(
+    client,
+    admin_headers,
+    db_session,
+):
+    fixture = await create_po_fixture(
+        client,
+        admin_headers,
+        db_session,
+        suffix="992",
+        quantity="1.000",
+        unit_cost="500.00",
+        discount="0.00",
+        tax="0.00",
+    )
+
+    supplier = await db_session.get(
+        Supplier,
+        fixture["supplier"]["id"],
+    )
+
+    supplier.credit_limit = Decimal("1000.00")
+    await db_session.commit()
+
+    response = await client.post(
+        f"{BASE_URL}/supplier-invoices",
+        headers=admin_headers,
+        json={
+            "supplier_id":
+                fixture["supplier"]["id"],
+            "supplier_invoice_number":
+                "SUP-INV-CREDIT-EXACT",
+            "subtotal":
+                "1000.00",
+            "discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+        },
+    )
+
+    assert response.status_code == 201, (
+        response.text
+    )
+
+    await db_session.refresh(supplier)
+
+    assert dec(
+        supplier.current_payable
+    ) == Decimal("1000.00")
+
+
+@pytest.mark.asyncio
+async def test_supplier_invoice_rejects_credit_limit_excess(
+    client,
+    admin_headers,
+    db_session,
+):
+    fixture = await create_po_fixture(
+        client,
+        admin_headers,
+        db_session,
+        suffix="993",
+        quantity="1.000",
+        unit_cost="500.00",
+        discount="0.00",
+        tax="0.00",
+    )
+
+    supplier = await db_session.get(
+        Supplier,
+        fixture["supplier"]["id"],
+    )
+
+    supplier.credit_limit = Decimal("1000.00")
+    await db_session.commit()
+
+    first = await client.post(
+        f"{BASE_URL}/supplier-invoices",
+        headers=admin_headers,
+        json={
+            "supplier_id":
+                fixture["supplier"]["id"],
+            "supplier_invoice_number":
+                "SUP-INV-CREDIT-FIRST",
+            "subtotal":
+                "800.00",
+            "discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+        },
+    )
+
+    assert first.status_code == 201, (
+        first.text
+    )
+
+    second = await client.post(
+        f"{BASE_URL}/supplier-invoices",
+        headers=admin_headers,
+        json={
+            "supplier_id":
+                fixture["supplier"]["id"],
+            "supplier_invoice_number":
+                "SUP-INV-CREDIT-OVER",
+            "subtotal":
+                "201.00",
+            "discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+        },
+    )
+
+    assert second.status_code == 409, (
+        second.text
+    )
+
+    assert second.json()["detail"] == (
+        "Supplier credit limit would "
+        "be exceeded"
+    )
+
+    await db_session.refresh(supplier)
+
+    assert dec(
+        supplier.current_payable
+    ) == Decimal("800.00")
+
+    result = await db_session.execute(
+        select(SupplierInvoice).where(
+            SupplierInvoice.supplier_id
+            == supplier.id,
+            SupplierInvoice
+            .supplier_invoice_number
+            == "SUP-INV-CREDIT-OVER",
+        )
+    )
+
+    assert result.scalar_one_or_none() is None

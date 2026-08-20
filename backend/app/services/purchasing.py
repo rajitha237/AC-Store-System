@@ -3239,6 +3239,31 @@ async def create_supplier_invoice(
         + tax
     )
 
+    credit_limit = money(
+        supplier.credit_limit
+    )
+
+    projected_payable = money(
+        Decimal(
+            supplier.current_payable
+        )
+        + grand_total
+    )
+
+    if (
+        credit_limit > Decimal("0.00")
+        and projected_payable > credit_limit
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=(
+                "Supplier credit limit would "
+                "be exceeded"
+            ),
+        )
+
     invoice_date = (
         payload.invoice_date
         or datetime.now(
