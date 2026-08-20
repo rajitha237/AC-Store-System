@@ -80,6 +80,12 @@ const navigation = [
     available: true,
   },
   {
+    label: "Purchases",
+    href: "/purchases",
+    icon: ClipboardList,
+    available: true,
+  },
+  {
     label: "Inventory",
     href: "/inventory",
     icon: Boxes,

@@ -51,6 +51,7 @@ import {
   deactivateSupplier,
   getSupplier,
   getSuppliers,
+  listSupplierInvoices,
   updateSupplier,
 } from "@/lib/supplier-api";
 
@@ -61,6 +62,7 @@ import type {
 import type {
   Supplier,
   SupplierCreatePayload,
+  SupplierInvoice,
   SupplierUpdatePayload,
 } from "@/types/supplier";
 
@@ -201,6 +203,24 @@ function money(
     )
       ? numeric
       : 0,
+  );
+}
+
+
+
+function financeTotal(
+  invoices: SupplierInvoice[],
+  field:
+    | "grand_total"
+    | "paid_amount"
+    | "balance_amount",
+): number {
+  return invoices.reduce(
+    (total, invoice) =>
+      total + Number(
+        invoice[field] ?? 0,
+      ),
+    0,
   );
 }
 
@@ -499,6 +519,70 @@ export default function SuppliersPage() {
     setDetailLoading,
   ] =
     useState(false);
+
+
+  const [
+    supplierInvoices,
+    setSupplierInvoices,
+  ] = useState<SupplierInvoice[]>([]);
+
+  const [
+    financeLoading,
+    setFinanceLoading,
+  ] = useState(false);
+
+  const [
+    financeError,
+    setFinanceError,
+  ] = useState("");
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSupplierFinance() {
+      if (!selected) {
+        setSupplierInvoices([]);
+        setFinanceError("");
+        return;
+      }
+
+      setFinanceLoading(true);
+      setFinanceError("");
+
+      try {
+        const response =
+          await listSupplierInvoices({
+            supplierId: selected.id,
+            page: 1,
+            pageSize: 100,
+          });
+
+        if (!cancelled) {
+          setSupplierInvoices(
+            response.items,
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSupplierInvoices([]);
+          setFinanceError(
+            apiError(error),
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setFinanceLoading(false);
+        }
+      }
+    }
+
+    void loadSupplierFinance();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selected]);
 
 
   const [
@@ -1698,6 +1782,205 @@ export default function SuppliersPage() {
                       {" days"}
                     </strong>
                   </div>
+                </section>
+
+
+                <section
+                  style={{
+                    marginTop: "18px",
+                  }}
+                >
+                  <p className="eyebrow">
+                    SUPPLIER FINANCE
+                  </p>
+
+                  {financeLoading ? (
+                    <div
+                      className={
+                        styles.detailEmpty
+                      }
+                    >
+                      <Loader2
+                        size={18}
+                        className={
+                          styles.spin
+                        }
+                      />
+                      Loading finance...
+                    </div>
+                  ) : financeError ? (
+                    <div
+                      className={
+                        styles.detailEmpty
+                      }
+                    >
+                      <CircleAlert
+                        size={18}
+                      />
+                      {financeError}
+                    </div>
+                  ) : (
+                    <>
+                      <section
+                        className={
+                          styles.financeGrid
+                        }
+                      >
+                        <div>
+                          <span>
+                            Total purchased
+                          </span>
+
+                          <strong>
+                            {money(
+                              financeTotal(
+                                supplierInvoices,
+                                "grand_total",
+                              ),
+                            )}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>
+                            Total paid
+                          </span>
+
+                          <strong>
+                            {money(
+                              financeTotal(
+                                supplierInvoices,
+                                "paid_amount",
+                              ),
+                            )}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>
+                            Outstanding
+                          </span>
+
+                          <strong>
+                            {money(
+                              financeTotal(
+                                supplierInvoices,
+                                "balance_amount",
+                              ),
+                            )}
+                          </strong>
+                        </div>
+                      </section>
+
+                      {supplierInvoices.length === 0 ? (
+                        <div
+                          className={
+                            styles.detailEmpty
+                          }
+                          style={{
+                            marginTop: "12px",
+                          }}
+                        >
+                          No supplier invoices yet.
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            marginTop: "14px",
+                            display: "grid",
+                            gap: "10px",
+                          }}
+                        >
+                          {supplierInvoices.map(
+                            (invoice) => (
+                              <div
+                                key={
+                                  invoice.id
+                                }
+                                style={{
+                                  border:
+                                    "1px solid var(--border)",
+                                  borderRadius:
+                                    "12px",
+                                  padding:
+                                    "12px",
+                                }}
+                              >
+                                <strong>
+                                  {
+                                    invoice
+                                      .invoice_number
+                                  }
+                                </strong>
+
+                                <div
+                                  style={{
+                                    marginTop:
+                                      "8px",
+                                    display:
+                                      "grid",
+                                    gap: "4px",
+                                    fontSize:
+                                      "13px",
+                                  }}
+                                >
+                                  <span>
+                                    PO:{" "}
+                                    {
+                                      invoice
+                                        .purchase_order_number
+                                      || "—"
+                                    }
+                                  </span>
+
+                                  <span>
+                                    GRN:{" "}
+                                    {
+                                      invoice
+                                        .grn_number
+                                      || "—"
+                                    }
+                                  </span>
+
+                                  <span>
+                                    Purchase:{" "}
+                                    {money(
+                                      invoice
+                                        .grand_total,
+                                    )}
+                                  </span>
+
+                                  <span>
+                                    Paid:{" "}
+                                    {money(
+                                      invoice
+                                        .paid_amount,
+                                    )}
+                                  </span>
+
+                                  <span>
+                                    Balance:{" "}
+                                    {money(
+                                      invoice
+                                        .balance_amount,
+                                    )}
+                                  </span>
+
+                                  <span>
+                                    Aging:{" "}
+                                    {
+                                      invoice
+                                        .aging_bucket
+                                    }
+                                  </span>
+                                </div>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </section>
 
 

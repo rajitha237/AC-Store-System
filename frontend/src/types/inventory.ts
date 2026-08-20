@@ -154,6 +154,7 @@ export type SerialNumberDetail = {
 export type NonSerializedReceivePayload = {
   product_id: number;
   warehouse_id: number;
+  supplier_id?: number | null;
 
   quantity: string;
   unit_cost: string;
@@ -173,6 +174,7 @@ export type SerializedReceiveItem = {
 export type SerializedReceivePayload = {
   product_id: number;
   warehouse_id: number;
+  supplier_id?: number | null;
 
   unit_cost: string;
 

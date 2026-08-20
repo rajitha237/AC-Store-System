@@ -28,6 +28,10 @@ import {
   receiveSerializedStock,
 } from "@/lib/inventory-api";
 
+import {
+  getSuppliers,
+} from "@/lib/supplier-api";
+
 import type {
   Product,
 } from "@/types/catalog";
@@ -35,6 +39,10 @@ import type {
 import type {
   Warehouse,
 } from "@/types/inventory";
+
+import type {
+  Supplier,
+} from "@/types/supplier";
 
 import styles from "@/app/inventory/inventory.module.css";
 
@@ -52,6 +60,7 @@ type Props = {
 type FormState = {
   productId: string;
   warehouseId: string;
+  supplierId: string;
 
   quantity: string;
   unitCost: string;
@@ -66,6 +75,7 @@ type FormState = {
 const emptyForm: FormState = {
   productId: "",
   warehouseId: "",
+  supplierId: "",
 
   quantity: "1.000",
   unitCost: "0.00",
@@ -236,6 +246,20 @@ export function ReceiveStockModal({
     useState(true);
 
   const [
+    suppliers,
+    setSuppliers,
+  ] =
+    useState<Supplier[]>(
+      [],
+    );
+
+  const [
+    loadingSuppliers,
+    setLoadingSuppliers,
+  ] =
+    useState(true);
+
+  const [
     saving,
     setSaving,
   ] =
@@ -273,6 +297,57 @@ export function ReceiveStockModal({
     let cancelled =
       false;
 
+    async function loadSuppliers() {
+      setLoadingSuppliers(
+        true,
+      );
+
+      try {
+        const response =
+          await getSuppliers({
+            page: 1,
+            pageSize: 100,
+            isActive: true,
+          });
+
+        if (cancelled) {
+          return;
+        }
+
+        setSuppliers(
+          response.items,
+        );
+      } catch (
+        requestError
+      ) {
+        if (!cancelled) {
+          setError(
+            apiError(
+              requestError,
+            ),
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingSuppliers(
+            false,
+          );
+        }
+      }
+    }
+
+    void loadSuppliers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+
+  useEffect(() => {
+    let cancelled =
+      false;
+
     const timer =
       window.setTimeout(
         () => {
@@ -304,31 +379,6 @@ export function ReceiveStockModal({
                 active,
               );
 
-              if (
-                active.length > 0
-              ) {
-                setForm(
-                  (current) => ({
-                    ...current,
-
-                    productId:
-                      current.productId
-                      || String(
-                          active[0].id,
-                        ),
-
-                    unitCost:
-                      current.unitCost
-                      !== "0.00"
-                        ? current.unitCost
-                        : String(
-                            active[0]
-                              .purchase_cost
-                            ?? "0.00",
-                          ),
-                  }),
-                );
-              }
             } catch (
               requestError
             ) {
@@ -596,6 +646,13 @@ export function ReceiveStockModal({
           warehouse_id:
             warehouseId,
 
+          supplier_id:
+            form.supplierId
+              ? Number(
+                  form.supplierId,
+                )
+              : null,
+
           unit_cost:
             form.unitCost,
 
@@ -632,6 +689,13 @@ export function ReceiveStockModal({
 
           warehouse_id:
             warehouseId,
+
+          supplier_id:
+            form.supplierId
+              ? Number(
+                  form.supplierId,
+                )
+              : null,
 
           quantity:
             form.quantity,
@@ -774,31 +838,54 @@ export function ReceiveStockModal({
               >
                 Product *
 
-                <select
+                <input
                   required
+                  type="search"
+                  list="receive-stock-products"
                   disabled={
                     loadingProducts
                     || saving
                   }
-                  value={
-                    form.productId
-                  }
-                  onChange={
-                    (event) =>
-                      selectProduct(
-                        event
-                          .target
-                          .value,
-                      )
-                  }
-                >
-                  <option value="">
-                    {loadingProducts
+                  placeholder={
+                    loadingProducts
                       ? "Loading products..."
-                      : "Select product"
-                    }
-                  </option>
+                      : "Search product code or name..."
+                  }
+                  defaultValue=""
+                  onChange={
+                    (event) => {
+                      const value =
+                        event.target.value
+                          .trim();
 
+                      const product =
+                        products.find(
+                          (item) => {
+                            const label =
+                              `${item.product_code} — ${item.name}`;
+
+                            return (
+                              label === value
+                              || item.product_code === value
+                              || item.name === value
+                            );
+                          },
+                        );
+
+                      selectProduct(
+                        product
+                          ? String(
+                              product.id,
+                            )
+                          : "",
+                      );
+                    }
+                  }
+                />
+
+                <datalist
+                  id="receive-stock-products"
+                >
                   {products.map(
                     (product) => (
                       <option
@@ -806,22 +893,70 @@ export function ReceiveStockModal({
                           product.id
                         }
                         value={
-                          product.id
+                          `${product.product_code} — ${product.name}`
                         }
                       >
-                        {
-                          product
-                            .product_code
-                        }
-                        {" — "}
-                        {
-                          product.name
-                        }
-                        {" — "}
                         {product
                           .track_serial_numbers
                           ? "Serialized"
                           : "Standard"
+                        }
+                      </option>
+                    ),
+                  )}
+                </datalist>
+              </label>
+
+
+              <label>
+                Supplier *
+
+                <select
+                  required
+                  disabled={
+                    loadingSuppliers
+                    || saving
+                  }
+                  value={
+                    form.supplierId
+                  }
+                  onChange={
+                    (event) =>
+                      setForm({
+                        ...form,
+
+                        supplierId:
+                          event
+                            .target
+                            .value,
+                      })
+                  }
+                >
+                  <option value="">
+                    {loadingSuppliers
+                      ? "Loading suppliers..."
+                      : "Select supplier"
+                    }
+                  </option>
+
+                  {suppliers.map(
+                    (supplier) => (
+                      <option
+                        key={
+                          supplier.id
+                        }
+                        value={
+                          supplier.id
+                        }
+                      >
+                        {
+                          supplier
+                            .supplier_code
+                        }
+                        {" — "}
+                        {
+                          supplier
+                            .company_name
                         }
                       </option>
                     ),
