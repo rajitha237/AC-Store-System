@@ -407,6 +407,35 @@ export default function SalesPage() {
   ] =
     useState("");
 
+
+  const [
+    saleCustomerSearch,
+    setSaleCustomerSearch,
+  ] =
+    useState("");
+
+  const [
+    saleCustomerSearchOpen,
+    setSaleCustomerSearchOpen,
+  ] =
+    useState(false);
+
+  const [
+    saleProductSearch,
+    setSaleProductSearch,
+  ] =
+    useState<
+      Record<string, string>
+    >({});
+
+  const [
+    saleProductSearchOpenKey,
+    setSaleProductSearchOpenKey,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
   const [
     lines,
     setLines,
@@ -434,6 +463,26 @@ export default function SalesPage() {
     setNotes,
   ] =
     useState("");
+
+  const [
+    salesTradeInEnabled,
+    setSalesTradeInEnabled,
+  ] =
+    useState(false);
+
+  const [
+    salesTradeIn,
+    setSalesTradeIn,
+  ] =
+    useState({
+      brand: "",
+      model: "",
+      serialNumber: "",
+      condition: "Used",
+      description: "",
+      allowance: "",
+    });
+
 
   const [
     saving,
@@ -767,6 +816,25 @@ export default function SalesPage() {
     );
 
 
+  const calculatedTradeInAmount =
+    salesTradeInEnabled
+      ? Math.max(
+          0,
+          numeric(
+            salesTradeIn.allowance,
+          ),
+        )
+      : 0;
+
+
+  const calculatedCustomerPayable =
+    Math.max(
+      0,
+      calculatedGrandTotal
+      - calculatedTradeInAmount,
+    );
+
+
   function submitSearch(
     event:
       FormEvent<HTMLFormElement>,
@@ -794,6 +862,52 @@ export default function SalesPage() {
     setInvoiceStatus("");
     setPaymentStatus("");
     setPage(1);
+  }
+
+
+  async function searchSaleCustomers(
+    query: string,
+  ) {
+    try {
+      const result =
+        await getSalesCustomers(
+          query,
+        );
+
+      setCustomers(
+        result,
+      );
+    } catch (
+      requestError
+    ) {
+      console.error(
+        "Sales customer search failed",
+        requestError,
+      );
+    }
+  }
+
+
+  async function searchSaleProducts(
+    query: string,
+  ) {
+    try {
+      const result =
+        await getSalesProducts(
+          query,
+        );
+
+      setProducts(
+        result,
+      );
+    } catch (
+      requestError
+    ) {
+      console.error(
+        "Sales product search failed",
+        requestError,
+      );
+    }
   }
 
 
@@ -856,6 +970,22 @@ export default function SalesPage() {
 
     setCustomerId("");
 
+    setSaleCustomerSearch(
+      "",
+    );
+
+    setSaleCustomerSearchOpen(
+      false,
+    );
+
+    setSaleProductSearch(
+      {},
+    );
+
+    setSaleProductSearchOpenKey(
+      null,
+    );
+
     setLines([
       makeLine(),
     ]);
@@ -869,6 +999,19 @@ export default function SalesPage() {
     );
 
     setNotes("");
+
+    setSalesTradeInEnabled(
+      false,
+    );
+
+    setSalesTradeIn({
+      brand: "",
+      model: "",
+      serialNumber: "",
+      condition: "Used",
+      description: "",
+      allowance: "",
+    });
 
     setCreatedDraft(
       null,
@@ -1262,6 +1405,40 @@ export default function SalesPage() {
     }
 
     if (
+      salesTradeInEnabled
+      && calculatedTradeInAmount <= 0
+    ) {
+      return (
+        "Enter a valid trade-in allowance."
+      );
+    }
+
+    if (
+      salesTradeInEnabled
+      && calculatedTradeInAmount
+      > calculatedCustomerPayable
+    ) {
+      return (
+        "Trade-in allowance cannot exceed the invoice total."
+      );
+    }
+
+    if (
+      salesTradeInEnabled
+      && !(
+        salesTradeIn.brand.trim()
+        || salesTradeIn.model.trim()
+        || salesTradeIn.serialNumber.trim()
+        || salesTradeIn.description.trim()
+      )
+    ) {
+      return (
+        "Enter brand, model, serial number or description for the trade-in unit."
+      );
+    }
+
+
+    if (
       initialPaymentEnabled
       && initialPaymentAmount
       && numeric(
@@ -1271,7 +1448,7 @@ export default function SalesPage() {
     ) {
       return (
         "Initial payment cannot "
-        + "exceed the grand total."
+        + "exceed the customer payable balance."
       );
     }
 
@@ -1319,6 +1496,37 @@ export default function SalesPage() {
             cleanText(
               notes,
             ),
+
+          trade_ins:
+            salesTradeInEnabled
+              ? [
+                  {
+                    brand:
+                      cleanText(
+                        salesTradeIn.brand,
+                      ),
+                    model:
+                      cleanText(
+                        salesTradeIn.model,
+                      ),
+                    serial_number:
+                      cleanText(
+                        salesTradeIn.serialNumber,
+                      ),
+                    condition:
+                      cleanText(
+                        salesTradeIn.condition,
+                      ),
+                    description:
+                      cleanText(
+                        salesTradeIn.description,
+                      ),
+                    allowance_amount:
+                      salesTradeIn.allowance
+                      || "0.00",
+                  },
+                ]
+              : [],
 
           items:
             lines.map(
@@ -1386,7 +1594,7 @@ export default function SalesPage() {
         && !initialPaymentAmount
       ) {
         setInitialPaymentAmount(
-          created.grand_total,
+          created.balance_amount,
         );
       }
     } catch (
@@ -1437,7 +1645,7 @@ export default function SalesPage() {
         amount
         > numeric(
             createdDraft
-              .grand_total,
+              .balance_amount,
           )
       ) {
         setError(
@@ -2246,50 +2454,173 @@ export default function SalesPage() {
                     >
                       Customer *
 
-                      <select
-                        required
-                        value={
-                          customerId
-                        }
-                        onChange={
-                          (event) =>
-                            setCustomerId(
-                              event
-                                .target
-                                .value,
-                            )
+                      <div
+                        className={
+                          styles.searchableSelect
                         }
                       >
-                        <option value="">
-                          Select customer
-                        </option>
+                        <input
+                          required
+                          type="text"
+                          autoComplete="off"
+                          placeholder="Search customer name, code, phone or NIC..."
+                          value={
+                            saleCustomerSearchOpen
+                              ? saleCustomerSearch
+                              : (
+                                  customers.find(
+                                    (customer) =>
+                                      String(
+                                        customer.id,
+                                      )
+                                      === customerId,
+                                  )
+                                    ? `${
+                                        customers.find(
+                                          (customer) =>
+                                            String(
+                                              customer.id,
+                                            )
+                                            === customerId,
+                                        )?.customer_code
+                                        ?? `#${customerId}`
+                                      } — ${
+                                        customers.find(
+                                          (customer) =>
+                                            String(
+                                              customer.id,
+                                            )
+                                            === customerId,
+                                        )?.full_name
+                                        ?? ""
+                                      }`
+                                    : ""
+                                )
+                          }
+                          onFocus={() => {
+                            setSaleCustomerSearch(
+                              "",
+                            );
 
-                        {customers.map(
-                          (customer) => (
-                            <option
-                              key={
-                                customer.id
-                              }
-                              value={
-                                customer.id
-                              }
-                            >
-                              {
-                                customer
-                                  .full_name
-                              }
-                              {customer
-                                .phone
-                                ? ` — ${customer.phone}`
-                                : customer
-                                    .mobile_number
-                                  ? ` — ${customer.mobile_number}`
-                                  : ""
-                              }
-                            </option>
-                          ),
+                            setSaleCustomerSearchOpen(
+                              true,
+                            );
+
+                            void searchSaleCustomers(
+                              "",
+                            );
+                          }}
+                          onChange={(event) => {
+                            const value =
+                              event.target.value;
+
+                            setSaleCustomerSearch(
+                              value,
+                            );
+
+                            setSaleCustomerSearchOpen(
+                              true,
+                            );
+
+                            void searchSaleCustomers(
+                              value,
+                            );
+
+                            if (
+                              customerId
+                            ) {
+                              setCustomerId(
+                                "",
+                              );
+                            }
+                          }}
+                          onBlur={() => {
+                            window.setTimeout(
+                              () => {
+                                setSaleCustomerSearchOpen(
+                                  false,
+                                );
+                              },
+                              150,
+                            );
+                          }}
+                        />
+
+                        {saleCustomerSearchOpen && (
+                          <div
+                            className={
+                              styles.searchableMenu
+                            }
+                          >
+                            {customers.length > 0 ? (
+                              customers.map(
+                                (customer) => (
+                                  <button
+                                    key={
+                                      customer.id
+                                    }
+                                    type="button"
+                                    className={
+                                      styles.searchableOption
+                                    }
+                                    onMouseDown={(
+                                      event,
+                                    ) => {
+                                      event.preventDefault();
+
+                                      setCustomerId(
+                                        String(
+                                          customer.id,
+                                        ),
+                                      );
+
+                                      setSaleCustomerSearch(
+                                        `${
+                                          customer.customer_code
+                                          ?? `#${customer.id}`
+                                        } — ${
+                                          customer.full_name
+                                        }`,
+                                      );
+
+                                      setSaleCustomerSearchOpen(
+                                        false,
+                                      );
+                                    }}
+                                  >
+                                    <strong>
+                                      {
+                                        customer.customer_code
+                                        ?? `#${customer.id}`
+                                      }
+                                      {" — "}
+                                      {
+                                        customer.full_name
+                                      }
+                                    </strong>
+
+                                    <span>
+                                      {customer.phone
+                                        || customer.mobile_number
+                                        || customer.nic_number
+                                        || "No phone / NIC"
+                                      }
+                                    </span>
+                                  </button>
+                                ),
+                              )
+                            ) : (
+                              <div
+                                className={
+                                  styles.searchableEmpty
+                                }
+                              >
+                                No customers found.
+                              </div>
+                            )}
+                          </div>
                         )}
-                      </select>
+                      </div>
                     </label>
                   </section>
 
@@ -2408,53 +2739,194 @@ export default function SalesPage() {
                                 >
                                   Product *
 
-                                  <select
-                                    value={
-                                      line
-                                        .productId
-                                    }
-                                    onChange={
-                                      (event) =>
-                                        void changeProduct(
-                                          line,
-                                          event
-                                            .target
-                                            .value,
-                                        )
+                                  <div
+                                    className={
+                                      styles.searchableSelect
                                     }
                                   >
-                                    <option value="">
-                                      Select product
-                                    </option>
+                                    <input
+                                      type="text"
+                                      autoComplete="off"
+                                      placeholder="Search product code or name..."
+                                      value={
+                                        saleProductSearchOpenKey
+                                          === line.key
+                                          ? (
+                                              saleProductSearch[
+                                                line.key
+                                              ]
+                                              ?? ""
+                                            )
+                                          : (
+                                              products.find(
+                                                (item) =>
+                                                  String(
+                                                    item.id,
+                                                  )
+                                                  === line.productId,
+                                              )
+                                                ? `${
+                                                    products.find(
+                                                      (item) =>
+                                                        String(
+                                                          item.id,
+                                                        )
+                                                        === line.productId,
+                                                    )?.product_code
+                                                    ?? ""
+                                                  } — ${
+                                                    products.find(
+                                                      (item) =>
+                                                        String(
+                                                          item.id,
+                                                        )
+                                                        === line.productId,
+                                                    )?.name
+                                                    ?? ""
+                                                  }`
+                                                : ""
+                                            )
+                                      }
+                                      onFocus={() => {
+                                        setSaleProductSearch({
+                                          ...saleProductSearch,
+                                          [line.key]:
+                                            "",
+                                        });
 
-                                    {products.map(
-                                      (item) => (
-                                        <option
-                                          key={
-                                            item.id
-                                          }
-                                          value={
-                                            item.id
-                                          }
-                                        >
-                                          {
-                                            item
-                                              .product_code
-                                          }
-                                          {" — "}
-                                          {
-                                            item
-                                              .name
-                                          }
-                                          {item
-                                            .track_serial_numbers
-                                            ? " — Serialized"
-                                            : ""
-                                          }
-                                        </option>
-                                      ),
+                                        setSaleProductSearchOpenKey(
+                                          line.key,
+                                        );
+
+                                        void searchSaleProducts(
+                                          "",
+                                        );
+                                      }}
+                                      onChange={(event) => {
+                                        const value =
+                                          event.target.value;
+
+                                        setSaleProductSearch({
+                                          ...saleProductSearch,
+                                          [line.key]:
+                                            value,
+                                        });
+
+                                        setSaleProductSearchOpenKey(
+                                          line.key,
+                                        );
+
+                                        void searchSaleProducts(
+                                          value,
+                                        );
+
+                                        if (
+                                          line.productId
+                                        ) {
+                                          void changeProduct(
+                                            line,
+                                            "",
+                                          );
+                                        }
+                                      }}
+                                      onBlur={() => {
+                                        window.setTimeout(
+                                          () => {
+                                            setSaleProductSearchOpenKey(
+                                              (
+                                                current
+                                              ) =>
+                                                current
+                                                === line.key
+                                                  ? null
+                                                  : current,
+                                            );
+                                          },
+                                          150,
+                                        );
+                                      }}
+                                    />
+
+                                    {saleProductSearchOpenKey
+                                      === line.key && (
+                                      <div
+                                        className={
+                                          styles.searchableMenu
+                                        }
+                                      >
+                                        {products.length > 0 ? (
+                                          products.map(
+                                            (item) => (
+                                              <button
+                                                key={
+                                                  item.id
+                                                }
+                                                type="button"
+                                                className={
+                                                  styles.searchableOption
+                                                }
+                                                onMouseDown={(
+                                                  event,
+                                                ) => {
+                                                  event.preventDefault();
+
+                                                  setSaleProductSearch({
+                                                    ...saleProductSearch,
+                                                    [line.key]:
+                                                      `${
+                                                        item.product_code
+                                                      } — ${
+                                                        item.name
+                                                      }`,
+                                                  });
+
+                                                  setSaleProductSearchOpenKey(
+                                                    null,
+                                                  );
+
+                                                  void changeProduct(
+                                                    line,
+                                                    String(
+                                                      item.id,
+                                                    ),
+                                                  );
+                                                }}
+                                              >
+                                                <strong>
+                                                  {
+                                                    item.product_code
+                                                  }
+                                                  {" — "}
+                                                  {
+                                                    item.name
+                                                  }
+                                                </strong>
+
+                                                <span>
+                                                  Price:{" "}
+                                                  {
+                                                    item.selling_price
+                                                  }
+                                                  {item.track_serial_numbers
+                                                    ? " — Serialized"
+                                                    : ""
+                                                  }
+                                                </span>
+                                              </button>
+                                            ),
+                                          )
+                                        ) : (
+                                          <div
+                                            className={
+                                              styles.searchableEmpty
+                                            }
+                                          >
+                                            No products found.
+                                          </div>
+                                        )}
+                                      </div>
                                     )}
-                                  </select>
+                                  </div>
                                 </label>
 
 
@@ -2724,6 +3196,189 @@ export default function SalesPage() {
                       styles.formSection
                     }
                   >
+                    <div
+                      className={
+                        styles.tradeInHeader
+                      }
+                    >
+                      <div>
+                        <h3>
+                          Trade-in / Exchange
+                        </h3>
+
+                        <p>
+                          Keep the old A/C allowance separate from normal sales discount.
+                        </p>
+                      </div>
+
+                      <label
+                        className={
+                          styles.tradeInToggle
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={
+                            salesTradeInEnabled
+                          }
+                          onChange={
+                            (event) =>
+                              setSalesTradeInEnabled(
+                                event.target.checked,
+                              )
+                          }
+                        />
+
+                        Use trade-in
+                      </label>
+                    </div>
+
+                    {salesTradeInEnabled && (
+                      <div
+                        className={
+                          styles.totalsGrid
+                        }
+                      >
+                        <label>
+                          Brand
+
+                          <input
+                            value={
+                              salesTradeIn.brand
+                            }
+                            onChange={
+                              (event) =>
+                                setSalesTradeIn({
+                                  ...salesTradeIn,
+                                  brand:
+                                    event.target.value,
+                                })
+                            }
+                          />
+                        </label>
+
+                        <label>
+                          Model
+
+                          <input
+                            value={
+                              salesTradeIn.model
+                            }
+                            onChange={
+                              (event) =>
+                                setSalesTradeIn({
+                                  ...salesTradeIn,
+                                  model:
+                                    event.target.value,
+                                })
+                            }
+                          />
+                        </label>
+
+                        <label>
+                          Serial number
+
+                          <input
+                            value={
+                              salesTradeIn
+                                .serialNumber
+                            }
+                            onChange={
+                              (event) =>
+                                setSalesTradeIn({
+                                  ...salesTradeIn,
+                                  serialNumber:
+                                    event.target.value,
+                                })
+                            }
+                          />
+                        </label>
+
+                        <label>
+                          Condition
+
+                          <select
+                            value={
+                              salesTradeIn.condition
+                            }
+                            onChange={
+                              (event) =>
+                                setSalesTradeIn({
+                                  ...salesTradeIn,
+                                  condition:
+                                    event.target.value,
+                                })
+                            }
+                          >
+                            <option value="Used">
+                              Used
+                            </option>
+                            <option value="Working">
+                              Working
+                            </option>
+                            <option value="Repair required">
+                              Repair required
+                            </option>
+                            <option value="Scrap">
+                              Scrap
+                            </option>
+                          </select>
+                        </label>
+
+                        <label>
+                          Trade-in allowance
+
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={
+                              salesTradeIn.allowance
+                            }
+                            onChange={
+                              (event) =>
+                                setSalesTradeIn({
+                                  ...salesTradeIn,
+                                  allowance:
+                                    event.target.value,
+                                })
+                            }
+                          />
+                        </label>
+
+                        <label
+                          className={
+                            styles.fullField
+                          }
+                        >
+                          Old A/C details
+
+                          <textarea
+                            rows={2}
+                            value={
+                              salesTradeIn
+                                .description
+                            }
+                            onChange={
+                              (event) =>
+                                setSalesTradeIn({
+                                  ...salesTradeIn,
+                                  description:
+                                    event.target.value,
+                                })
+                            }
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </section>
+
+
+                  <section
+                    className={
+                      styles.formSection
+                    }
+                  >
                     <h3>
                       Invoice totals
                     </h3>
@@ -2841,18 +3496,42 @@ export default function SalesPage() {
                         </strong>
                       </div>
 
+                      <div>
+                        <span>
+                          Sale total
+                        </span>
+
+                        <strong>
+                          {money(
+                            calculatedGrandTotal,
+                          )}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Trade-in allowance
+                        </span>
+
+                        <strong>
+                          -{money(
+                            calculatedTradeInAmount,
+                          )}
+                        </strong>
+                      </div>
+
                       <div
                         className={
                           styles.grandTotal
                         }
                       >
                         <span>
-                          Grand total
+                          Customer payable
                         </span>
 
                         <strong>
                           {money(
-                            calculatedGrandTotal,
+                            calculatedCustomerPayable,
                           )}
                         </strong>
                       </div>
@@ -3028,14 +3707,14 @@ export default function SalesPage() {
                                     0,
                                     numeric(
                                       createdDraft
-                                        .grand_total,
+                                        .balance_amount,
                                     )
                                     - numeric(
                                         initialPaymentAmount,
                                       ),
                                   )
                                 : createdDraft
-                                    .grand_total,
+                                    .balance_amount,
                             )}
                           </strong>
                         </div>
@@ -3074,7 +3753,7 @@ export default function SalesPage() {
                                 ) {
                                   setInitialPaymentAmount(
                                     createdDraft
-                                      .grand_total,
+                                      .balance_amount,
                                   );
                                 }
                               }
@@ -3434,6 +4113,77 @@ export default function SalesPage() {
                     </strong>
                   </div>
                 </div>
+
+
+                {selectedInvoice.trade_ins
+                  .length > 0 && (
+                  <section
+                    className={
+                      styles.detailSection
+                    }
+                  >
+                    <h3>
+                      Trade-in details
+                    </h3>
+
+                    {selectedInvoice.trade_ins.map(
+                      (tradeIn) => (
+                        <article
+                          key={
+                            tradeIn.id
+                          }
+                          className={
+                            styles.detailItem
+                          }
+                        >
+                          <div>
+                            <strong>
+                              {[
+                                tradeIn.brand,
+                                tradeIn.model,
+                              ]
+                                .filter(Boolean)
+                                .join(" ")
+                                || "Old A/C unit"
+                              }
+                            </strong>
+
+                            <span>
+                              {tradeIn.serial_number
+                                ? `Serial: ${tradeIn.serial_number}`
+                                : "Serial not recorded"
+                              }
+                            </span>
+
+                            {tradeIn.condition && (
+                              <small>
+                                Condition:{" "}
+                                {
+                                  tradeIn.condition
+                                }
+                              </small>
+                            )}
+
+                            {tradeIn.description && (
+                              <small>
+                                {
+                                  tradeIn.description
+                                }
+                              </small>
+                            )}
+                          </div>
+
+                          <strong>
+                            -{money(
+                              tradeIn
+                                .allowance_amount,
+                            )}
+                          </strong>
+                        </article>
+                      ),
+                    )}
+                  </section>
+                )}
 
 
                 <section

@@ -88,6 +88,76 @@ class ServiceInvoiceCreateRequest(BaseModel):
     due_date: date | None = None
 
 
+class SalesTradeInCreate(BaseModel):
+    brand: str | None = Field(
+        default=None,
+        max_length=120,
+    )
+
+    model: str | None = Field(
+        default=None,
+        max_length=120,
+    )
+
+    serial_number: str | None = Field(
+        default=None,
+        max_length=150,
+    )
+
+    condition: str | None = Field(
+        default=None,
+        max_length=100,
+    )
+
+    description: str | None = Field(
+        default=None,
+        max_length=500,
+    )
+
+    allowance_amount: Decimal = Field(
+        gt=Decimal("0.00"),
+        max_digits=18,
+        decimal_places=2,
+    )
+
+    @field_validator(
+        "brand",
+        "model",
+        "serial_number",
+        "condition",
+        "description",
+    )
+    @classmethod
+    def normalize_trade_in_text(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        value = value.strip()
+        return value or None
+
+    @model_validator(mode="after")
+    def validate_trade_in_identity(
+        self,
+    ) -> "SalesTradeInCreate":
+        if not any(
+            (
+                self.brand,
+                self.model,
+                self.serial_number,
+                self.description,
+            )
+        ):
+            raise ValueError(
+                "Trade-in must include brand, "
+                "model, serial number or description"
+            )
+
+        return self
+
+
 class SalesInvoiceCreate(BaseModel):
     customer_id: int = Field(ge=1)
 
@@ -121,6 +191,11 @@ class SalesInvoiceCreate(BaseModel):
     items: list[SalesItemCreate] = Field(
         min_length=1,
         max_length=100,
+    )
+
+    trade_ins: list[SalesTradeInCreate] = Field(
+        default_factory=list,
+        max_length=10,
     )
 
     @field_validator("notes")
@@ -224,6 +299,24 @@ class SalesInvoiceItemResponse(BaseModel):
     created_at: datetime
 
 
+class SalesTradeInResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+    id: int
+    invoice_id: int
+
+    brand: str | None
+    model: str | None
+    serial_number: str | None
+    condition: str | None
+    description: str | None
+
+    allowance_amount: Decimal
+    created_at: datetime
+
+
 class CustomerPaymentResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True
@@ -277,6 +370,7 @@ class SalesInvoiceResponse(BaseModel):
     grand_total: Decimal
 
     credited_amount: Decimal
+    trade_in_amount: Decimal
     paid_amount: Decimal
     balance_amount: Decimal
 
@@ -295,6 +389,12 @@ class SalesInvoiceResponse(BaseModel):
     items: list[
         SalesInvoiceItemResponse
     ]
+
+    trade_ins: list[
+        SalesTradeInResponse
+    ] = Field(
+        default_factory=list
+    )
 
 
 class SalesInvoiceDetailResponse(

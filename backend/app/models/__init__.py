@@ -56,6 +56,7 @@ from app.models.sales import (
     PaymentStatus,
     SalesInvoice,
     SalesInvoiceItem,
+    SalesTradeIn,
 )
 from app.models.service import (
     ApprovalStatus,
@@ -124,6 +125,7 @@ __all__ = [
     "SalesReturnStatusHistory",
     "SalesInvoice",
     "SalesInvoiceItem",
+    "SalesTradeIn",
     "SerialNumberStatus",
     "ServiceChecklistItem",
     "ServiceJobCard",

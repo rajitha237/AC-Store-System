@@ -73,6 +73,24 @@ export interface QuickSaleCustomerCreate {
   sms_phone?: string | null;
 }
 
+export interface QuickSaleTradeIn {
+  id?: number;
+  invoice_id?: number;
+
+  brand?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  condition?: string | null;
+  description?: string | null;
+
+  allowance_amount:
+    | number
+    | string;
+
+  created_at?: string;
+}
+
+
 export interface QuickSaleDraftInvoice {
   id: number;
   invoice_number?: string;
@@ -81,6 +99,8 @@ export interface QuickSaleDraftInvoice {
   net_total?: number | string;
   paid_amount?: number | string;
   balance_amount?: number | string;
+  trade_in_amount?: number | string;
+  trade_ins?: QuickSaleTradeIn[];
   status?: string;
   [key: string]: unknown;
 }

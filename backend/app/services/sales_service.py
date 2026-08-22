@@ -22,6 +22,7 @@ from app.models import (
     ProductSerialNumber,
     SalesInvoice,
     SalesInvoiceItem,
+    SalesTradeIn,
     SerialNumberStatus,
     StockItem,
     StockMovement,
@@ -89,6 +90,8 @@ def sales_invoice_audit_snapshot(
             str(money(invoice.grand_total)),
         "credited_amount":
             str(money(invoice.credited_amount)),
+        "trade_in_amount":
+            str(money(invoice.trade_in_amount)),
         "paid_amount":
             str(money(invoice.paid_amount)),
         "balance_amount":
@@ -259,6 +262,9 @@ async def get_invoice(
             ),
             selectinload(
                 SalesInvoice.payments
+            ),
+            selectinload(
+                SalesInvoice.trade_ins
             ),
         )
         .where(
@@ -531,6 +537,30 @@ async def create_draft_invoice(
         + payload.tax_amount
     )
 
+    trade_in_total = money(
+        sum(
+            (
+                Decimal(
+                    trade_in.allowance_amount
+                )
+                for trade_in
+                in payload.trade_ins
+            ),
+            ZERO_2,
+        )
+    )
+
+    if trade_in_total > grand_total:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Trade-in allowance cannot exceed "
+                "the invoice grand total"
+            ),
+        )
+
     invoice = SalesInvoice(
         company_id=company.id,
         branch_id=branch.id,
@@ -544,8 +574,11 @@ async def create_draft_invoice(
         ),
         tax_amount=payload.tax_amount,
         grand_total=grand_total,
+        trade_in_amount=trade_in_total,
         paid_amount=ZERO_2,
-        balance_amount=grand_total,
+        balance_amount=money(
+            grand_total - trade_in_total
+        ),
         payment_status=(
             PaymentStatus.UNPAID.value
         ),
@@ -562,6 +595,25 @@ async def create_draft_invoice(
     invoice.invoice_number = (
         f"INV-{invoice.id:06d}"
     )
+
+    for trade_in in payload.trade_ins:
+        session.add(
+            SalesTradeIn(
+                invoice_id=invoice.id,
+                brand=trade_in.brand,
+                model=trade_in.model,
+                serial_number=(
+                    trade_in.serial_number
+                ),
+                condition=trade_in.condition,
+                description=(
+                    trade_in.description
+                ),
+                allowance_amount=money(
+                    trade_in.allowance_amount
+                ),
+            )
+        )
 
     for (
         item,
@@ -1376,7 +1428,7 @@ async def confirm_invoice(
         if initial_payment is not None:
             if (
                 initial_payment.amount
-                > invoice.grand_total
+                > invoice.balance_amount
             ):
                 raise HTTPException(
                     status_code=(
@@ -1384,7 +1436,7 @@ async def confirm_invoice(
                     ),
                     detail=(
                         "Initial payment cannot exceed "
-                        "invoice grand total"
+                        "customer payable balance"
                     ),
                 )
 
@@ -1425,6 +1477,7 @@ async def confirm_invoice(
                 ZERO_2,
                 Decimal(invoice.grand_total)
                 - Decimal(invoice.credited_amount)
+                - Decimal(invoice.trade_in_amount)
                 - Decimal(invoice.paid_amount),
             )
         )
@@ -1609,6 +1662,7 @@ async def post_payment(
                 ZERO_2,
                 Decimal(invoice.grand_total)
                 - Decimal(invoice.credited_amount)
+                - Decimal(invoice.trade_in_amount)
                 - Decimal(invoice.paid_amount),
             )
         )
@@ -1665,11 +1719,13 @@ async def invoice_detail_response(
         tax_amount=invoice.tax_amount,
         grand_total=invoice.grand_total,
         credited_amount=invoice.credited_amount,
+        trade_in_amount=invoice.trade_in_amount,
         paid_amount=invoice.paid_amount,
         balance_amount=invoice.balance_amount,
         payment_status=(
             invoice.payment_status
         ),
+        due_date=invoice.due_date,
         invoice_status=(
             invoice.invoice_status
         ),
@@ -1683,6 +1739,7 @@ async def invoice_detail_response(
         created_at=invoice.created_at,
         updated_at=invoice.updated_at,
         items=invoice.items,
+        trade_ins=invoice.trade_ins,
         customer_name=customer.full_name,
         customer_phone=(
             customer.primary_phone
@@ -1758,6 +1815,9 @@ async def list_invoices(
         .options(
             selectinload(
                 SalesInvoice.items
+            ),
+            selectinload(
+                SalesInvoice.trade_ins
             ),
         )
         .where(*filters)

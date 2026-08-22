@@ -276,6 +276,14 @@ export async function createDraftInvoice(
     invoice_discount_amount: number;
     tax_amount: number;
     notes?: string | null;
+    trade_ins?: Array<{
+      brand?: string | null;
+      model?: string | null;
+      serial_number?: string | null;
+      condition?: string | null;
+      description?: string | null;
+      allowance_amount: number;
+    }>;
     items: Array<{
       product_id: number;
       quantity: number;

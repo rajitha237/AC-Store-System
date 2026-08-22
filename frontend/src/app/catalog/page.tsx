@@ -2206,26 +2206,49 @@ export default function CatalogPage() {
                   </label>
 
                   <label>
-                    Warranty months
+                    Warranty years
 
                     <input
                       type="number"
                       min="0"
-                      max="120"
-                      step="1"
+                      max="10"
+                      step="0.5"
                       value={
                         productForm
                           .warranty_months
+                          ? String(
+                              Number(
+                                productForm
+                                  .warranty_months,
+                              ) / 12,
+                            )
+                          : "0"
                       }
                       onChange={
-                        (event) =>
+                        (event) => {
+                          const years =
+                            Number(
+                              event.target.value
+                              || 0,
+                            );
+
                           setProductForm({
                             ...productForm,
                             warranty_months:
-                              event.target.value,
-                          })
+                              String(
+                                Math.round(
+                                  years * 12,
+                                ),
+                              ),
+                          });
+                        }
                       }
                     />
+
+                    <small>
+                      Enter warranty in years.
+                      1 year = 12 months.
+                    </small>
                   </label>
                 </div>
               </section>

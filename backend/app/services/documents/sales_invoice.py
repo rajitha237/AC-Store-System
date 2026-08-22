@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -380,6 +381,142 @@ async def build_sales_invoice_pdf(
     story.append(item_table)
     story.append(Spacer(1, 4 * mm))
 
+    if invoice.trade_ins:
+        story.append(
+            Paragraph(
+                "<b>Trade-In / Exchange</b>",
+                STYLES["normal"],
+            )
+        )
+
+        trade_rows = [
+            [
+                Paragraph(
+                    "<b>Old Unit</b>",
+                    STYLES["small"],
+                ),
+                Paragraph(
+                    "<b>Serial</b>",
+                    STYLES["small"],
+                ),
+                Paragraph(
+                    "<b>Condition</b>",
+                    STYLES["small"],
+                ),
+                Paragraph(
+                    "<b>Allowance</b>",
+                    STYLES["small"],
+                ),
+            ]
+        ]
+
+        for trade_in in invoice.trade_ins:
+            unit_text = " ".join(
+                value
+                for value in (
+                    trade_in.brand,
+                    trade_in.model,
+                )
+                if value
+            ) or "Old A/C unit"
+
+            if trade_in.description:
+                unit_text += (
+                    "<br/>"
+                    + escape(
+                        trade_in.description
+                    )
+                )
+
+            trade_rows.append(
+                [
+                    Paragraph(
+                        escape(unit_text)
+                        if "<br/>" not in unit_text
+                        else unit_text,
+                        STYLES["small"],
+                    ),
+                    Paragraph(
+                        escape(
+                            trade_in.serial_number
+                            or "-"
+                        ),
+                        STYLES["small"],
+                    ),
+                    Paragraph(
+                        escape(
+                            trade_in.condition
+                            or "-"
+                        ),
+                        STYLES["small"],
+                    ),
+                    money(
+                        trade_in.allowance_amount
+                    ),
+                ]
+            )
+
+        trade_table = Table(
+            trade_rows,
+            colWidths=[
+                92 * mm,
+                40 * mm,
+                35 * mm,
+                30 * mm,
+            ],
+            repeatRows=1,
+        )
+
+        trade_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "LINEABOVE",
+                        (0, 0),
+                        (-1, 0),
+                        0.6,
+                        colors.black,
+                    ),
+                    (
+                        "LINEBELOW",
+                        (0, 0),
+                        (-1, 0),
+                        0.6,
+                        colors.black,
+                    ),
+                    (
+                        "ALIGN",
+                        (-1, 1),
+                        (-1, -1),
+                        "RIGHT",
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "FONTSIZE",
+                        (0, 0),
+                        (-1, -1),
+                        7.5,
+                    ),
+                ]
+            )
+        )
+
+        story.append(
+            trade_table
+        )
+
+        story.append(
+            Spacer(
+                1,
+                4 * mm,
+            )
+        )
+
     paid_method = "Cash"
 
     active_payments = [
@@ -409,12 +546,32 @@ async def build_sales_invoice_pdf(
         ],
         [
             "",
+            "Trade-In Allowance",
+            f"({money(invoice.trade_in_amount)})",
+        ],
+        [
+            "",
             Paragraph(
                 "<b>Net Amount</b>",
                 STYLES["normal"],
             ),
             Paragraph(
                 f"<b>{money(invoice.grand_total)}</b>",
+                STYLES["right"],
+            ),
+        ],
+        [
+            "",
+            Paragraph(
+                "<b>Customer Payable</b>",
+                STYLES["normal"],
+            ),
+            Paragraph(
+                (
+                    "<b>"
+                    f"{money(invoice.balance_amount + invoice.paid_amount)}"
+                    "</b>"
+                ),
                 STYLES["right"],
             ),
         ],

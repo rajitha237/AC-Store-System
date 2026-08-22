@@ -877,6 +877,17 @@ export default function ServiceJobsPage() {
     );
 
   const [
+    partProductSearch,
+    setPartProductSearch,
+  ] = useState("");
+
+  const [
+    partProductSearchOpen,
+    setPartProductSearchOpen,
+  ] = useState(false);
+
+
+  const [
     actionLoading,
     setActionLoading,
   ] =
@@ -2674,6 +2685,14 @@ export default function ServiceJobsPage() {
 
     setPartProductId(
       "",
+    );
+
+    setPartProductSearch(
+      "",
+    );
+
+    setPartProductSearchOpen(
+      false,
     );
 
     setPartWarehouseId(
@@ -8099,70 +8118,177 @@ export default function ServiceJobsPage() {
                   <label>
                     Product *
 
-                    <select
-                      value={
-                        partProductId
+                    <div
+                      className={
+                        styles.searchableSelect
                       }
-                      onChange={
-                        (event) => {
-                          const value =
-                            event
-                              .target
-                              .value;
+                    >
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        placeholder="Search product code or name..."
+                        value={
+                          partProductSearchOpen
+                            ? partProductSearch
+                            : (
+                                products.find(
+                                  (product) =>
+                                    String(
+                                      product.id,
+                                    )
+                                    === partProductId,
+                                )
+                                  ? `${
+                                      products.find(
+                                        (product) =>
+                                          String(
+                                            product.id,
+                                          )
+                                          === partProductId,
+                                      )?.product_code
+                                      ?? `#${partProductId}`
+                                    } — ${
+                                      products.find(
+                                        (product) =>
+                                          String(
+                                            product.id,
+                                          )
+                                          === partProductId,
+                                      )?.name
+                                      ?? ""
+                                    }`
+                                  : ""
+                              )
+                        }
+                        onFocus={() => {
+                          setPartProductSearch(
+                            "",
+                          );
 
-                          setPartProductId(
+                          setPartProductSearchOpen(
+                            true,
+                          );
+
+                          void searchProductOptions(
+                            "",
+                          );
+                        }}
+                        onChange={(event) => {
+                          const value =
+                            event.target.value;
+
+                          setPartProductSearch(
                             value,
                           );
 
-                          const product =
-                            products.find(
-                              (item) =>
-                                String(
-                                  item.id,
-                                )
-                                === value,
-                            );
+                          setPartProductSearchOpen(
+                            true,
+                          );
+
+                          void searchProductOptions(
+                            value,
+                          );
 
                           if (
-                            product
-                            && !partUnitPrice
+                            partProductId
                           ) {
+                            setPartProductId(
+                              "",
+                            );
+
                             setPartUnitPrice(
-                              String(
-                                product
-                                  .selling_price,
-                              ),
+                              "",
                             );
                           }
-                        }
-                      }
-                    >
-                      <option value="">
-                        Select product
-                      </option>
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(
+                            () => {
+                              setPartProductSearchOpen(
+                                false,
+                              );
+                            },
+                            150,
+                          );
+                        }}
+                      />
 
-                      {products.map(
-                        (product) => (
-                          <option
-                            key={
-                              product.id
-                            }
-                            value={
-                              product.id
-                            }
-                          >
-                            {
-                              product
-                                .product_code
-                            }
-                            {" — "}
-                            {
-                              product.name
-                            }
-                          </option>
-                        ),
+                      {partProductSearchOpen && (
+                        <div
+                          className={
+                            styles.searchableMenu
+                          }
+                        >
+                          {products.length > 0 ? (
+                            products.map(
+                              (product) => (
+                                <button
+                                  key={
+                                    product.id
+                                  }
+                                  type="button"
+                                  className={
+                                    styles.searchableOption
+                                  }
+                                  onMouseDown={(
+                                    event,
+                                  ) => {
+                                    event.preventDefault();
+
+                                    setPartProductId(
+                                      String(
+                                        product.id,
+                                      ),
+                                    );
+
+                                    setPartProductSearch(
+                                      `${
+                                        product.product_code
+                                      } — ${
+                                        product.name
+                                      }`,
+                                    );
+
+                                    setPartProductSearchOpen(
+                                      false,
+                                    );
+
+                                    setPartUnitPrice(
+                                      String(
+                                        product.selling_price,
+                                      ),
+                                    );
+                                  }}
+                                >
+                                  <strong>
+                                    {
+                                      product.product_code
+                                    }
+                                    {" — "}
+                                    {
+                                      product.name
+                                    }
+                                  </strong>
+
+                                  <span>
+                                    Selling price:{" "}
+                                    {product.selling_price}
+                                  </span>
+                                </button>
+                              ),
+                            )
+                          ) : (
+                            <div
+                              className={
+                                styles.searchableEmpty
+                              }
+                            >
+                              No products found.
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </select>
+                    </div>
                   </label>
 
                   <label>

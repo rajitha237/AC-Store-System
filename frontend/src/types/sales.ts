@@ -32,6 +32,16 @@ export type SalesItemCreate = {
 };
 
 
+export type SalesTradeInCreate = {
+  brand?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  condition?: string | null;
+  description?: string | null;
+  allowance_amount: string;
+};
+
+
 export type SalesInvoiceCreate = {
   customer_id: number;
   branch_id?: number | null;
@@ -41,6 +51,7 @@ export type SalesInvoiceCreate = {
   source_type?: "legacy_service_job" | null;
   source_id?: number | null;
   items: SalesItemCreate[];
+  trade_ins?: SalesTradeInCreate[];
 };
 
 
@@ -73,6 +84,21 @@ export type SalesInvoiceItemResponse = {
   product_code?: string | null;
   serial_number?: string | null;
   warehouse_name?: string | null;
+};
+
+
+export type SalesTradeInResponse = {
+  id: number;
+  invoice_id: number;
+
+  brand: string | null;
+  model: string | null;
+  serial_number: string | null;
+  condition: string | null;
+  description: string | null;
+
+  allowance_amount: string;
+  created_at: string;
 };
 
 
@@ -112,6 +138,7 @@ export type SalesInvoiceResponse = {
   tax_amount: string;
   grand_total: string;
   credited_amount: string;
+  trade_in_amount: string;
   paid_amount: string;
   balance_amount: string;
 
@@ -127,6 +154,7 @@ export type SalesInvoiceResponse = {
   updated_at: string;
 
   items: SalesInvoiceItemResponse[];
+  trade_ins: SalesTradeInResponse[];
 };
 
 

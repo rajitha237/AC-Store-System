@@ -1557,3 +1557,420 @@ async def test_fully_paid_invoice_rejects_extra_payment(
         extra.json()["detail"]
         == "This invoice is already fully paid"
     )
+
+
+# ===== SALES TRADE-IN INTEGRATION TESTS =====
+
+
+@pytest.mark.asyncio
+async def test_sales_trade_in_full_lifecycle(
+    client,
+    admin_headers,
+    db_session,
+):
+    suffix = "220"
+
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    product = await create_non_serialized_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix=suffix,
+        selling_price="1200.00",
+    )
+
+    warehouse = await get_main_warehouse(
+        client,
+        admin_headers,
+    )
+
+    await receive_stock(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        suffix=suffix,
+        quantity="20.000",
+    )
+
+    branch_id = await get_main_branch_id(
+        db_session
+    )
+
+    create_response = await client.post(
+        "/api/v1/sales/invoices",
+        headers=admin_headers,
+        json={
+            "branch_id":
+                branch_id,
+            "customer_id":
+                customer["id"],
+            "invoice_discount_amount":
+                "100.00",
+            "tax_amount":
+                "0.00",
+            "notes":
+                "Trade-in integration test",
+            "trade_ins": [
+                {
+                    "brand":
+                        "Panasonic",
+                    "model":
+                        "CS-OLD-12000",
+                    "serial_number":
+                        "OLD-AC-TRADE-220",
+                    "condition":
+                        "Working",
+                    "description":
+                        "Old customer A/C received "
+                        "as exchange unit",
+                    "allowance_amount":
+                        "400.00",
+                }
+            ],
+            "items": [
+                {
+                    "product_id":
+                        product["id"],
+                    "warehouse_id":
+                        warehouse["id"],
+                    "serial_number_id":
+                        None,
+                    "quantity":
+                        "2.000",
+                    "unit_price":
+                        "1200.00",
+                    "discount_amount":
+                        "0.00",
+                    "description":
+                        "New A/C / trade-in sale",
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201, (
+        create_response.text
+    )
+
+    draft = create_response.json()
+
+    #
+    # Financial contract:
+    #
+    # Item value          = 2400
+    # Normal discount     =  100
+    # Sale / grand total  = 2300
+    # Trade-in allowance  =  400
+    # Customer payable    = 1900
+    #
+    assert dec(
+        draft["grand_total"]
+    ) == Decimal("2300.00")
+
+    assert dec(
+        draft["trade_in_amount"]
+    ) == Decimal("400.00")
+
+    assert dec(
+        draft["balance_amount"]
+    ) == Decimal("1900.00")
+
+    assert len(
+        draft["trade_ins"]
+    ) == 1
+
+    trade_in = draft["trade_ins"][0]
+
+    assert (
+        trade_in["brand"]
+        == "Panasonic"
+    )
+
+    assert (
+        trade_in["model"]
+        == "CS-OLD-12000"
+    )
+
+    assert (
+        trade_in["serial_number"]
+        == "OLD-AC-TRADE-220"
+    )
+
+    assert dec(
+        trade_in["allowance_amount"]
+    ) == Decimal("400.00")
+
+    #
+    # Detail endpoint must preserve trade-in.
+    #
+    detail_response = await client.get(
+        (
+            "/api/v1/sales/invoices/"
+            f"{draft['id']}"
+        ),
+        headers=admin_headers,
+    )
+
+    assert detail_response.status_code == 200, (
+        detail_response.text
+    )
+
+    detail = detail_response.json()
+
+    assert dec(
+        detail["trade_in_amount"]
+    ) == Decimal("400.00")
+
+    assert len(
+        detail["trade_ins"]
+    ) == 1
+
+    #
+    # Confirm with partial payment:
+    #
+    # Payable before payment = 1900
+    # Initial payment        =  900
+    # Remaining receivable   = 1000
+    #
+    confirm_response = await confirm_invoice(
+        client,
+        admin_headers,
+        draft["id"],
+        initial_payment={
+            "amount":
+                "900.00",
+            "payment_method":
+                "cash",
+            "reference_number":
+                "TRADE-IN-TEST-220",
+            "notes":
+                "Trade-in partial settlement",
+        },
+    )
+
+    assert confirm_response.status_code == 200, (
+        confirm_response.text
+    )
+
+    confirmed = confirm_response.json()
+
+    assert (
+        confirmed["invoice_status"]
+        == "confirmed"
+    )
+
+    assert dec(
+        confirmed["grand_total"]
+    ) == Decimal("2300.00")
+
+    assert dec(
+        confirmed["trade_in_amount"]
+    ) == Decimal("400.00")
+
+    assert dec(
+        confirmed["paid_amount"]
+    ) == Decimal("900.00")
+
+    assert dec(
+        confirmed["balance_amount"]
+    ) == Decimal("1000.00")
+
+    assert (
+        confirmed["payment_status"]
+        == "partial"
+    )
+
+    #
+    # Stock must deduct only the sold product.
+    #
+    stock = (
+        await db_session.execute(
+            select(StockItem)
+            .where(
+                StockItem.product_id
+                == product["id"],
+                StockItem.warehouse_id
+                == warehouse["id"],
+            )
+        )
+    ).scalar_one()
+
+    await db_session.refresh(
+        stock
+    )
+
+    assert dec(
+        stock.quantity_on_hand
+    ) == Decimal("18.000")
+
+    #
+    # Customer receivable must equal only
+    # the remaining customer payable.
+    #
+    customer_row = await db_session.get(
+        Customer,
+        customer["id"],
+    )
+
+    await db_session.refresh(
+        customer_row
+    )
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("1000.00")
+
+    #
+    # Database invoice must retain the separate
+    # trade-in accounting amount.
+    #
+    invoice_row = await db_session.get(
+        SalesInvoice,
+        draft["id"],
+    )
+
+    assert invoice_row is not None
+
+    assert dec(
+        invoice_row.trade_in_amount
+    ) == Decimal("400.00")
+
+    assert dec(
+        invoice_row.grand_total
+    ) == Decimal("2300.00")
+
+    assert dec(
+        invoice_row.paid_amount
+    ) == Decimal("900.00")
+
+    assert dec(
+        invoice_row.balance_amount
+    ) == Decimal("1000.00")
+
+    #
+    # Invoice PDF must still generate successfully.
+    #
+    pdf_response = await client.get(
+        (
+            "/api/v1/documents/"
+            "sales-invoices/"
+            f"{draft['id']}/pdf"
+        ),
+        headers=admin_headers,
+    )
+
+    assert pdf_response.status_code == 200, (
+        pdf_response.text
+    )
+
+    assert (
+        "application/pdf"
+        in pdf_response.headers.get(
+            "content-type",
+            "",
+        )
+    )
+
+    assert pdf_response.content.startswith(
+        b"%PDF"
+    )
+
+
+@pytest.mark.asyncio
+async def test_sales_trade_in_allowance_cannot_exceed_sale_total(
+    client,
+    admin_headers,
+    db_session,
+):
+    suffix = "221"
+
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    product = await create_non_serialized_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix=suffix,
+        selling_price="1200.00",
+    )
+
+    warehouse = await get_main_warehouse(
+        client,
+        admin_headers,
+    )
+
+    await receive_stock(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        suffix=suffix,
+        quantity="10.000",
+    )
+
+    branch_id = await get_main_branch_id(
+        db_session
+    )
+
+    response = await client.post(
+        "/api/v1/sales/invoices",
+        headers=admin_headers,
+        json={
+            "branch_id":
+                branch_id,
+            "customer_id":
+                customer["id"],
+            "invoice_discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+            "trade_ins": [
+                {
+                    "brand":
+                        "Old A/C",
+                    "description":
+                        "Allowance overflow test",
+                    "allowance_amount":
+                        "1500.00",
+                }
+            ],
+            "items": [
+                {
+                    "product_id":
+                        product["id"],
+                    "warehouse_id":
+                        warehouse["id"],
+                    "serial_number_id":
+                        None,
+                    "quantity":
+                        "1.000",
+                    "unit_price":
+                        "1200.00",
+                    "discount_amount":
+                        "0.00",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 422, (
+        response.text
+    )
+
+    assert (
+        response.json()["detail"]
+        == (
+            "Trade-in allowance cannot exceed "
+            "the invoice grand total"
+        )
+    )

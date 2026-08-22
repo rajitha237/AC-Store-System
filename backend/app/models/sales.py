@@ -84,6 +84,10 @@ class SalesInvoice(Base):
             name="ck_sales_invoices_paid_nonnegative",
         ),
         CheckConstraint(
+            "trade_in_amount >= 0",
+            name="ck_sales_invoices_trade_in_nonnegative",
+        ),
+        CheckConstraint(
             "balance_amount >= 0",
             name="ck_sales_invoices_balance_nonnegative",
         ),
@@ -178,6 +182,13 @@ class SalesInvoice(Base):
         nullable=False,
     )
 
+    trade_in_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2),
+        default=Decimal("0.00"),
+        server_default="0.00",
+        nullable=False,
+    )
+
     paid_amount: Mapped[Decimal] = mapped_column(
         Numeric(18, 2),
         default=Decimal("0.00"),
@@ -252,6 +263,12 @@ class SalesInvoice(Base):
         back_populates="invoice",
         cascade="all, delete-orphan",
         order_by="SalesInvoiceItem.id",
+    )
+
+    trade_ins: Mapped[list["SalesTradeIn"]] = relationship(
+        back_populates="invoice",
+        cascade="all, delete-orphan",
+        order_by="SalesTradeIn.id",
     )
 
     payments: Mapped[list["CustomerPayment"]] = relationship(
@@ -380,6 +397,71 @@ class SalesInvoiceItem(Base):
     serial_number: Mapped[
         "ProductSerialNumber | None"
     ] = relationship()
+
+
+class SalesTradeIn(Base):
+    __tablename__ = "sales_trade_ins"
+    __table_args__ = (
+        CheckConstraint(
+            "allowance_amount > 0",
+            name="ck_sales_trade_ins_allowance_positive",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    invoice_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "sales_invoices.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    brand: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+    )
+
+    model: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+    )
+
+    serial_number: Mapped[str | None] = mapped_column(
+        String(150),
+        nullable=True,
+        index=True,
+    )
+
+    condition: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    description: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    allowance_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    invoice: Mapped["SalesInvoice"] = relationship(
+        back_populates="trade_ins",
+    )
 
 
 class CustomerPayment(Base):

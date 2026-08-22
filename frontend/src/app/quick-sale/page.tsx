@@ -284,6 +284,24 @@ export default function QuickSalePage() {
   });
 
   const [
+    tradeInEnabled,
+    setTradeInEnabled,
+  ] = useState(false);
+
+  const [
+    tradeIn,
+    setTradeIn,
+  ] = useState({
+    brand: "",
+    model: "",
+    serialNumber: "",
+    condition: "Used",
+    description: "",
+    allowance: "",
+  });
+
+
+  const [
     busy,
     setBusy,
   ] = useState(false);
@@ -362,6 +380,25 @@ export default function QuickSalePage() {
         discountTotal,
     );
 
+  const tradeInAllowance =
+    tradeInEnabled
+      ? Math.max(
+          0,
+          Number(
+            tradeIn.allowance
+            || 0,
+          ) || 0,
+        )
+      : 0;
+
+  const customerPayable =
+    Math.max(
+      0,
+      grandTotal -
+        tradeInAllowance,
+    );
+
+
   const downPayment =
     Math.max(
       0,
@@ -375,7 +412,7 @@ export default function QuickSalePage() {
     "installment"
       ? Math.max(
           0,
-          grandTotal -
+          customerPayable -
             downPayment,
         )
       : 0;
@@ -761,6 +798,75 @@ export default function QuickSalePage() {
     );
   }
 
+  function changeSellingPrice(
+    key: string,
+    value: string,
+  ) {
+    const requestedPrice =
+      Number(value);
+
+    if (
+      !Number.isFinite(requestedPrice) ||
+      requestedPrice < 0
+    ) {
+      return;
+    }
+
+    setCart(
+      (current) =>
+        current.map(
+          (item) => {
+            if (item.key !== key) {
+              return item;
+            }
+
+            const originalLineTotal =
+              item.unitPrice *
+              item.quantity;
+
+            const requestedLineTotal =
+              requestedPrice *
+              item.quantity;
+
+            const discountAmount =
+              Math.max(
+                0,
+                Number(
+                  (
+                    originalLineTotal -
+                    requestedLineTotal
+                  ).toFixed(2),
+                ),
+              );
+
+            return {
+              ...item,
+              discountAmount,
+            };
+          },
+        ),
+    );
+  }
+
+  function effectiveUnitPrice(
+    item: QuickSaleCartItem,
+  ): number {
+    if (item.quantity <= 0) {
+      return item.unitPrice;
+    }
+
+    return Number(
+      (
+        (
+          item.unitPrice *
+          item.quantity -
+          item.discountAmount
+        ) /
+        item.quantity
+      ).toFixed(2),
+    );
+  }
+
   function removeCartItem(
     key: string,
   ) {
@@ -882,7 +988,8 @@ export default function QuickSalePage() {
     const belowCostItems = cart.filter(
       (item) =>
         item.averageCost !== null &&
-        item.unitPrice < item.averageCost,
+        effectiveUnitPrice(item) <
+          item.averageCost,
     );
 
     if (belowCostItems.length > 0) {
@@ -891,6 +998,43 @@ export default function QuickSalePage() {
       );
       return;
     }
+
+    if (
+      tradeInEnabled
+      && tradeInAllowance <= 0
+    ) {
+      setError(
+        "Enter a valid trade-in allowance.",
+      );
+      return;
+    }
+
+    if (
+      tradeInEnabled
+      && tradeInAllowance >
+        grandTotal
+    ) {
+      setError(
+        "Trade-in allowance cannot exceed the sale total.",
+      );
+      return;
+    }
+
+    if (
+      tradeInEnabled
+      && !(
+        tradeIn.brand.trim()
+        || tradeIn.model.trim()
+        || tradeIn.serialNumber.trim()
+        || tradeIn.description.trim()
+      )
+    ) {
+      setError(
+        "Enter brand, model, serial number or a description for the trade-in unit.",
+      );
+      return;
+    }
+
 
     if (
       !Number.isFinite(
@@ -917,10 +1061,10 @@ export default function QuickSalePage() {
 
     if (
       downPayment >
-      grandTotal
+      customerPayable
     ) {
       setError(
-        "Down payment cannot exceed the sale total.",
+        "Down payment cannot exceed the customer payable balance.",
       );
       return;
     }
@@ -957,6 +1101,33 @@ export default function QuickSalePage() {
           notes:
             form.notes.trim() ||
             null,
+          trade_ins:
+            tradeInEnabled
+              ? [
+                  {
+                    brand:
+                      tradeIn.brand.trim()
+                      || null,
+                    model:
+                      tradeIn.model.trim()
+                      || null,
+                    serial_number:
+                      tradeIn.serialNumber
+                        .trim()
+                      || null,
+                    condition:
+                      tradeIn.condition
+                        .trim()
+                      || null,
+                    description:
+                      tradeIn.description
+                        .trim()
+                      || null,
+                    allowance_amount:
+                      tradeInAllowance,
+                  },
+                ]
+              : [],
           items:
             cart.map(
               (item) => ({
@@ -980,7 +1151,7 @@ export default function QuickSalePage() {
       const initialPaymentAmount =
         form.paymentMode ===
         "cash"
-          ? grandTotal
+          ? customerPayable
           : downPayment;
 
       const confirmation =
@@ -1095,6 +1266,18 @@ export default function QuickSalePage() {
     setStatement(null);
     setError("");
     setSuccess("");
+
+    setTradeInEnabled(false);
+
+    setTradeIn({
+      brand: "",
+      model: "",
+      serialNumber: "",
+      condition: "Used",
+      description: "",
+      allowance: "",
+    });
+
     setForm({
       branchId:
         form.branchId,
@@ -1477,7 +1660,7 @@ export default function QuickSalePage() {
                         </small>
 
                         {item.averageCost !== null &&
-                        item.unitPrice <
+                        effectiveUnitPrice(item) <
                           item.averageCost ? (
                           <small
                             style={{
@@ -1489,8 +1672,12 @@ export default function QuickSalePage() {
                             {money(item.averageCost)} ·
                             Loss{" "}
                             {money(
-                              (item.averageCost -
-                                item.unitPrice) *
+                              (
+                                item.averageCost -
+                                effectiveUnitPrice(
+                                  item,
+                                )
+                              ) *
                                 item.quantity,
                             )}
                           </small>
@@ -1537,6 +1724,57 @@ export default function QuickSalePage() {
                         </button>
                       </div>
 
+                      <div
+                        className={
+                          styles.salePriceControl
+                        }
+                      >
+                        <small>
+                          Selling price
+                        </small>
+
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={
+                            effectiveUnitPrice(
+                              item,
+                            )
+                          }
+                          onChange={(event) =>
+                            changeSellingPrice(
+                              item.key,
+                              event.target.value,
+                            )
+                          }
+                          aria-label={
+                            `Selling price for ${item.productName}`
+                          }
+                        />
+
+                        {item.discountAmount > 0 ? (
+                          <span>
+                            List{" "}
+                            {money(
+                              item.unitPrice,
+                            )}
+                            {" · "}
+                            Discount{" "}
+                            {money(
+                              item.discountAmount,
+                            )}
+                          </span>
+                        ) : (
+                          <span>
+                            List{" "}
+                            {money(
+                              item.unitPrice,
+                            )}
+                          </span>
+                        )}
+                      </div>
+
                       <div className={styles.linePrice}>
                         {money(
                           item.unitPrice *
@@ -1563,6 +1801,221 @@ export default function QuickSalePage() {
               </div>
             )}
           </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div>
+                <span className={styles.step}>
+                  EXCHANGE
+                </span>
+
+                <h2>
+                  Trade-in / Exchange
+                </h2>
+
+                <p className={styles.tradeInHint}>
+                  Accept the customer&apos;s old A/C unit and apply its agreed value separately from normal discounts.
+                </p>
+              </div>
+
+              <label className={styles.tradeInToggle}>
+                <input
+                  type="checkbox"
+                  checked={tradeInEnabled}
+                  onChange={(event) =>
+                    setTradeInEnabled(
+                      event.target.checked,
+                    )
+                  }
+                />
+
+                Use trade-in
+              </label>
+            </div>
+
+            {tradeInEnabled && (
+              <>
+                <div className={styles.formGrid}>
+                  <label>
+                    <span>Brand</span>
+
+                    <input
+                      value={tradeIn.brand}
+                      onChange={(event) =>
+                        setTradeIn(
+                          (current) => ({
+                            ...current,
+                            brand:
+                              event.target.value,
+                          }),
+                        )
+                      }
+                      placeholder="e.g. Panasonic"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Model</span>
+
+                    <input
+                      value={tradeIn.model}
+                      onChange={(event) =>
+                        setTradeIn(
+                          (current) => ({
+                            ...current,
+                            model:
+                              event.target.value,
+                          }),
+                        )
+                      }
+                      placeholder="Old unit model"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Serial number</span>
+
+                    <input
+                      value={
+                        tradeIn.serialNumber
+                      }
+                      onChange={(event) =>
+                        setTradeIn(
+                          (current) => ({
+                            ...current,
+                            serialNumber:
+                              event.target.value,
+                          }),
+                        )
+                      }
+                      placeholder="Optional serial"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Condition</span>
+
+                    <select
+                      value={
+                        tradeIn.condition
+                      }
+                      onChange={(event) =>
+                        setTradeIn(
+                          (current) => ({
+                            ...current,
+                            condition:
+                              event.target.value,
+                          }),
+                        )
+                      }
+                    >
+                      <option value="Used">
+                        Used
+                      </option>
+                      <option value="Working">
+                        Working
+                      </option>
+                      <option value="Repair required">
+                        Repair required
+                      </option>
+                      <option value="Scrap">
+                        Scrap
+                      </option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>
+                      Trade-in allowance
+                    </span>
+
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={
+                        tradeIn.allowance
+                      }
+                      onChange={(event) =>
+                        setTradeIn(
+                          (current) => ({
+                            ...current,
+                            allowance:
+                              event.target.value,
+                          }),
+                        )
+                      }
+                      placeholder="0.00"
+                    />
+                  </label>
+
+                  <label
+                    className={
+                      styles.fullField
+                    }
+                  >
+                    <span>
+                      Old unit details
+                    </span>
+
+                    <textarea
+                      rows={2}
+                      value={
+                        tradeIn.description
+                      }
+                      onChange={(event) =>
+                        setTradeIn(
+                          (current) => ({
+                            ...current,
+                            description:
+                              event.target.value,
+                          }),
+                        )
+                      }
+                      placeholder="Capacity, condition, accessories, defects or any other identifying information"
+                    />
+                  </label>
+                </div>
+
+                <div className={styles.tradeInSummary}>
+                  <div>
+                    <span>
+                      Sale total
+                    </span>
+
+                    <strong>
+                      {money(grandTotal)}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Trade-in allowance
+                    </span>
+
+                    <strong>
+                      -{money(
+                        tradeInAllowance,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Customer payable
+                    </span>
+
+                    <strong>
+                      {money(
+                        customerPayable,
+                      )}
+                    </strong>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
 
           <div className={styles.card}>
             <div className={styles.cardHeader}>
