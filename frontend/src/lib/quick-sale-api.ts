@@ -203,6 +203,90 @@ export async function searchProducts(
   );
 }
 
+export async function getQuickSaleWarehouseForProduct(
+  productId: number,
+): Promise<number | null> {
+  const query =
+    new URLSearchParams();
+
+  query.set(
+    "product_id",
+    String(productId),
+  );
+
+  const value =
+    await request<unknown>(
+      `/inventory/balances?${query.toString()}`,
+    );
+
+  const balances =
+    unwrapItems<{
+      product_id?: number;
+      warehouse_id?: number;
+      quantity_available?:
+        number | string;
+      quantity_on_hand?:
+        number | string;
+    }>(
+      value,
+    );
+
+  const eligible =
+    balances
+      .filter(
+        (item) =>
+          Number(
+            item.product_id,
+          ) === productId
+          && Number.isInteger(
+            Number(
+              item.warehouse_id,
+            ),
+          )
+          && Number(
+            item.warehouse_id,
+          ) > 0
+          && Number(
+            item.quantity_available
+            ?? item.quantity_on_hand
+            ?? 0,
+          ) > 0,
+      )
+      .sort(
+        (a, b) =>
+          Number(
+            b.quantity_available
+            ?? b.quantity_on_hand
+            ?? 0,
+          )
+          - Number(
+            a.quantity_available
+            ?? a.quantity_on_hand
+            ?? 0,
+          ),
+      );
+
+  const balance =
+    eligible[0];
+
+  if (!balance) {
+    return null;
+  }
+
+  const warehouseId =
+    Number(
+      balance.warehouse_id,
+    );
+
+  return Number.isInteger(
+    warehouseId,
+  )
+    && warehouseId > 0
+    ? warehouseId
+    : null;
+}
+
+
 export async function getQuickSaleAverageCost(
   productId: number,
   warehouseId: number,

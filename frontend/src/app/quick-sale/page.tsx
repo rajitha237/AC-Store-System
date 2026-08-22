@@ -35,6 +35,7 @@ import {
   downloadReceiptPdf,
   getAvailableSerials,
   getQuickSaleAverageCost,
+  getQuickSaleWarehouseForProduct,
   searchCustomers,
   searchProducts,
   type QuickSalePaymentInput,
@@ -712,19 +713,42 @@ export default function QuickSalePage() {
       | QuickSaleSerial
       | null,
   ) {
-    // AC_QUICK_SALE_WAREHOUSE_CONTRACT_REPAIR_V3
-    const warehouseId =
-      serial?.warehouse_id;
+    // AC_QUICK_SALE_WAREHOUSE_AUTO_RESOLVE_V4
+    let warehouseId =
+      serial?.warehouse_id
+      ?? null;
 
     if (
-      !Number.isInteger(warehouseId) ||
-      warehouseId === undefined ||
-      warehouseId <= 0
+      !serial
+      && (
+        warehouseId === null
+        || !Number.isInteger(
+          warehouseId,
+        )
+        || warehouseId <= 0
+      )
+    ) {
+      try {
+        warehouseId =
+          await getQuickSaleWarehouseForProduct(
+            product.id,
+          );
+      } catch {
+        warehouseId = null;
+      }
+    }
+
+    if (
+      warehouseId === null
+      || !Number.isInteger(
+        warehouseId,
+      )
+      || warehouseId <= 0
     ) {
       setError(
         serial
           ? "Selected serial does not have a valid warehouse. Sale was not submitted."
-          : "A valid warehouse is required for this product before it can be added to Quick Sale.",
+          : "No available stock warehouse was found for this product.",
       );
       return;
     }
