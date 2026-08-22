@@ -377,15 +377,40 @@ export function InventoryPhase4Actions({
     );
 
     try {
-      const response =
+      const first =
         await getProducts({
           page: 1,
           pageSize: 100,
         });
 
-      setProducts(
-        response.items,
-      );
+      const remaining =
+        first.total_pages > 1
+          ? await Promise.all(
+              Array.from(
+                {
+                  length:
+                    first.total_pages - 1,
+                },
+                (
+                  _,
+                  index,
+                ) =>
+                  getProducts({
+                    page:
+                      index + 2,
+                    pageSize: 100,
+                  }),
+              ),
+            )
+          : [];
+
+      setProducts([
+        ...first.items,
+        ...remaining.flatMap(
+          (page) =>
+            page.items,
+        ),
+      ]);
 
       setProductsLoaded(
         true,
@@ -1300,57 +1325,73 @@ export function InventoryPhase4Actions({
                     >
                       Standard product *
 
-                      <select
+                      <input
                         required
-                        value={
-                          adjustment
-                            .productId
-                        }
+                        type="search"
+                        list="adjust-stock-products"
                         disabled={
                           saving
                         }
+                        placeholder={
+                          loadingProducts
+                            ? "Loading products..."
+                            : "Search product code or name..."
+                        }
+                        defaultValue=""
                         onChange={
                           (event) => {
-                            const productId =
-                              event
-                                .target
-                                .value;
+                            const value =
+                              event.target.value
+                                .trim();
 
                             const product =
-                              standardProducts
-                                .find(
-                                  (item) =>
-                                    String(
-                                      item.id,
-                                    )
-                                    === productId,
-                                );
+                              standardProducts.find(
+                                (item) => {
+                                  const label =
+                                    `${item.product_code} — ${item.name}`;
 
-                            setAdjustment({
-                              ...adjustment,
+                                  return (
+                                    label === value
+                                    || item.product_code
+                                      === value
+                                    || item.name
+                                      === value
+                                  );
+                                },
+                              );
 
-                              productId,
+                            setAdjustment(
+                              (current) => ({
+                                ...current,
 
-                              unitCost:
-                                product
-                                  ? String(
-                                      product
-                                        .purchase_cost
-                                      ?? "",
-                                    )
-                                  : "",
-                            });
+                                productId:
+                                  product
+                                    ? String(
+                                        product.id,
+                                      )
+                                    : "",
+
+                                unitCost:
+                                  product
+                                    ? String(
+                                        product
+                                          .purchase_cost
+                                        ?? "",
+                                      )
+                                    : "",
+                              }),
+                            );
 
                             setConfirmingAdjustment(
                               false,
                             );
                           }
                         }
-                      >
-                        <option value="">
-                          Select product
-                        </option>
+                      />
 
+                      <datalist
+                        id="adjust-stock-products"
+                      >
                         {standardProducts.map(
                           (product) => (
                             <option
@@ -1358,21 +1399,12 @@ export function InventoryPhase4Actions({
                                 product.id
                               }
                               value={
-                                product.id
+                                `${product.product_code} — ${product.name}`
                               }
-                            >
-                              {
-                                product
-                                  .product_code
-                              }
-                              {" — "}
-                              {
-                                product.name
-                              }
-                            </option>
+                            />
                           ),
                         )}
-                      </select>
+                      </datalist>
                     </label>
 
 
@@ -1945,28 +1977,55 @@ export function InventoryPhase4Actions({
                     >
                       Product *
 
-                      <select
+                      <input
                         required
+                        type="search"
+                        list="transfer-stock-products"
                         disabled={
                           saving
                         }
-                        value={
-                          transfer
-                            .productId
+                        placeholder={
+                          loadingProducts
+                            ? "Loading products..."
+                            : "Search product code or name..."
                         }
+                        defaultValue=""
                         onChange={
-                          (event) =>
-                            void changeTransferProduct(
-                              event
-                                .target
-                                .value,
-                            )
-                        }
-                      >
-                        <option value="">
-                          Select product
-                        </option>
+                          (event) => {
+                            const value =
+                              event.target.value
+                                .trim();
 
+                            const product =
+                              activeProducts.find(
+                                (item) => {
+                                  const label =
+                                    `${item.product_code} — ${item.name}`;
+
+                                  return (
+                                    label === value
+                                    || item.product_code
+                                      === value
+                                    || item.name
+                                      === value
+                                  );
+                                },
+                              );
+
+                            void changeTransferProduct(
+                              product
+                                ? String(
+                                    product.id,
+                                  )
+                                : "",
+                            );
+                          }
+                        }
+                      />
+
+                      <datalist
+                        id="transfer-stock-products"
+                      >
                         {activeProducts.map(
                           (product) => (
                             <option
@@ -1974,18 +2033,9 @@ export function InventoryPhase4Actions({
                                 product.id
                               }
                               value={
-                                product.id
+                                `${product.product_code} — ${product.name}`
                               }
                             >
-                              {
-                                product
-                                  .product_code
-                              }
-                              {" — "}
-                              {
-                                product.name
-                              }
-                              {" — "}
                               {product
                                 .track_serial_numbers
                                 ? "Serialized"
@@ -1994,7 +2044,7 @@ export function InventoryPhase4Actions({
                             </option>
                           ),
                         )}
-                      </select>
+                      </datalist>
                     </label>
 
 

@@ -303,20 +303,46 @@ export function ReceiveStockModal({
       );
 
       try {
-        const response =
+        const first =
           await getSuppliers({
             page: 1,
             pageSize: 100,
             isActive: true,
           });
 
+        const remaining =
+          first.total_pages > 1
+            ? await Promise.all(
+                Array.from(
+                  {
+                    length:
+                      first.total_pages - 1,
+                  },
+                  (
+                    _,
+                    index,
+                  ) =>
+                    getSuppliers({
+                      page:
+                        index + 2,
+                      pageSize: 100,
+                      isActive: true,
+                    }),
+                ),
+              )
+            : [];
+
         if (cancelled) {
           return;
         }
 
-        setSuppliers(
-          response.items,
-        );
+        setSuppliers([
+          ...first.items,
+          ...remaining.flatMap(
+            (page) =>
+              page.items,
+          ),
+        ]);
       } catch (
         requestError
       ) {
@@ -911,34 +937,61 @@ export function ReceiveStockModal({
               <label>
                 Supplier *
 
-                <select
+                <input
                   required
+                  type="search"
+                  list="receive-stock-suppliers"
                   disabled={
                     loadingSuppliers
                     || saving
                   }
-                  value={
-                    form.supplierId
-                  }
-                  onChange={
-                    (event) =>
-                      setForm({
-                        ...form,
-
-                        supplierId:
-                          event
-                            .target
-                            .value,
-                      })
-                  }
-                >
-                  <option value="">
-                    {loadingSuppliers
+                  placeholder={
+                    loadingSuppliers
                       ? "Loading suppliers..."
-                      : "Select supplier"
-                    }
-                  </option>
+                      : "Search supplier code or company name..."
+                  }
+                  defaultValue=""
+                  onChange={
+                    (event) => {
+                      const value =
+                        event.target.value
+                          .trim();
 
+                      const supplier =
+                        suppliers.find(
+                          (item) => {
+                            const label =
+                              `${item.supplier_code} — ${item.company_name}`;
+
+                            return (
+                              label === value
+                              || item.supplier_code
+                                === value
+                              || item.company_name
+                                === value
+                            );
+                          },
+                        );
+
+                      setForm(
+                        (current) => ({
+                          ...current,
+
+                          supplierId:
+                            supplier
+                              ? String(
+                                  supplier.id,
+                                )
+                              : "",
+                        }),
+                      );
+                    }
+                  }
+                />
+
+                <datalist
+                  id="receive-stock-suppliers"
+                >
                   {suppliers.map(
                     (supplier) => (
                       <option
@@ -946,22 +999,12 @@ export function ReceiveStockModal({
                           supplier.id
                         }
                         value={
-                          supplier.id
+                          `${supplier.supplier_code} — ${supplier.company_name}`
                         }
-                      >
-                        {
-                          supplier
-                            .supplier_code
-                        }
-                        {" — "}
-                        {
-                          supplier
-                            .company_name
-                        }
-                      </option>
+                      />
                     ),
                   )}
-                </select>
+                </datalist>
               </label>
 
 

@@ -242,6 +242,40 @@ async def build_sales_invoice_pdf(
                 or "Product"
             )
 
+        if item.description:
+            item_note = (
+                item.description.strip()
+            )
+
+            if item_note.upper().startswith(
+                "FREE ITEM -"
+            ):
+                free_reason = (
+                    item_note[
+                        len("FREE ITEM -"):
+                    ].strip()
+                )
+
+                description = (
+                    "<b>FREE ITEM</b> - "
+                    + description
+                )
+
+                if free_reason:
+                    description += (
+                        "<br/>Reason: "
+                        + escape(
+                            free_reason
+                        )
+                    )
+            else:
+                description += (
+                    "<br/>"
+                    + escape(
+                        item_note
+                    )
+                )
+
         if item.serial_number_id is not None:
             serial = await session.get(
                 ProductSerialNumber,

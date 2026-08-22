@@ -47,6 +47,7 @@ import {
 
 import {
   downloadSalesInvoicePdf,
+  saveDownloadedDocument,
 } from "@/lib/documents-api";
 
 import {
@@ -1998,6 +1999,70 @@ export default function SalesPage() {
   }
 
 
+  async function saveInvoicePdf(
+    invoiceId: number,
+  ) {
+    const document =
+      await downloadSalesInvoicePdf(
+        invoiceId,
+      );
+
+    saveDownloadedDocument(
+      document,
+    );
+  }
+
+
+  async function openInvoicePdf(
+    invoiceId: number,
+  ) {
+    try {
+      const document =
+        await downloadSalesInvoicePdf(
+          invoiceId,
+        );
+
+      const url =
+        URL.createObjectURL(
+          document.blob,
+        );
+
+      const opened =
+        window.open(
+          url,
+          "_blank",
+          "noopener,noreferrer",
+        );
+
+      if (!opened) {
+        saveDownloadedDocument(
+          document,
+        );
+      }
+
+      window.setTimeout(
+        () => {
+          URL.revokeObjectURL(
+            url,
+          );
+        },
+        60000,
+      );
+    } catch (
+      requestError
+    ) {
+      console.error(
+        "Invoice PDF open failed:",
+        requestError,
+      );
+
+      setError(
+        "Unable to open invoice PDF.",
+      );
+    }
+  }
+
+
   async function confirmDraft() {
     if (
       !createdDraft
@@ -2079,7 +2144,7 @@ export default function SalesPage() {
 
       // AC_SALES_AUTO_INVOICE_PDF
       try {
-        await downloadSalesInvoicePdf(
+        await saveInvoicePdf(
           confirmed.id,
         );
       } catch (pdfError) {
@@ -2436,7 +2501,7 @@ export default function SalesPage() {
       ) {
         // AC_SALES_DETAIL_CONFIRM_PDF
         try {
-          await downloadSalesInvoicePdf(
+          await saveInvoicePdf(
             updated.id,
           );
         } catch (pdfError) {
@@ -2506,7 +2571,7 @@ export default function SalesPage() {
 
       // AC_SALES_DRAFT_CONFIRM_PDF
       try {
-        await downloadSalesInvoicePdf(
+        await saveInvoicePdf(
           updated.id,
         );
       } catch (pdfError) {
@@ -5545,6 +5610,51 @@ export default function SalesPage() {
                 </div>
 
 
+                <section
+                  className={
+                    styles.detailSection
+                  }
+                >
+                  <div
+                    className={
+                      styles.detailPaymentActionHeader
+                    }
+                  >
+                    <div>
+                      <h3>
+                        Invoice document
+                      </h3>
+
+                      <p
+                        className={
+                          styles.mutedText
+                        }
+                      >
+                        Open the official invoice PDF for printing or sharing.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={
+                        styles.primaryButton
+                      }
+                      onClick={() =>
+                        void openInvoicePdf(
+                          selectedInvoice.id,
+                        )
+                      }
+                    >
+                      <FileText
+                        size={16}
+                      />
+
+                      Print Invoice
+                    </button>
+                  </div>
+                </section>
+
+
                 {selectedInvoice.trade_ins
                   .length > 0 && (
                   <section
@@ -5644,10 +5754,32 @@ export default function SalesPage() {
                           </span>
 
                           <strong>
-                            {item.product_name
-                              ?? `Product #${item.product_id}`
+                            {item.description
+                              ?.trim()
+                              .toUpperCase()
+                              .startsWith(
+                                "FREE ITEM -",
+                              )
+                              ? (
+                                `FREE ITEM · ${
+                                  item.product_name
+                                  ?? `Product #${item.product_id}`
+                                }`
+                              )
+                              : (
+                                item.product_name
+                                ?? `Product #${item.product_id}`
+                              )
                             }
                           </strong>
+
+                          {item.description && (
+                            <small>
+                              {
+                                item.description
+                              }
+                            </small>
+                          )}
 
                           {item.serial_number && (
                             <small>
