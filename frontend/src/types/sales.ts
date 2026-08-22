@@ -255,4 +255,9 @@ export type SalesDraftLine = {
   unitPrice: string;
   discountAmount: string;
   description: string;
+
+  // AC_SALES_FREE_ITEM
+  isFree: boolean;
+  freeReason: string;
+  preFreeDiscountAmount: string | null;
 };

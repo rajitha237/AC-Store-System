@@ -3343,8 +3343,9 @@ export default function QuickSalePage() {
                     customerPayable ||
                   cart.some(
                     (item) =>
-                      item.averageCost !== null &&
-                      effectiveUnitPrice(
+                      !item.isFree
+                      && item.averageCost !== null
+                      && effectiveUnitPrice(
                         item,
                       ) <
                         item.averageCost,

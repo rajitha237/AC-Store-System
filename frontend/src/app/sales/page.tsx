@@ -46,6 +46,10 @@ import {
 } from "@/lib/auth";
 
 import {
+  downloadSalesInvoicePdf,
+} from "@/lib/documents-api";
+
+import {
   confirmSalesInvoice,
   createSalesInvoice,
   getAvailableSalesSerials,
@@ -120,6 +124,15 @@ SalesDraftLine {
 
     description:
       "",
+
+    // AC_SALES_FREE_ITEM
+    isFree: false,
+
+    freeReason:
+      "",
+
+    preFreeDiscountAmount:
+      null,
   };
 }
 
@@ -1178,6 +1191,111 @@ export default function SalesPage() {
   }
 
 
+  function toggleSalesFreeItem(
+    key: string,
+    enabled: boolean,
+  ) {
+    setLines(
+      (current) =>
+        current.map(
+          (line) => {
+            if (
+              line.key !== key
+            ) {
+              return line;
+            }
+
+            if (enabled) {
+              const gross =
+                numeric(
+                  line.quantity,
+                )
+                * numeric(
+                    line.unitPrice,
+                  );
+
+              return {
+                ...line,
+
+                isFree: true,
+
+                preFreeDiscountAmount:
+                  line.discountAmount,
+
+                discountAmount:
+                  gross.toFixed(2),
+
+                freeReason:
+                  line.freeReason
+                  || "Promotional giveaway",
+              };
+            }
+
+            return {
+              ...line,
+
+              isFree: false,
+
+              discountAmount:
+                line.preFreeDiscountAmount
+                ?? "0.00",
+
+              preFreeDiscountAmount:
+                null,
+            };
+          },
+        ),
+    );
+
+    setCreatedDraft(
+      null,
+    );
+
+    setConfirming(
+      false,
+    );
+  }
+
+
+  function changeSalesFreeReason(
+    key: string,
+    reason: string,
+  ) {
+    updateLine(
+      key,
+      {
+        freeReason:
+          reason,
+      },
+    );
+  }
+
+
+  function changeSalesLineQuantity(
+    line: SalesDraftLine,
+    quantity: string,
+  ) {
+    updateLine(
+      line.key,
+      {
+        quantity,
+
+        discountAmount:
+          line.isFree
+            ? (
+                numeric(
+                  quantity,
+                )
+                * numeric(
+                    line.unitPrice,
+                  )
+              ).toFixed(2)
+            : line.discountAmount,
+      },
+    );
+  }
+
+
   function updateLine(
     key: string,
     update:
@@ -1313,6 +1431,22 @@ export default function SalesPage() {
                 product.selling_price,
               )
             : "0.00",
+
+        discountAmount:
+          line.isFree
+          && product
+            ? (
+                numeric(
+                  product.selling_price,
+                )
+                * numeric(
+                    product
+                      .track_serial_numbers
+                      ? "1.000"
+                      : line.quantity,
+                  )
+              ).toFixed(2)
+            : line.discountAmount,
       },
     );
 
@@ -1612,6 +1746,16 @@ export default function SalesPage() {
           `Discount is greater than line value on row ${row}.`
         );
       }
+
+      if (
+        line.isFree
+        && !line.freeReason
+          .trim()
+      ) {
+        return (
+          `Select a free-item reason on row ${row}.`
+        );
+      }
     }
 
     if (
@@ -1792,9 +1936,20 @@ export default function SalesPage() {
                     || "0.00",
 
                   description:
-                    cleanText(
-                      line.description,
-                    ),
+                    line.isFree
+                      ? (
+                          `FREE ITEM - ${line.freeReason.trim()}`
+                          + (
+                              line.description
+                                .trim()
+                                .length > 0
+                                ? ` - ${line.description.trim()}`
+                                : ""
+                            )
+                        )
+                      : cleanText(
+                          line.description,
+                        ),
                 };
               },
             ),
@@ -1870,6 +2025,10 @@ export default function SalesPage() {
 
     if (
       initialPaymentEnabled
+      && numeric(
+          createdDraft
+            .balance_amount,
+        ) > 0
       && initialPayments.length
         === 0
     ) {
@@ -1917,6 +2076,18 @@ export default function SalesPage() {
       setCreatedDraft(
         confirmed,
       );
+
+      // AC_SALES_AUTO_INVOICE_PDF
+      try {
+        await downloadSalesInvoicePdf(
+          confirmed.id,
+        );
+      } catch (pdfError) {
+        console.error(
+          "Invoice PDF download failed:",
+          pdfError,
+        );
+      }
 
       await loadInvoices(
         true,
@@ -2259,6 +2430,23 @@ export default function SalesPage() {
         updated,
       );
 
+      if (
+        detailPaymentMode
+        === "confirm"
+      ) {
+        // AC_SALES_DETAIL_CONFIRM_PDF
+        try {
+          await downloadSalesInvoicePdf(
+            updated.id,
+          );
+        } catch (pdfError) {
+          console.error(
+            "Invoice PDF download failed:",
+            pdfError,
+          );
+        }
+      }
+
       setDetailPaymentMode(
         null,
       );
@@ -2315,6 +2503,18 @@ export default function SalesPage() {
       setSelectedInvoice(
         updated,
       );
+
+      // AC_SALES_DRAFT_CONFIRM_PDF
+      try {
+        await downloadSalesInvoicePdf(
+          updated.id,
+        );
+      } catch (pdfError) {
+        console.error(
+          "Invoice PDF download failed:",
+          pdfError,
+        );
+      }
 
       setDetailPaymentMode(
         null,
@@ -3664,14 +3864,11 @@ export default function SalesPage() {
                                       }
                                       onChange={
                                         (event) =>
-                                          updateLine(
-                                            line.key,
-                                            {
-                                              quantity:
-                                                event
-                                                  .target
-                                                  .value,
-                                            },
+                                          changeSalesLineQuantity(
+                                            line,
+                                            event
+                                              .target
+                                              .value,
                                           )
                                       }
                                     />
@@ -3686,6 +3883,9 @@ export default function SalesPage() {
                                     type="number"
                                     min="0"
                                     step="0.01"
+                                    disabled={
+                                      line.isFree
+                                    }
                                     value={
                                       line
                                         .unitPrice
@@ -3713,6 +3913,9 @@ export default function SalesPage() {
                                     type="number"
                                     min="0"
                                     step="0.01"
+                                    disabled={
+                                      line.isFree
+                                    }
                                     value={
                                       line
                                         .discountAmount
@@ -3731,6 +3934,99 @@ export default function SalesPage() {
                                     }
                                   />
                                 </label>
+
+
+                                <div
+                                  style={{
+                                    display:
+                                      "grid",
+                                    gap: 7,
+                                    alignContent:
+                                      "end",
+                                  }}
+                                >
+                                  <label
+                                    style={{
+                                      display:
+                                        "flex",
+                                      alignItems:
+                                        "center",
+                                      gap: 7,
+                                      fontWeight:
+                                        700,
+                                      cursor:
+                                        "pointer",
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={
+                                        line.isFree
+                                      }
+                                      onChange={
+                                        (event) =>
+                                          toggleSalesFreeItem(
+                                            line.key,
+                                            event
+                                              .target
+                                              .checked,
+                                          )
+                                      }
+                                    />
+
+                                    Free item / Giveaway
+                                  </label>
+
+                                  {line.isFree ? (
+                                    <>
+                                      <select
+                                        value={
+                                          line.freeReason
+                                        }
+                                        onChange={
+                                          (event) =>
+                                            changeSalesFreeReason(
+                                              line.key,
+                                              event
+                                                .target
+                                                .value,
+                                            )
+                                        }
+                                      >
+                                        <option value="Promotional giveaway">
+                                          Promotion
+                                        </option>
+
+                                        <option value="Bundle free item">
+                                          Bundle free item
+                                        </option>
+
+                                        <option value="Management approved">
+                                          Management approved
+                                        </option>
+
+                                        <option value="Warranty goodwill">
+                                          Warranty goodwill
+                                        </option>
+
+                                        <option value="Customer goodwill">
+                                          Customer goodwill
+                                        </option>
+                                      </select>
+
+                                      <strong
+                                        style={{
+                                          color:
+                                            "#15803d",
+                                          fontSize:
+                                            12,
+                                        }}
+                                      >
+                                        FREE · Customer charge LKR 0.00
+                                      </strong>
+                                    </>
+                                  ) : null}
+                                </div>
 
 
                                 <label
