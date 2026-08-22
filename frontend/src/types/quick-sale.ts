@@ -57,6 +57,12 @@ interface QuickSaleCartItem {
   quantity: number;
   unitPrice: number;
   discountAmount: number;
+
+  // AC_QUICK_SALE_FREE_ITEM
+  isFree: boolean;
+  freeReason: string;
+  preFreeDiscountAmount: number | null;
+
   // AC_BELOW_COST_UI_PROTECTION
   averageCost: number | null;
   serialId?: number | null;

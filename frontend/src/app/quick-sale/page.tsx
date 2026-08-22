@@ -831,6 +831,12 @@ export default function QuickSalePage() {
                 product,
               ),
             discountAmount: 0,
+
+            // AC_QUICK_SALE_FREE_ITEM
+            isFree: false,
+            freeReason: "",
+            preFreeDiscountAmount: null,
+
             // AC_BELOW_COST_UI_PROTECTION
             averageCost,
             serialId:
@@ -872,14 +878,28 @@ export default function QuickSalePage() {
                 return item;
               }
 
+              const nextQuantity =
+                Math.max(
+                  1,
+                  item.quantity +
+                    delta,
+                );
+
               return {
                 ...item,
+
                 quantity:
-                  Math.max(
-                    1,
-                    item.quantity +
-                      delta,
-                  ),
+                  nextQuantity,
+
+                discountAmount:
+                  item.isFree
+                    ? Number(
+                        (
+                          item.unitPrice
+                          * nextQuantity
+                        ).toFixed(2),
+                      )
+                    : item.discountAmount,
               };
             },
           ),
@@ -905,6 +925,10 @@ export default function QuickSalePage() {
         current.map(
           (item) => {
             if (item.key !== key) {
+              return item;
+            }
+
+            if (item.isFree) {
               return item;
             }
 
@@ -935,6 +959,81 @@ export default function QuickSalePage() {
         ),
     );
   }
+
+  function toggleFreeItem(
+    key: string,
+    enabled: boolean,
+  ) {
+    setCart(
+      (current) =>
+        current.map(
+          (item) => {
+            if (
+              item.key !== key
+            ) {
+              return item;
+            }
+
+            if (enabled) {
+              return {
+                ...item,
+
+                isFree: true,
+
+                preFreeDiscountAmount:
+                  item.discountAmount,
+
+                discountAmount:
+                  Number(
+                    (
+                      item.unitPrice
+                      * item.quantity
+                    ).toFixed(2),
+                  ),
+
+                freeReason:
+                  item.freeReason
+                  || "Promotional giveaway",
+              };
+            }
+
+            return {
+              ...item,
+
+              isFree: false,
+
+              discountAmount:
+                item.preFreeDiscountAmount
+                ?? 0,
+
+              preFreeDiscountAmount:
+                null,
+            };
+          },
+        ),
+    );
+  }
+
+
+  function changeFreeReason(
+    key: string,
+    reason: string,
+  ) {
+    setCart(
+      (current) =>
+        current.map(
+          (item) =>
+            item.key === key
+              ? {
+                  ...item,
+                  freeReason:
+                    reason,
+                }
+              : item,
+        ),
+    );
+  }
+
 
   function effectiveUnitPrice(
     item: QuickSaleCartItem,
@@ -1238,15 +1337,32 @@ export default function QuickSalePage() {
 
     const belowCostItems = cart.filter(
       (item) =>
-        item.averageCost !== null &&
-        effectiveUnitPrice(item) <
-          item.averageCost,
+        !item.isFree
+        && item.averageCost !== null
+        && effectiveUnitPrice(item)
+          < item.averageCost,
     );
 
     if (belowCostItems.length > 0) {
       setError(
         "Sale cannot be confirmed because one or more products are priced below warehouse average cost.",
       );
+      return;
+    }
+
+    const freeItemWithoutReason =
+      cart.find(
+        (item) =>
+          item.isFree
+          && !item.freeReason
+            .trim(),
+      );
+
+    if (freeItemWithoutReason) {
+      setError(
+        `Enter a free-item reason for ${freeItemWithoutReason.productName}.`,
+      );
+
       return;
     }
 
@@ -1324,6 +1440,7 @@ export default function QuickSalePage() {
       !saveAsDraft
       && form.paymentMode ===
         "cash"
+      && customerPayable > 0
       && paidNow <= 0
     ) {
       setError(
@@ -1408,6 +1525,11 @@ export default function QuickSalePage() {
                 serial_number_id:
                   item.serialId ??
                   null,
+
+                description:
+                  item.isFree
+                    ? `FREE ITEM - ${item.freeReason.trim()}`
+                    : null,
               }),
             ),
         });
@@ -1933,8 +2055,9 @@ export default function QuickSalePage() {
                             : ""}
                         </small>
 
-                        {item.averageCost !== null &&
-                        effectiveUnitPrice(item) <
+                        {!item.isFree
+                        && item.averageCost !== null
+                        && effectiveUnitPrice(item) <
                           item.averageCost ? (
                           <small
                             style={{
@@ -2011,6 +2134,9 @@ export default function QuickSalePage() {
                           type="number"
                           min={0}
                           step="0.01"
+                          disabled={
+                            item.isFree
+                          }
                           value={
                             effectiveUnitPrice(
                               item,
@@ -2047,6 +2173,100 @@ export default function QuickSalePage() {
                             )}
                           </span>
                         )}
+                      </div>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gap: 6,
+                          minWidth: 170,
+                        }}
+                      >
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 7,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={
+                              item.isFree
+                            }
+                            onChange={
+                              (event) =>
+                                toggleFreeItem(
+                                  item.key,
+                                  event.target
+                                    .checked,
+                                )
+                            }
+                          />
+
+                          Free item
+                        </label>
+
+                        {item.isFree ? (
+                          <>
+                            <select
+                              value={
+                                item.freeReason
+                              }
+                              onChange={
+                                (event) =>
+                                  changeFreeReason(
+                                    item.key,
+                                    event.target
+                                      .value,
+                                  )
+                              }
+                              style={{
+                                minHeight: 34,
+                                border:
+                                  "1px solid #d8dfe8",
+                                borderRadius: 8,
+                                padding:
+                                  "6px 8px",
+                                background:
+                                  "#fff",
+                              }}
+                            >
+                              <option value="Promotional giveaway">
+                                Promotion
+                              </option>
+
+                              <option value="Bundle free item">
+                                Bundle free item
+                              </option>
+
+                              <option value="Management approved">
+                                Management approved
+                              </option>
+
+                              <option value="Warranty goodwill">
+                                Warranty goodwill
+                              </option>
+
+                              <option value="Customer goodwill">
+                                Customer goodwill
+                              </option>
+                            </select>
+
+                            <strong
+                              style={{
+                                color:
+                                  "#15803d",
+                                fontSize: 12,
+                              }}
+                            >
+                              FREE · Customer charge LKR 0.00
+                            </strong>
+                          </>
+                        ) : null}
                       </div>
 
                       <div className={styles.linePrice}>
