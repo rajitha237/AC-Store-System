@@ -3813,6 +3813,337 @@ export default function SalesPage() {
                       styles.formSection
                     }
                   >
+                    <label
+                      className={
+                        styles.paymentToggle
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        checked={
+                          initialPaymentEnabled
+                        }
+                        onChange={
+                          (event) => {
+                            const checked =
+                              event.target.checked;
+
+                            setInitialPaymentEnabled(
+                              checked,
+                            );
+
+                            if (
+                              checked
+                              && initialPaymentTotal <= 0
+                            ) {
+                              setInitialPaymentRows([
+                                {
+                                  id: 1,
+                                  paymentMethod: "cash",
+                                  amount:
+                                    calculatedCustomerPayable
+                                      .toFixed(2),
+                                  referenceNumber: "",
+                                  notes: "",
+                                },
+                              ]);
+                            }
+                          }
+                        }
+                      />
+
+                      <div>
+                        <strong>
+                          Receive payment
+                        </strong>
+
+                        <span>
+                          Optional. Add one or more payment methods now, or keep the invoice as a draft and collect payment later.
+                        </span>
+                      </div>
+                    </label>
+
+                    {initialPaymentEnabled && (
+                      <div
+                        className={
+                          styles.salesSplitPayment
+                        }
+                      >
+                        <div
+                          className={
+                            styles.salesSplitPaymentHeader
+                          }
+                        >
+                          <div>
+                            <strong>
+                              Split payment
+                            </strong>
+
+                            <span>
+                              Use cash, card, cheque, bank transfer or multiple methods for the same invoice.
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            className={
+                              styles.addLineButton
+                            }
+                            disabled={
+                              initialPaymentRows.length
+                              >= 10
+                            }
+                            onClick={
+                              addInitialPaymentRow
+                            }
+                          >
+                            <Plus size={15} />
+
+                            Add payment
+                          </button>
+                        </div>
+
+                        <div
+                          className={
+                            styles.salesSplitPaymentRows
+                          }
+                        >
+                          {initialPaymentRows.map(
+                            (
+                              payment,
+                              index,
+                            ) => (
+                              <article
+                                key={
+                                  payment.id
+                                }
+                                className={
+                                  styles.salesSplitPaymentRow
+                                }
+                              >
+                                <div
+                                  className={
+                                    styles.salesSplitPaymentNumber
+                                  }
+                                >
+                                  {index + 1}
+                                </div>
+
+                                <label>
+                                  Method
+
+                                  <select
+                                    value={
+                                      payment.paymentMethod
+                                    }
+                                    onChange={
+                                      (event) =>
+                                        updateInitialPaymentRow(
+                                          payment.id,
+                                          {
+                                            paymentMethod:
+                                              event.target
+                                                .value as PaymentMethod,
+                                          },
+                                        )
+                                    }
+                                  >
+                                    <option value="cash">
+                                      Cash
+                                    </option>
+
+                                    <option value="card">
+                                      Card
+                                    </option>
+
+                                    <option value="cheque">
+                                      Cheque
+                                    </option>
+
+                                    <option value="bank_transfer">
+                                      Bank transfer
+                                    </option>
+
+                                    <option value="mobile_payment">
+                                      Mobile payment
+                                    </option>
+
+                                    <option value="other">
+                                      Other
+                                    </option>
+                                  </select>
+                                </label>
+
+                                <label>
+                                  Amount
+
+                                  <div
+                                    className={
+                                      styles.salesPaymentAmountControl
+                                    }
+                                  >
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={
+                                        payment.amount
+                                      }
+                                      onChange={
+                                        (event) =>
+                                          updateInitialPaymentRow(
+                                            payment.id,
+                                            {
+                                              amount:
+                                                event.target
+                                                  .value,
+                                            },
+                                          )
+                                      }
+                                    />
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        fillInitialPaymentBalance(
+                                          payment.id,
+                                          calculatedCustomerPayable,
+                                        )
+                                      }
+                                    >
+                                      Balance
+                                    </button>
+                                  </div>
+                                </label>
+
+                                <label>
+                                  {payment.paymentMethod
+                                    === "cheque"
+                                    ? "Cheque / reference no."
+                                    : payment.paymentMethod
+                                        === "card"
+                                      ? "Card / reference no."
+                                      : "Reference"
+                                  }
+
+                                  <input
+                                    type="text"
+                                    maxLength={150}
+                                    value={
+                                      payment.referenceNumber
+                                    }
+                                    onChange={
+                                      (event) =>
+                                        updateInitialPaymentRow(
+                                          payment.id,
+                                          {
+                                            referenceNumber:
+                                              event.target
+                                                .value,
+                                          },
+                                        )
+                                    }
+                                  />
+                                </label>
+
+                                <label>
+                                  Notes
+
+                                  <input
+                                    type="text"
+                                    value={
+                                      payment.notes
+                                    }
+                                    onChange={
+                                      (event) =>
+                                        updateInitialPaymentRow(
+                                          payment.id,
+                                          {
+                                            notes:
+                                              event.target
+                                                .value,
+                                          },
+                                        )
+                                    }
+                                  />
+                                </label>
+
+                                <button
+                                  type="button"
+                                  className={
+                                    styles.salesSplitRemove
+                                  }
+                                  onClick={() =>
+                                    removeInitialPaymentRow(
+                                      payment.id,
+                                    )
+                                  }
+                                  aria-label={
+                                    `Remove payment ${index + 1}`
+                                  }
+                                >
+                                  <X size={15} />
+                                </button>
+                              </article>
+                            ),
+                          )}
+                        </div>
+
+                        <div
+                          className={
+                            styles.salesSplitTotals
+                          }
+                        >
+                          <div>
+                            <span>
+                              Customer payable
+                            </span>
+
+                            <strong>
+                              {money(
+                                calculatedCustomerPayable,
+                              )}
+                            </strong>
+                          </div>
+
+                          <div>
+                            <span>
+                              Paid now
+                            </span>
+
+                            <strong>
+                              {money(
+                                initialPaymentTotal,
+                              )}
+                            </strong>
+                          </div>
+
+                          <div>
+                            <span>
+                              Remaining
+                            </span>
+
+                            <strong>
+                              {money(
+                                Math.max(
+                                  0,
+                                  calculatedCustomerPayable
+                                  - initialPaymentTotal,
+                                ),
+                              )}
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+
+
+                  <section
+                    className={
+                      styles.formSection
+                    }
+                  >
                     <div
                       className={
                         styles.tradeInHeader
