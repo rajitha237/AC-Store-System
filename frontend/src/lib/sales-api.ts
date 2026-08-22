@@ -8,6 +8,8 @@ import type {
   SalesInvoiceListParams,
   SalesInvoiceListResponse,
   SalesInvoiceResponse,
+  SplitPaymentCreate,
+  SplitPaymentResponse,
   SalesProductOption,
   SalesSerialOption,
   SalesWarehouseOption,
@@ -171,6 +173,22 @@ export async function confirmSalesInvoice(
       SalesInvoiceDetailResponse
     >(
       `/sales/invoices/${invoiceId}/confirm`,
+      payload,
+    );
+
+  return response.data;
+}
+
+
+export async function receiveSplitSalesPayments(
+  invoiceId: number,
+  payload: SplitPaymentCreate,
+): Promise<SplitPaymentResponse> {
+  const response =
+    await api.post<
+      SplitPaymentResponse
+    >(
+      `/sales/invoices/${invoiceId}/split-payments`,
       payload,
     );
 

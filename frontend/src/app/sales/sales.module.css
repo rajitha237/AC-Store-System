@@ -1131,3 +1131,308 @@
   height: 16px;
   width: 16px;
 }
+
+
+/* ============================================================
+   SALES SPLIT PAYMENT
+   ============================================================ */
+
+.salesSplitPayment {
+  border: 1px solid #e1e7ef;
+  border-radius: 11px;
+  padding: 12px;
+}
+
+.salesSplitPaymentHeader {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.salesSplitPaymentHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.salesSplitPaymentHeader strong {
+  color: #465368;
+  font-size: 10px;
+}
+
+.salesSplitPaymentHeader span {
+  color: #929baa;
+  font-size: 8px;
+}
+
+.salesSplitPaymentRows {
+  display: grid;
+  gap: 9px;
+}
+
+.salesSplitPaymentRow {
+  align-items: end;
+  background: #f9fafc;
+  border: 1px solid #e2e7ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns:
+    28px
+    minmax(105px, .8fr)
+    minmax(160px, 1fr)
+    minmax(150px, 1fr)
+    minmax(150px, 1fr)
+    34px;
+  padding: 10px;
+}
+
+.salesSplitPaymentRow label {
+  color: #657186;
+  display: grid;
+  font-size: 8px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.salesSplitPaymentRow input,
+.salesSplitPaymentRow select {
+  background: #fff;
+  border: 1px solid #d8dfe8;
+  border-radius: 8px;
+  color: #344054;
+  font-size: 9px;
+  min-height: 38px;
+  padding: 8px;
+  width: 100%;
+}
+
+.salesSplitPaymentNumber {
+  align-items: center;
+  align-self: center;
+  background: #eaf1fb;
+  border-radius: 999px;
+  color: #315f9f;
+  display: flex;
+  font-size: 9px;
+  font-weight: 800;
+  height: 27px;
+  justify-content: center;
+  width: 27px;
+}
+
+.salesPaymentAmountControl {
+  display: flex;
+  gap: 5px;
+}
+
+.salesPaymentAmountControl input {
+  min-width: 0;
+}
+
+.salesPaymentAmountControl button {
+  background: #fff;
+  border: 1px solid #d8dfe8;
+  border-radius: 7px;
+  color: #53647a;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 0 8px;
+}
+
+.salesSplitRemove {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #fda29b;
+  border-radius: 8px;
+  color: #b42318;
+  cursor: pointer;
+  display: flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.salesSplitTotals {
+  background: #f7f9fc;
+  border: 1px solid #e1e7ef;
+  border-radius: 9px;
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.salesSplitTotals > div {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.salesSplitTotals span {
+  color: #8490a1;
+  font-size: 8px;
+}
+
+.salesSplitTotals strong {
+  color: #344054;
+  font-size: 9px;
+}
+
+@media (max-width: 900px) {
+  .salesSplitPaymentRow {
+    grid-template-columns:
+      28px 1fr;
+  }
+
+  .salesSplitPaymentRow label,
+  .salesSplitRemove {
+    grid-column: 2;
+  }
+
+  .salesSplitPaymentHeader {
+    align-items: stretch;
+    display: grid;
+  }
+}
+
+
+/* ============================================================
+   SALES DETAIL SPLIT PAYMENT
+   ============================================================ */
+
+.detailPaymentActionHeader {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+}
+
+.detailPaymentActionHeader h3 {
+  margin-bottom: 4px;
+}
+
+.detailPaymentActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.detailPaymentActions button {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.detailSplitPaymentPanel {
+  background: #f8fafc;
+  border: 1px solid #dce3ec;
+  border-radius: 11px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.detailSplitHeader {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.detailSplitHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.detailSplitHeader strong {
+  color: #344054;
+  font-size: 10px;
+}
+
+.detailSplitHeader span {
+  color: #8490a1;
+  font-size: 8px;
+}
+
+.detailSplitRows {
+  display: grid;
+  gap: 8px;
+}
+
+.detailSplitRow {
+  align-items: end;
+  background: #fff;
+  border: 1px solid #e1e7ef;
+  border-radius: 9px;
+  display: grid;
+  gap: 7px;
+  grid-template-columns:
+    28px
+    minmax(95px, .8fr)
+    minmax(150px, 1fr)
+    minmax(150px, 1fr)
+    34px;
+  padding: 9px;
+}
+
+.detailSplitRow label {
+  color: #657186;
+  display: grid;
+  font-size: 8px;
+  font-weight: 700;
+  gap: 5px;
+}
+
+.detailSplitRow input,
+.detailSplitRow select {
+  background: #fff;
+  border: 1px solid #d8dfe8;
+  border-radius: 7px;
+  color: #344054;
+  font-size: 9px;
+  min-height: 36px;
+  padding: 7px;
+  width: 100%;
+}
+
+.detailSplitFooter {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+@media (max-width: 720px) {
+  .detailPaymentActions {
+    display: grid;
+  }
+
+  .detailPaymentActions button {
+    width: 100%;
+  }
+
+  .detailSplitHeader {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .detailSplitRow {
+    grid-template-columns:
+      28px 1fr;
+  }
+
+  .detailSplitRow label,
+  .detailSplitRow .salesSplitRemove {
+    grid-column: 2;
+  }
+
+  .detailSplitFooter {
+    display: grid;
+    grid-template-columns:
+      1fr 1fr;
+  }
+}

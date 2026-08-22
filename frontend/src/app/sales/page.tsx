@@ -54,6 +54,7 @@ import {
   getSalesInvoices,
   getSalesProducts,
   getSalesWarehouses,
+  receiveSplitSalesPayments,
 } from "@/lib/sales-api";
 
 import type {
@@ -74,6 +75,15 @@ import type {
 } from "@/types/sales";
 
 import styles from "./sales.module.css";
+
+
+type SalesPaymentRow = {
+  id: number;
+  paymentMethod: PaymentMethod;
+  amount: string;
+  referenceNumber: string;
+  notes: string;
+};
 
 
 const PAGE_SIZE = 20;
@@ -514,30 +524,19 @@ export default function SalesPage() {
     useState(false);
 
   const [
-    initialPaymentAmount,
-    setInitialPaymentAmount,
-  ] =
-    useState("");
-
-  const [
-    initialPaymentMethod,
-    setInitialPaymentMethod,
-  ] =
-    useState<PaymentMethod>(
-      "cash",
-    );
-
-  const [
-    paymentReference,
-    setPaymentReference,
-  ] =
-    useState("");
-
-  const [
-    paymentNotes,
-    setPaymentNotes,
-  ] =
-    useState("");
+    initialPaymentRows,
+    setInitialPaymentRows,
+  ] = useState<
+    SalesPaymentRow[]
+  >([
+    {
+      id: 1,
+      paymentMethod: "cash",
+      amount: "",
+      referenceNumber: "",
+      notes: "",
+    },
+  ]);
 
 
   const [
@@ -584,6 +583,36 @@ export default function SalesPage() {
     >(
       null,
     );
+
+
+  const [
+    detailPaymentMode,
+    setDetailPaymentMode,
+  ] = useState<
+    "confirm"
+    | "receive"
+    | null
+  >(null);
+
+  const [
+    detailPaymentRows,
+    setDetailPaymentRows,
+  ] = useState<
+    SalesPaymentRow[]
+  >([
+    {
+      id: 1,
+      paymentMethod: "cash",
+      amount: "",
+      referenceNumber: "",
+      notes: "",
+    },
+  ]);
+
+  const [
+    detailPaymentSaving,
+    setDetailPaymentSaving,
+  ] = useState(false);
 
 
   useEffect(() => {
@@ -835,6 +864,40 @@ export default function SalesPage() {
     );
 
 
+  const initialPaymentTotal =
+    initialPaymentRows.reduce(
+      (
+        total,
+        payment,
+      ) =>
+        total
+        + Math.max(
+            0,
+            numeric(
+              payment.amount,
+            ),
+          ),
+      0,
+    );
+
+
+  const detailPaymentTotal =
+    detailPaymentRows.reduce(
+      (
+        total,
+        payment,
+      ) =>
+        total
+        + Math.max(
+            0,
+            numeric(
+              payment.amount,
+            ),
+          ),
+      0,
+    );
+
+
   function submitSearch(
     event:
       FormEvent<HTMLFormElement>,
@@ -1017,6 +1080,20 @@ export default function SalesPage() {
       null,
     );
 
+    setInitialPaymentEnabled(
+      false,
+    );
+
+    setInitialPaymentRows([
+      {
+        id: 1,
+        paymentMethod: "cash",
+        amount: "",
+        referenceNumber: "",
+        notes: "",
+      },
+    ]);
+
     setConfirming(
       false,
     );
@@ -1025,21 +1102,6 @@ export default function SalesPage() {
       false,
     );
 
-    setInitialPaymentAmount(
-      "",
-    );
-
-    setInitialPaymentMethod(
-      "cash",
-    );
-
-    setPaymentReference(
-      "",
-    );
-
-    setPaymentNotes(
-      "",
-    );
 
     setSerialOptions(
       {},
@@ -1286,6 +1348,166 @@ export default function SalesPage() {
   }
 
 
+  function addInitialPaymentRow() {
+    setInitialPaymentRows(
+      (current) => {
+        const nextId =
+          current.reduce(
+            (
+              highest,
+              payment,
+            ) =>
+              Math.max(
+                highest,
+                payment.id,
+              ),
+            0,
+          ) + 1;
+
+        return [
+          ...current,
+          {
+            id: nextId,
+            paymentMethod: "cash",
+            amount: "",
+            referenceNumber: "",
+            notes: "",
+          },
+        ];
+      },
+    );
+  }
+
+
+  function updateInitialPaymentRow(
+    id: number,
+    patch:
+      Partial<
+        SalesPaymentRow
+      >,
+  ) {
+    setInitialPaymentRows(
+      (current) =>
+        current.map(
+          (payment) =>
+            payment.id === id
+              ? {
+                  ...payment,
+                  ...patch,
+                }
+              : payment,
+        ),
+    );
+  }
+
+
+  function removeInitialPaymentRow(
+    id: number,
+  ) {
+    setInitialPaymentRows(
+      (current) => {
+        if (
+          current.length <= 1
+        ) {
+          return [
+            {
+              id:
+                current[0]?.id
+                ?? 1,
+              paymentMethod:
+                "cash",
+              amount: "",
+              referenceNumber:
+                "",
+              notes: "",
+            },
+          ];
+        }
+
+        return current.filter(
+          (payment) =>
+            payment.id !== id,
+        );
+      },
+    );
+  }
+
+
+  function fillInitialPaymentBalance(
+    id: number,
+    balance: number,
+  ) {
+    const otherTotal =
+      initialPaymentRows.reduce(
+        (
+          total,
+          payment,
+        ) =>
+          payment.id === id
+            ? total
+            : total
+              + Math.max(
+                  0,
+                  numeric(
+                    payment.amount,
+                  ),
+                ),
+        0,
+      );
+
+    updateInitialPaymentRow(
+      id,
+      {
+        amount:
+          Math.max(
+            0,
+            balance
+            - otherTotal,
+          ).toFixed(2),
+      },
+    );
+  }
+
+
+  function initialPaymentPayload():
+    InitialPaymentCreate[] {
+    return initialPaymentRows
+      .map(
+        (payment) => ({
+          amount:
+            String(
+              Math.max(
+                0,
+                numeric(
+                  payment.amount,
+                ),
+              ),
+            ),
+
+          payment_method:
+            payment.paymentMethod,
+
+          reference_number:
+            cleanText(
+              payment
+                .referenceNumber,
+            ),
+
+          notes:
+            cleanText(
+              payment.notes,
+            ),
+        }),
+      )
+      .filter(
+        (payment) =>
+          numeric(
+            payment.amount,
+          ) > 0,
+      );
+  }
+
+
   function validateSale():
     string | null {
     if (!customerId) {
@@ -1440,14 +1662,11 @@ export default function SalesPage() {
 
     if (
       initialPaymentEnabled
-      && initialPaymentAmount
-      && numeric(
-        initialPaymentAmount,
-      )
-      > calculatedGrandTotal
+      && initialPaymentTotal
+      > calculatedCustomerPayable
     ) {
       return (
-        "Initial payment cannot "
+        "Combined initial payments cannot "
         + "exceed the customer payable balance."
       );
     }
@@ -1591,10 +1810,21 @@ export default function SalesPage() {
 
       if (
         initialPaymentEnabled
-        && !initialPaymentAmount
+        && initialPaymentTotal <= 0
       ) {
-        setInitialPaymentAmount(
-          created.balance_amount,
+        setInitialPaymentRows(
+          [
+            {
+              id: 1,
+              paymentMethod:
+                "cash",
+              amount:
+                created.balance_amount,
+              referenceNumber:
+                "",
+              notes: "",
+            },
+          ],
         );
       }
     } catch (
@@ -1620,59 +1850,48 @@ export default function SalesPage() {
       return;
     }
 
-    let initialPayment:
-      InitialPaymentCreate
-      | null = null;
+    const initialPayments =
+      initialPaymentEnabled
+        ? initialPaymentPayload()
+        : [];
+
+    const paymentTotal =
+      initialPayments.reduce(
+        (
+          total,
+          payment,
+        ) =>
+          total
+          + numeric(
+              payment.amount,
+            ),
+        0,
+      );
 
     if (
       initialPaymentEnabled
+      && initialPayments.length
+        === 0
     ) {
-      const amount =
-        numeric(
-          initialPaymentAmount,
-        );
+      setError(
+        "Add at least one payment amount or disable initial payment.",
+      );
 
-      if (amount <= 0) {
-        setError(
-          "Initial payment amount "
-          + "must be greater than zero.",
-        );
+      return;
+    }
 
-        return;
-      }
+    if (
+      paymentTotal
+      > numeric(
+          createdDraft
+            .balance_amount,
+        )
+    ) {
+      setError(
+        "Combined initial payments cannot exceed the invoice balance.",
+      );
 
-      if (
-        amount
-        > numeric(
-            createdDraft
-              .balance_amount,
-          )
-      ) {
-        setError(
-          "Initial payment cannot "
-          + "exceed the invoice total.",
-        );
-
-        return;
-      }
-
-      initialPayment = {
-        amount:
-          initialPaymentAmount,
-
-        payment_method:
-          initialPaymentMethod,
-
-        reference_number:
-          cleanText(
-            paymentReference,
-          ),
-
-        notes:
-          cleanText(
-            paymentNotes,
-          ),
-      };
+      return;
     }
 
     setSaving(
@@ -1689,7 +1908,9 @@ export default function SalesPage() {
           createdDraft.id,
           {
             initial_payment:
-              initialPayment,
+              null,
+            initial_payments:
+              initialPayments,
           },
         );
 
@@ -1728,6 +1949,396 @@ export default function SalesPage() {
   }
 
 
+  function resetDetailPaymentRows(
+    amount = "",
+  ) {
+    setDetailPaymentRows([
+      {
+        id: 1,
+        paymentMethod: "cash",
+        amount,
+        referenceNumber: "",
+        notes: "",
+      },
+    ]);
+  }
+
+
+  function addDetailPaymentRow() {
+    setDetailPaymentRows(
+      (current) => {
+        const nextId =
+          current.reduce(
+            (
+              highest,
+              payment,
+            ) =>
+              Math.max(
+                highest,
+                payment.id,
+              ),
+            0,
+          ) + 1;
+
+        return [
+          ...current,
+          {
+            id: nextId,
+            paymentMethod: "cash",
+            amount: "",
+            referenceNumber: "",
+            notes: "",
+          },
+        ];
+      },
+    );
+  }
+
+
+  function updateDetailPaymentRow(
+    id: number,
+    patch:
+      Partial<
+        SalesPaymentRow
+      >,
+  ) {
+    setDetailPaymentRows(
+      (current) =>
+        current.map(
+          (payment) =>
+            payment.id === id
+              ? {
+                  ...payment,
+                  ...patch,
+                }
+              : payment,
+        ),
+    );
+  }
+
+
+  function removeDetailPaymentRow(
+    id: number,
+  ) {
+    setDetailPaymentRows(
+      (current) => {
+        if (
+          current.length <= 1
+        ) {
+          return [
+            {
+              id:
+                current[0]?.id
+                ?? 1,
+              paymentMethod:
+                "cash",
+              amount: "",
+              referenceNumber: "",
+              notes: "",
+            },
+          ];
+        }
+
+        return current.filter(
+          (payment) =>
+            payment.id !== id,
+        );
+      },
+    );
+  }
+
+
+  function fillDetailPaymentBalance(
+    id: number,
+  ) {
+    if (!selectedInvoice) {
+      return;
+    }
+
+    const balance =
+      numeric(
+        selectedInvoice
+          .balance_amount,
+      );
+
+    const otherTotal =
+      detailPaymentRows.reduce(
+        (
+          total,
+          payment,
+        ) =>
+          payment.id === id
+            ? total
+            : total
+              + Math.max(
+                  0,
+                  numeric(
+                    payment.amount,
+                  ),
+                ),
+        0,
+      );
+
+    updateDetailPaymentRow(
+      id,
+      {
+        amount:
+          Math.max(
+            0,
+            balance
+            - otherTotal,
+          ).toFixed(2),
+      },
+    );
+  }
+
+
+  function detailPaymentPayload():
+    InitialPaymentCreate[] {
+    return detailPaymentRows
+      .map(
+        (payment) => ({
+          amount:
+            String(
+              Math.max(
+                0,
+                numeric(
+                  payment.amount,
+                ),
+              ),
+            ),
+
+          payment_method:
+            payment.paymentMethod,
+
+          reference_number:
+            cleanText(
+              payment
+                .referenceNumber,
+            ),
+
+          notes:
+            cleanText(
+              payment.notes,
+            ),
+        }),
+      )
+      .filter(
+        (payment) =>
+          numeric(
+            payment.amount,
+          ) > 0,
+      );
+  }
+
+
+  function openDraftConfirmPayment() {
+    if (!selectedInvoice) {
+      return;
+    }
+
+    setDetailPaymentMode(
+      "confirm",
+    );
+
+    resetDetailPaymentRows(
+      selectedInvoice
+        .balance_amount,
+    );
+
+    setError("");
+  }
+
+
+  function openLaterPayment() {
+    if (!selectedInvoice) {
+      return;
+    }
+
+    setDetailPaymentMode(
+      "receive",
+    );
+
+    resetDetailPaymentRows(
+      selectedInvoice
+        .balance_amount,
+    );
+
+    setError("");
+  }
+
+
+  async function submitDetailPayment() {
+    if (
+      !selectedInvoice
+      || !detailPaymentMode
+    ) {
+      return;
+    }
+
+    const payments =
+      detailPaymentPayload();
+
+    if (
+      payments.length === 0
+    ) {
+      setError(
+        "Enter at least one payment amount.",
+      );
+
+      return;
+    }
+
+    const total =
+      payments.reduce(
+        (
+          current,
+          payment,
+        ) =>
+          current
+          + numeric(
+              payment.amount,
+            ),
+        0,
+      );
+
+    const balance =
+      numeric(
+        selectedInvoice
+          .balance_amount,
+      );
+
+    if (
+      total > balance
+    ) {
+      setError(
+        "Combined payments cannot exceed the invoice balance.",
+      );
+
+      return;
+    }
+
+    setDetailPaymentSaving(
+      true,
+    );
+
+    setError("");
+
+    try {
+      let updated:
+        SalesInvoiceDetailResponse;
+
+      if (
+        detailPaymentMode
+        === "confirm"
+      ) {
+        updated =
+          await confirmSalesInvoice(
+            selectedInvoice.id,
+            {
+              initial_payment:
+                null,
+              initial_payments:
+                payments,
+            },
+          );
+      } else {
+        const response =
+          await receiveSplitSalesPayments(
+            selectedInvoice.id,
+            {
+              payments,
+            },
+          );
+
+        updated =
+          response.invoice;
+      }
+
+      setSelectedInvoice(
+        updated,
+      );
+
+      setDetailPaymentMode(
+        null,
+      );
+
+      resetDetailPaymentRows();
+
+      await loadInvoices(
+        true,
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    } finally {
+      setDetailPaymentSaving(
+        false,
+      );
+    }
+  }
+
+
+  async function confirmDraftWithoutPayment() {
+    if (
+      !selectedInvoice
+      || selectedInvoice
+        .invoice_status
+        !== "draft"
+    ) {
+      return;
+    }
+
+    setDetailPaymentSaving(
+      true,
+    );
+
+    setError("");
+
+    try {
+      const updated =
+        await confirmSalesInvoice(
+          selectedInvoice.id,
+          {
+            initial_payment:
+              null,
+            initial_payments:
+              [],
+          },
+        );
+
+      setSelectedInvoice(
+        updated,
+      );
+
+      setDetailPaymentMode(
+        null,
+      );
+
+      await loadInvoices(
+        true,
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    } finally {
+      setDetailPaymentSaving(
+        false,
+      );
+    }
+  }
+
+
   async function openDetail(
     invoiceId: number,
   ) {
@@ -1742,6 +2353,12 @@ export default function SalesPage() {
     setSelectedInvoice(
       null,
     );
+
+    setDetailPaymentMode(
+      null,
+    );
+
+    resetDetailPaymentRows();
 
     setError(
       "",
@@ -3709,9 +4326,7 @@ export default function SalesPage() {
                                       createdDraft
                                         .balance_amount,
                                     )
-                                    - numeric(
-                                        initialPaymentAmount,
-                                      ),
+                                    - initialPaymentTotal,
                                   )
                                 : createdDraft
                                     .balance_amount,
@@ -3749,11 +4364,24 @@ export default function SalesPage() {
 
                                 if (
                                   checked
-                                  && !initialPaymentAmount
+                                  && initialPaymentTotal
+                                    <= 0
                                 ) {
-                                  setInitialPaymentAmount(
-                                    createdDraft
-                                      .balance_amount,
+                                  setInitialPaymentRows(
+                                    [
+                                      {
+                                        id: 1,
+                                        paymentMethod:
+                                          "cash",
+                                        amount:
+                                          createdDraft
+                                            .balance_amount,
+                                        referenceNumber:
+                                          "",
+                                        notes:
+                                          "",
+                                      },
+                                    ],
                                   );
                                 }
                               }
@@ -3775,116 +4403,285 @@ export default function SalesPage() {
                         {initialPaymentEnabled && (
                           <div
                             className={
-                              styles.totalsGrid
+                              styles.salesSplitPayment
                             }
                           >
-                            <label>
-                              Amount *
+                            <div
+                              className={
+                                styles.salesSplitPaymentHeader
+                              }
+                            >
+                              <div>
+                                <strong>
+                                  Payment methods
+                                </strong>
 
-                              <input
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                value={
-                                  initialPaymentAmount
-                                }
-                                onChange={
-                                  (event) =>
-                                    setInitialPaymentAmount(
-                                      event
-                                        .target
-                                        .value,
-                                    )
-                                }
-                              />
-                            </label>
+                                <span>
+                                  Split the payment between cash, card, cheque or bank transfer.
+                                </span>
+                              </div>
 
-                            <label>
-                              Payment method
-
-                              <select
-                                value={
-                                  initialPaymentMethod
+                              <button
+                                type="button"
+                                className={
+                                  styles.addLineButton
                                 }
-                                onChange={
-                                  (event) =>
-                                    setInitialPaymentMethod(
-                                      event
-                                        .target
-                                        .value,
-                                    )
+                                disabled={
+                                  initialPaymentRows
+                                    .length >= 10
+                                }
+                                onClick={
+                                  addInitialPaymentRow
                                 }
                               >
-                                <option
-                                  value="cash"
-                                >
-                                  Cash
-                                </option>
+                                <Plus
+                                  size={15}
+                                />
 
-                                <option
-                                  value="card"
-                                >
-                                  Card
-                                </option>
+                                Add payment
+                              </button>
+                            </div>
 
-                                <option
-                                  value="bank_transfer"
-                                >
-                                  Bank transfer
-                                </option>
+                            <div
+                              className={
+                                styles.salesSplitPaymentRows
+                              }
+                            >
+                              {initialPaymentRows.map(
+                                (
+                                  payment,
+                                  index,
+                                ) => (
+                                  <article
+                                    key={
+                                      payment.id
+                                    }
+                                    className={
+                                      styles.salesSplitPaymentRow
+                                    }
+                                  >
+                                    <div
+                                      className={
+                                        styles.salesSplitPaymentNumber
+                                      }
+                                    >
+                                      {index + 1}
+                                    </div>
 
-                                <option
-                                  value="cheque"
-                                >
-                                  Cheque
-                                </option>
+                                    <label>
+                                      Method
 
-                                <option
-                                  value="mobile_payment"
-                                >
-                                  Mobile payment
-                                </option>
-                              </select>
-                            </label>
+                                      <select
+                                        value={
+                                          payment
+                                            .paymentMethod
+                                        }
+                                        onChange={
+                                          (event) =>
+                                            updateInitialPaymentRow(
+                                              payment.id,
+                                              {
+                                                paymentMethod:
+                                                  event.target
+                                                    .value as PaymentMethod,
+                                              },
+                                            )
+                                        }
+                                      >
+                                        <option value="cash">
+                                          Cash
+                                        </option>
 
-                            <label>
-                              Reference
+                                        <option value="card">
+                                          Card
+                                        </option>
 
-                              <input
-                                type="text"
-                                maxLength={150}
-                                value={
-                                  paymentReference
-                                }
-                                onChange={
-                                  (event) =>
-                                    setPaymentReference(
-                                      event
-                                        .target
-                                        .value,
-                                    )
-                                }
-                              />
-                            </label>
+                                        <option value="bank_transfer">
+                                          Bank transfer
+                                        </option>
 
-                            <label>
-                              Payment notes
+                                        <option value="cheque">
+                                          Cheque
+                                        </option>
 
-                              <input
-                                type="text"
-                                value={
-                                  paymentNotes
-                                }
-                                onChange={
-                                  (event) =>
-                                    setPaymentNotes(
-                                      event
-                                        .target
-                                        .value,
-                                    )
-                                }
-                              />
-                            </label>
+                                        <option value="mobile_payment">
+                                          Mobile payment
+                                        </option>
+
+                                        <option value="other">
+                                          Other
+                                        </option>
+                                      </select>
+                                    </label>
+
+                                    <label>
+                                      Amount
+
+                                      <div
+                                        className={
+                                          styles.salesPaymentAmountControl
+                                        }
+                                      >
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          value={
+                                            payment.amount
+                                          }
+                                          onChange={
+                                            (event) =>
+                                              updateInitialPaymentRow(
+                                                payment.id,
+                                                {
+                                                  amount:
+                                                    event.target
+                                                      .value,
+                                                },
+                                              )
+                                          }
+                                        />
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            fillInitialPaymentBalance(
+                                              payment.id,
+                                              numeric(
+                                                createdDraft
+                                                  .balance_amount,
+                                              ),
+                                            )
+                                          }
+                                        >
+                                          Balance
+                                        </button>
+                                      </div>
+                                    </label>
+
+                                    <label>
+                                      {payment
+                                        .paymentMethod
+                                        === "cheque"
+                                        ? "Cheque / reference no."
+                                        : "Reference"
+                                      }
+
+                                      <input
+                                        type="text"
+                                        maxLength={150}
+                                        value={
+                                          payment
+                                            .referenceNumber
+                                        }
+                                        onChange={
+                                          (event) =>
+                                            updateInitialPaymentRow(
+                                              payment.id,
+                                              {
+                                                referenceNumber:
+                                                  event.target
+                                                    .value,
+                                              },
+                                            )
+                                        }
+                                      />
+                                    </label>
+
+                                    <label>
+                                      Notes
+
+                                      <input
+                                        type="text"
+                                        value={
+                                          payment.notes
+                                        }
+                                        onChange={
+                                          (event) =>
+                                            updateInitialPaymentRow(
+                                              payment.id,
+                                              {
+                                                notes:
+                                                  event.target
+                                                    .value,
+                                              },
+                                            )
+                                        }
+                                      />
+                                    </label>
+
+                                    <button
+                                      type="button"
+                                      className={
+                                        styles.salesSplitRemove
+                                      }
+                                      onClick={() =>
+                                        removeInitialPaymentRow(
+                                          payment.id,
+                                        )
+                                      }
+                                      aria-label={
+                                        `Remove payment ${index + 1}`
+                                      }
+                                    >
+                                      <X
+                                        size={15}
+                                      />
+                                    </button>
+                                  </article>
+                                ),
+                              )}
+                            </div>
+
+                            <div
+                              className={
+                                styles.salesSplitTotals
+                              }
+                            >
+                              <div>
+                                <span>
+                                  Invoice balance
+                                </span>
+
+                                <strong>
+                                  {money(
+                                    createdDraft
+                                      .balance_amount,
+                                  )}
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>
+                                  Paid now
+                                </span>
+
+                                <strong>
+                                  {money(
+                                    initialPaymentTotal,
+                                  )}
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>
+                                  Remaining
+                                </span>
+
+                                <strong>
+                                  {money(
+                                    Math.max(
+                                      0,
+                                      numeric(
+                                        createdDraft
+                                          .balance_amount,
+                                      )
+                                      - initialPaymentTotal,
+                                    ),
+                                  )}
+                                </strong>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </section>
@@ -4010,11 +4807,17 @@ export default function SalesPage() {
                 className={
                   styles.iconButton
                 }
-                onClick={() =>
+                onClick={() => {
                   setDetailOpen(
                     false,
-                  )
-                }
+                  );
+
+                  setDetailPaymentMode(
+                    null,
+                  );
+
+                  resetDetailPaymentRows();
+                }}
               >
                 <X size={18} />
               </button>
@@ -4250,6 +5053,439 @@ export default function SalesPage() {
                         </div>
                       </article>
                     ),
+                  )}
+                </section>
+
+
+                <section
+                  className={
+                    styles.detailSection
+                  }
+                >
+                  <div
+                    className={
+                      styles.detailPaymentActionHeader
+                    }
+                  >
+                    <div>
+                      <h3>
+                        Invoice payment actions
+                      </h3>
+
+                      <p
+                        className={
+                          styles.mutedText
+                        }
+                      >
+                        Confirm a saved draft or receive outstanding payments later.
+                      </p>
+                    </div>
+                  </div>
+
+                  {selectedInvoice
+                    .invoice_status
+                    === "draft" ? (
+                    <div
+                      className={
+                        styles.detailPaymentActions
+                      }
+                    >
+                      <button
+                        type="button"
+                        className={
+                          styles.secondaryButton
+                        }
+                        disabled={
+                          detailPaymentSaving
+                        }
+                        onClick={() =>
+                          void confirmDraftWithoutPayment()
+                        }
+                      >
+                        <Check
+                          size={15}
+                        />
+
+                        Confirm without payment
+                      </button>
+
+                      <button
+                        type="button"
+                        className={
+                          styles.primaryButton
+                        }
+                        disabled={
+                          detailPaymentSaving
+                        }
+                        onClick={
+                          openDraftConfirmPayment
+                        }
+                      >
+                        <Banknote
+                          size={15}
+                        />
+
+                        Confirm & receive payment
+                      </button>
+                    </div>
+                  ) : (
+                    selectedInvoice
+                      .invoice_status
+                      === "confirmed"
+                    && numeric(
+                      selectedInvoice
+                        .balance_amount,
+                    ) > 0
+                  ) ? (
+                    <div
+                      className={
+                        styles.detailPaymentActions
+                      }
+                    >
+                      <button
+                        type="button"
+                        className={
+                          styles.primaryButton
+                        }
+                        disabled={
+                          detailPaymentSaving
+                        }
+                        onClick={
+                          openLaterPayment
+                        }
+                      >
+                        <Banknote
+                          size={15}
+                        />
+
+                        Receive Payment
+                      </button>
+                    </div>
+                  ) : (
+                    <p
+                      className={
+                        styles.mutedText
+                      }
+                    >
+                      {selectedInvoice
+                        .payment_status
+                        === "paid"
+                        ? "This invoice is fully paid."
+                        : "No payment action is currently available."
+                      }
+                    </p>
+                  )}
+
+                  {detailPaymentMode && (
+                    <div
+                      className={
+                        styles.detailSplitPaymentPanel
+                      }
+                    >
+                      <div
+                        className={
+                          styles.detailSplitHeader
+                        }
+                      >
+                        <div>
+                          <strong>
+                            {detailPaymentMode
+                              === "confirm"
+                              ? "Confirm draft with payment"
+                              : "Receive outstanding payment"
+                            }
+                          </strong>
+
+                          <span>
+                            Add one or more payment methods.
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          className={
+                            styles.addLineButton
+                          }
+                          disabled={
+                            detailPaymentRows
+                              .length >= 10
+                            || detailPaymentSaving
+                          }
+                          onClick={
+                            addDetailPaymentRow
+                          }
+                        >
+                          <Plus
+                            size={15}
+                          />
+
+                          Add payment
+                        </button>
+                      </div>
+
+                      <div
+                        className={
+                          styles.detailSplitRows
+                        }
+                      >
+                        {detailPaymentRows.map(
+                          (
+                            payment,
+                            index,
+                          ) => (
+                            <article
+                              key={
+                                payment.id
+                              }
+                              className={
+                                styles.detailSplitRow
+                              }
+                            >
+                              <div
+                                className={
+                                  styles.salesSplitPaymentNumber
+                                }
+                              >
+                                {index + 1}
+                              </div>
+
+                              <label>
+                                Method
+
+                                <select
+                                  value={
+                                    payment
+                                      .paymentMethod
+                                  }
+                                  onChange={
+                                    (event) =>
+                                      updateDetailPaymentRow(
+                                        payment.id,
+                                        {
+                                          paymentMethod:
+                                            event.target
+                                              .value as PaymentMethod,
+                                        },
+                                      )
+                                  }
+                                >
+                                  <option value="cash">
+                                    Cash
+                                  </option>
+
+                                  <option value="card">
+                                    Card
+                                  </option>
+
+                                  <option value="bank_transfer">
+                                    Bank transfer
+                                  </option>
+
+                                  <option value="cheque">
+                                    Cheque
+                                  </option>
+
+                                  <option value="other">
+                                    Other
+                                  </option>
+                                </select>
+                              </label>
+
+                              <label>
+                                Amount
+
+                                <div
+                                  className={
+                                    styles.salesPaymentAmountControl
+                                  }
+                                >
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={
+                                      payment.amount
+                                    }
+                                    onChange={
+                                      (event) =>
+                                        updateDetailPaymentRow(
+                                          payment.id,
+                                          {
+                                            amount:
+                                              event.target
+                                                .value,
+                                          },
+                                        )
+                                    }
+                                  />
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      fillDetailPaymentBalance(
+                                        payment.id,
+                                      )
+                                    }
+                                  >
+                                    Balance
+                                  </button>
+                                </div>
+                              </label>
+
+                              <label>
+                                {payment
+                                  .paymentMethod
+                                  === "cheque"
+                                  ? "Cheque / reference no."
+                                  : "Reference"
+                                }
+
+                                <input
+                                  value={
+                                    payment
+                                      .referenceNumber
+                                  }
+                                  maxLength={150}
+                                  onChange={
+                                    (event) =>
+                                      updateDetailPaymentRow(
+                                        payment.id,
+                                        {
+                                          referenceNumber:
+                                            event.target
+                                              .value,
+                                        },
+                                      )
+                                  }
+                                />
+                              </label>
+
+                              <button
+                                type="button"
+                                className={
+                                  styles.salesSplitRemove
+                                }
+                                onClick={() =>
+                                  removeDetailPaymentRow(
+                                    payment.id,
+                                  )
+                                }
+                                aria-label={
+                                  `Remove payment ${index + 1}`
+                                }
+                              >
+                                <X
+                                  size={15}
+                                />
+                              </button>
+                            </article>
+                          ),
+                        )}
+                      </div>
+
+                      <div
+                        className={
+                          styles.salesSplitTotals
+                        }
+                      >
+                        <div>
+                          <span>
+                            Outstanding
+                          </span>
+
+                          <strong>
+                            {money(
+                              selectedInvoice
+                                .balance_amount,
+                            )}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>
+                            Paying now
+                          </span>
+
+                          <strong>
+                            {money(
+                              detailPaymentTotal,
+                            )}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>
+                            Remaining
+                          </span>
+
+                          <strong>
+                            {money(
+                              Math.max(
+                                0,
+                                numeric(
+                                  selectedInvoice
+                                    .balance_amount,
+                                )
+                                - detailPaymentTotal,
+                              ),
+                            )}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div
+                        className={
+                          styles.detailSplitFooter
+                        }
+                      >
+                        <button
+                          type="button"
+                          className={
+                            styles.secondaryButton
+                          }
+                          disabled={
+                            detailPaymentSaving
+                          }
+                          onClick={() => {
+                            setDetailPaymentMode(
+                              null,
+                            );
+
+                            resetDetailPaymentRows();
+                          }}
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="button"
+                          className={
+                            styles.primaryButton
+                          }
+                          disabled={
+                            detailPaymentSaving
+                            || detailPaymentTotal
+                              <= 0
+                            || detailPaymentTotal
+                              > numeric(
+                                  selectedInvoice
+                                    .balance_amount,
+                                )
+                          }
+                          onClick={() =>
+                            void submitDetailPayment()
+                          }
+                        >
+                          {detailPaymentSaving
+                            ? "Saving..."
+                            : detailPaymentMode
+                              === "confirm"
+                              ? "Confirm & Save Payment"
+                              : "Receive Payment"
+                          }
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </section>
 

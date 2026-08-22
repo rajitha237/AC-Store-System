@@ -1419,34 +1419,57 @@ async def confirm_invoice(
             current_user.id
         )
 
-        created_initial_payment = None
+        created_initial_payments: list[
+            CustomerPayment
+        ] = []
 
-        initial_payment = (
-            payload.initial_payment
+        initial_payments = list(
+            payload.initial_payments
         )
 
-        if initial_payment is not None:
-            if (
-                initial_payment.amount
-                > invoice.balance_amount
-            ):
-                raise HTTPException(
-                    status_code=(
-                        status.HTTP_422_UNPROCESSABLE_CONTENT
-                    ),
-                    detail=(
-                        "Initial payment cannot exceed "
-                        "customer payable balance"
-                    ),
-                )
+        # Backward compatibility for existing callers.
+        if payload.initial_payment is not None:
+            initial_payments = [
+                payload.initial_payment
+            ]
 
+        total_initial_payment = money(
+            sum(
+                (
+                    Decimal(
+                        payment.amount
+                    )
+                    for payment
+                    in initial_payments
+                ),
+                ZERO_2,
+            )
+        )
+
+        if (
+            total_initial_payment
+            > invoice.balance_amount
+        ):
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail=(
+                    "Combined initial payments cannot "
+                    "exceed customer payable balance"
+                ),
+            )
+
+        for initial_payment in initial_payments:
             payment = CustomerPayment(
                 company_id=invoice.company_id,
                 branch_id=invoice.branch_id,
                 receipt_number=None,
                 customer_id=invoice.customer_id,
                 invoice_id=invoice.id,
-                amount=initial_payment.amount,
+                amount=money(
+                    initial_payment.amount
+                ),
                 payment_method=(
                     initial_payment
                     .payment_method.value
@@ -1466,11 +1489,22 @@ async def confirm_invoice(
                 f"REC-{payment.id:06d}"
             )
 
-            created_initial_payment = payment
-
-            invoice.paid_amount = money(
-                initial_payment.amount
+            created_initial_payments.append(
+                payment
             )
+
+        invoice.paid_amount = (
+            total_initial_payment
+        )
+
+        # Preserve the legacy single-payment audit field.
+        created_initial_payment = (
+            created_initial_payments[0]
+            if len(
+                created_initial_payments
+            ) == 1
+            else None
+        )
 
         invoice.balance_amount = money(
             max(
@@ -1545,6 +1579,13 @@ async def confirm_invoice(
                     is not None
                     else None
                 ),
+                "initial_payments": [
+                    sales_payment_audit_snapshot(
+                        payment
+                    )
+                    for payment
+                    in created_initial_payments
+                ],
             },
             metadata={
                 "customer_id":
@@ -1556,9 +1597,16 @@ async def confirm_invoice(
                 "source_id":
                     invoice.source_id,
                 "initial_payment_created":
-                    (
-                        created_initial_payment
-                        is not None
+                    bool(
+                        created_initial_payments
+                    ),
+                "initial_payment_count":
+                    len(
+                        created_initial_payments
+                    ),
+                "initial_payment_total":
+                    str(
+                        total_initial_payment
                     ),
             },
         )
@@ -1577,6 +1625,236 @@ async def confirm_invoice(
         session,
         invoice.id,
     )
+
+
+async def post_split_payments(
+    session: AsyncSession,
+    *,
+    invoice_id: int,
+    payments: list,
+    current_user: User,
+) -> list[CustomerPayment]:
+    invoice = await get_invoice(
+        session,
+        invoice_id,
+    )
+
+    if invoice.invoice_status != (
+        InvoiceStatus.CONFIRMED.value
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Payments can only be posted "
+                "to confirmed invoices"
+            ),
+        )
+
+    if invoice.balance_amount <= ZERO_2:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Invoice has no outstanding balance"
+            ),
+        )
+
+    total_payment = money(
+        sum(
+            (
+                Decimal(
+                    payment.amount
+                )
+                for payment
+                in payments
+            ),
+            ZERO_2,
+        )
+    )
+
+    if total_payment > invoice.balance_amount:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Combined payments cannot exceed "
+                "invoice balance"
+            ),
+        )
+
+    customer = await get_customer(
+        session,
+        invoice.customer_id,
+    )
+
+    created_payments: list[
+        CustomerPayment
+    ] = []
+
+    invoice_before_snapshot = (
+        sales_invoice_audit_snapshot(
+            invoice
+        )
+    )
+
+    customer_before_snapshot = (
+        sales_customer_audit_snapshot(
+            customer
+        )
+    )
+
+    try:
+        for entry in payments:
+            payment = CustomerPayment(
+                company_id=invoice.company_id,
+                branch_id=invoice.branch_id,
+                receipt_number=None,
+                customer_id=invoice.customer_id,
+                invoice_id=invoice.id,
+                amount=money(
+                    entry.amount
+                ),
+                payment_method=(
+                    entry.payment_method.value
+                ),
+                reference_number=(
+                    entry.reference_number
+                ),
+                notes=entry.notes,
+                created_by_id=current_user.id,
+            )
+
+            session.add(
+                payment
+            )
+
+            await session.flush()
+
+            payment.receipt_number = (
+                f"REC-{payment.id:06d}"
+            )
+
+            created_payments.append(
+                payment
+            )
+
+        invoice.paid_amount = money(
+            Decimal(
+                invoice.paid_amount
+            )
+            + total_payment
+        )
+
+        invoice.balance_amount = money(
+            max(
+                ZERO_2,
+                Decimal(
+                    invoice.grand_total
+                )
+                - Decimal(
+                    invoice.credited_amount
+                )
+                - Decimal(
+                    invoice.trade_in_amount
+                )
+                - Decimal(
+                    invoice.paid_amount
+                ),
+            )
+        )
+
+        invoice.payment_status = (
+            PaymentStatus.PAID.value
+            if invoice.balance_amount
+            == ZERO_2
+            else PaymentStatus.PARTIAL.value
+        )
+
+        invoice.updated_by_id = (
+            current_user.id
+        )
+
+        customer.current_balance = money(
+            max(
+                ZERO_2,
+                Decimal(
+                    customer.current_balance
+                )
+                - total_payment,
+            )
+        )
+
+        await create_audit_log(
+            session=session,
+            user_id=current_user.id,
+            action=(
+                "sales.split_payment_received"
+            ),
+            module="sales",
+            entity_type="sales_invoice",
+            entity_id=invoice.id,
+            entity_reference=(
+                invoice.invoice_number
+            ),
+            description=(
+                f"Split payment received for "
+                f"{invoice.invoice_number}"
+            ),
+            before_data={
+                "invoice":
+                    invoice_before_snapshot,
+                "customer":
+                    customer_before_snapshot,
+            },
+            after_data={
+                "invoice":
+                    sales_invoice_audit_snapshot(
+                        invoice
+                    ),
+                "customer":
+                    sales_customer_audit_snapshot(
+                        customer
+                    ),
+                "payments": [
+                    sales_payment_audit_snapshot(
+                        payment
+                    )
+                    for payment
+                    in created_payments
+                ],
+            },
+            metadata={
+                "customer_id":
+                    invoice.customer_id,
+                "branch_id":
+                    invoice.branch_id,
+                "payment_count":
+                    len(
+                        created_payments
+                    ),
+                "payment_total":
+                    str(
+                        total_payment
+                    ),
+            },
+        )
+
+        await session.commit()
+
+        for payment in created_payments:
+            await session.refresh(
+                payment
+            )
+
+    except HTTPException:
+        await session.rollback()
+        raise
+
+    except Exception:
+        await session.rollback()
+        raise
+
+    return created_payments
 
 
 async def post_payment(

@@ -941,3 +941,194 @@
   color: #101828;
   font-size: 13px;
 }
+
+
+/* ==========================================================
+   QUICK SALE SPLIT PAYMENT
+   ========================================================== */
+
+.splitPaymentSection {
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+}
+
+.splitPaymentHeader {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.splitPaymentHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.splitPaymentHeader span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.paymentRows {
+  display: grid;
+  gap: 10px;
+}
+
+.paymentRow {
+  align-items: end;
+  background: #f8fafc;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns:
+    34px
+    minmax(120px, 0.8fr)
+    minmax(170px, 1fr)
+    minmax(170px, 1fr)
+    36px;
+  padding: 10px;
+}
+
+.paymentNumber {
+  align-items: center;
+  background: #eaf2f8;
+  border-radius: 999px;
+  color: #1f4e79;
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  margin-bottom: 7px;
+  width: 28px;
+}
+
+.paymentAmountControl {
+  display: flex;
+  gap: 6px;
+}
+
+.paymentAmountControl input {
+  min-width: 0;
+  width: 100%;
+}
+
+.paymentAmountControl button {
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 9px;
+  white-space: nowrap;
+}
+
+.paymentRemoveButton {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #fda29b;
+  border-radius: 8px;
+  color: #b42318;
+  cursor: pointer;
+  display: flex;
+  height: 36px;
+  justify-content: center;
+  margin-bottom: 1px;
+  width: 36px;
+}
+
+.paymentTotals {
+  background: #ffffff;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 11px 12px;
+}
+
+.paymentTotals > div,
+.paymentSummary > div {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.paymentTotals span,
+.paymentSummary span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.paymentTotals strong,
+.paymentSummary strong {
+  color: #101828;
+}
+
+.paymentSummary {
+  border-bottom: 1px solid #eaecf0;
+  display: grid;
+  gap: 7px;
+  padding: 12px 0;
+}
+
+.draftNotice {
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 8px;
+  color: #7a2e0e;
+  font-size: 12px;
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.saleActions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1.25fr;
+}
+
+.draftButton {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #98a2b3;
+  border-radius: 9px;
+  color: #344054;
+  cursor: pointer;
+  display: flex;
+  font-weight: 700;
+  gap: 7px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.draftButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 900px) {
+  .paymentRow {
+    grid-template-columns:
+      30px
+      1fr;
+  }
+
+  .paymentRow label {
+    grid-column: 2;
+  }
+
+  .paymentRemoveButton {
+    grid-column: 2;
+  }
+
+  .saleActions {
+    grid-template-columns: 1fr;
+  }
+}

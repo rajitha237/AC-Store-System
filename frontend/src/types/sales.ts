@@ -65,6 +65,7 @@ export type InitialPaymentCreate = {
 
 export type SalesInvoiceConfirmRequest = {
   initial_payment?: InitialPaymentCreate | null;
+  initial_payments?: InitialPaymentCreate[];
 };
 
 
@@ -164,6 +165,17 @@ export type SalesInvoiceDetailResponse =
     customer_phone: string;
     payments: CustomerPaymentResponse[];
   };
+
+
+export type SplitPaymentCreate = {
+  payments: InitialPaymentCreate[];
+};
+
+
+export type SplitPaymentResponse = {
+  payments: CustomerPaymentResponse[];
+  invoice: SalesInvoiceDetailResponse;
+};
 
 
 export type SalesInvoiceListResponse = {

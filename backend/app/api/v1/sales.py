@@ -20,6 +20,8 @@ from app.schemas.sales import (
     CustomerPaymentResponse,
     PaymentCreate,
     SalesInvoiceConfirmRequest,
+    SplitPaymentCreate,
+    SplitPaymentResponse,
     SalesInvoiceCreate,
     SalesInvoiceDetailResponse,
     SalesInvoiceListResponse,
@@ -32,6 +34,7 @@ from app.services.sales_service import (
     invoice_detail_response,
     list_invoices,
     post_payment,
+    post_split_payments,
 )
 
 router = APIRouter(
@@ -160,6 +163,44 @@ async def confirm_sales_invoice(
     return await invoice_detail_response(
         session,
         invoice,
+    )
+
+
+@router.post(
+    "/invoices/{invoice_id}/split-payments",
+    response_model=SplitPaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_split_payments(
+    invoice_id: int,
+    payload: SplitPaymentCreate,
+    session: DatabaseSession,
+    current_user: CanReceivePayments,
+) -> SplitPaymentResponse:
+    payments = await post_split_payments(
+        session=session,
+        invoice_id=invoice_id,
+        payments=payload.payments,
+        current_user=current_user,
+    )
+
+    invoice = await get_invoice(
+        session,
+        invoice_id,
+    )
+
+    return SplitPaymentResponse(
+        payments=[
+            CustomerPaymentResponse.model_validate(
+                payment
+            )
+            for payment
+            in payments
+        ],
+        invoice=await invoice_detail_response(
+            session,
+            invoice,
+        ),
     )
 
 

@@ -274,6 +274,28 @@ class SalesInvoiceConfirmRequest(BaseModel):
         InitialPaymentCreate | None
     ) = None
 
+    initial_payments: list[
+        InitialPaymentCreate
+    ] = Field(
+        default_factory=list,
+        max_length=10,
+    )
+
+    @model_validator(mode="after")
+    def validate_initial_payment_contract(
+        self,
+    ) -> "SalesInvoiceConfirmRequest":
+        if (
+            self.initial_payment is not None
+            and self.initial_payments
+        ):
+            raise ValueError(
+                "Use either initial_payment or "
+                "initial_payments, not both"
+            )
+
+        return self
+
 
 class SalesInvoiceItemResponse(BaseModel):
     model_config = ConfigDict(
@@ -455,6 +477,23 @@ class PaymentCreate(BaseModel):
 
         value = value.strip()
         return value or None
+
+
+class SplitPaymentCreate(BaseModel):
+    payments: list[
+        InitialPaymentCreate
+    ] = Field(
+        min_length=1,
+        max_length=10,
+    )
+
+
+class SplitPaymentResponse(BaseModel):
+    payments: list[
+        CustomerPaymentResponse
+    ]
+
+    invoice: SalesInvoiceDetailResponse
 
 
 class InvoiceStatusResponse(BaseModel):

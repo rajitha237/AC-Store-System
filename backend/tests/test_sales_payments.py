@@ -1974,3 +1974,593 @@ async def test_sales_trade_in_allowance_cannot_exceed_sale_total(
             "the invoice grand total"
         )
     )
+
+
+# ===== SPLIT PAYMENT INTEGRATION TESTS =====
+
+
+@pytest.mark.asyncio
+async def test_confirm_invoice_with_atomic_split_payments(
+    client,
+    admin_headers,
+    db_session,
+):
+    suffix = "310"
+
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    product = await create_non_serialized_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix=suffix,
+        selling_price="100000.00",
+    )
+
+    warehouse = await get_main_warehouse(
+        client,
+        admin_headers,
+    )
+
+    await receive_stock(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        suffix=suffix,
+        quantity="2.000",
+    )
+
+    branch_id = await get_main_branch_id(
+        db_session
+    )
+
+    create_response = await client.post(
+        "/api/v1/sales/invoices",
+        headers=admin_headers,
+        json={
+            "branch_id":
+                branch_id,
+            "customer_id":
+                customer["id"],
+            "invoice_discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+            "notes":
+                "Atomic split payment test",
+            "items": [
+                {
+                    "product_id":
+                        product["id"],
+                    "warehouse_id":
+                        warehouse["id"],
+                    "serial_number_id":
+                        None,
+                    "quantity":
+                        "1.000",
+                    "unit_price":
+                        "100000.00",
+                    "discount_amount":
+                        "0.00",
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201, (
+        create_response.text
+    )
+
+    draft = create_response.json()
+
+    assert (
+        draft["invoice_status"]
+        == "draft"
+    )
+
+    confirm_response = await client.post(
+        (
+            "/api/v1/sales/invoices/"
+            f"{draft['id']}/confirm"
+        ),
+        headers=admin_headers,
+        json={
+            "initial_payments": [
+                {
+                    "amount":
+                        "40000.00",
+                    "payment_method":
+                        "cash",
+                    "reference_number":
+                        "CASH-310",
+                    "notes":
+                        "Cash portion",
+                },
+                {
+                    "amount":
+                        "35000.00",
+                    "payment_method":
+                        "card",
+                    "reference_number":
+                        "CARD-310",
+                    "notes":
+                        "Card portion",
+                },
+                {
+                    "amount":
+                        "25000.00",
+                    "payment_method":
+                        "cheque",
+                    "reference_number":
+                        "CHQ-310",
+                    "notes":
+                        "Cheque portion",
+                },
+            ]
+        },
+    )
+
+    assert confirm_response.status_code == 200, (
+        confirm_response.text
+    )
+
+    confirmed = confirm_response.json()
+
+    assert (
+        confirmed["invoice_status"]
+        == "confirmed"
+    )
+
+    assert (
+        confirmed["payment_status"]
+        == "paid"
+    )
+
+    assert dec(
+        confirmed["paid_amount"]
+    ) == Decimal("100000.00")
+
+    assert dec(
+        confirmed["balance_amount"]
+    ) == Decimal("0.00")
+
+    payments_response = await client.get(
+        (
+            "/api/v1/sales/invoices/"
+            f"{draft['id']}"
+        ),
+        headers=admin_headers,
+    )
+
+    assert payments_response.status_code == 200, (
+        payments_response.text
+    )
+
+    detail = payments_response.json()
+
+    payment_methods = {
+        payment["payment_method"]
+        for payment in detail["payments"]
+    }
+
+    assert payment_methods == {
+        "cash",
+        "card",
+        "cheque",
+    }
+
+    assert len(
+        detail["payments"]
+    ) == 3
+
+    receipt_numbers = [
+        payment["receipt_number"]
+        for payment in detail["payments"]
+    ]
+
+    assert all(
+        receipt_numbers
+    )
+
+    assert len(
+        set(receipt_numbers)
+    ) == 3
+
+    customer_row = await db_session.get(
+        Customer,
+        customer["id"],
+    )
+
+    await db_session.refresh(
+        customer_row
+    )
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("0.00")
+
+
+@pytest.mark.asyncio
+async def test_confirm_then_receive_outstanding_with_split_payments(
+    client,
+    admin_headers,
+    db_session,
+):
+    suffix = "311"
+
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    product = await create_non_serialized_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix=suffix,
+        selling_price="100000.00",
+    )
+
+    warehouse = await get_main_warehouse(
+        client,
+        admin_headers,
+    )
+
+    await receive_stock(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        suffix=suffix,
+        quantity="2.000",
+    )
+
+    branch_id = await get_main_branch_id(
+        db_session
+    )
+
+    create_response = await client.post(
+        "/api/v1/sales/invoices",
+        headers=admin_headers,
+        json={
+            "branch_id":
+                branch_id,
+            "customer_id":
+                customer["id"],
+            "invoice_discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+            "notes":
+                "Pay later split test",
+            "items": [
+                {
+                    "product_id":
+                        product["id"],
+                    "warehouse_id":
+                        warehouse["id"],
+                    "serial_number_id":
+                        None,
+                    "quantity":
+                        "1.000",
+                    "unit_price":
+                        "100000.00",
+                    "discount_amount":
+                        "0.00",
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201, (
+        create_response.text
+    )
+
+    draft = create_response.json()
+
+    #
+    # Confirm with only LKR 40,000 cash.
+    #
+    confirm_response = await client.post(
+        (
+            "/api/v1/sales/invoices/"
+            f"{draft['id']}/confirm"
+        ),
+        headers=admin_headers,
+        json={
+            "initial_payments": [
+                {
+                    "amount":
+                        "40000.00",
+                    "payment_method":
+                        "cash",
+                    "reference_number":
+                        "CASH-311",
+                }
+            ]
+        },
+    )
+
+    assert confirm_response.status_code == 200, (
+        confirm_response.text
+    )
+
+    confirmed = confirm_response.json()
+
+    assert (
+        confirmed["payment_status"]
+        == "partial"
+    )
+
+    assert dec(
+        confirmed["paid_amount"]
+    ) == Decimal("40000.00")
+
+    assert dec(
+        confirmed["balance_amount"]
+    ) == Decimal("60000.00")
+
+    customer_row = await db_session.get(
+        Customer,
+        customer["id"],
+    )
+
+    await db_session.refresh(
+        customer_row
+    )
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("60000.00")
+
+    #
+    # Customer returns later:
+    # Card 35,000 + Cheque 25,000.
+    #
+    split_response = await client.post(
+        (
+            "/api/v1/sales/invoices/"
+            f"{draft['id']}/split-payments"
+        ),
+        headers=admin_headers,
+        json={
+            "payments": [
+                {
+                    "amount":
+                        "35000.00",
+                    "payment_method":
+                        "card",
+                    "reference_number":
+                        "CARD-311",
+                    "notes":
+                        "Later card payment",
+                },
+                {
+                    "amount":
+                        "25000.00",
+                    "payment_method":
+                        "cheque",
+                    "reference_number":
+                        "CHQ-311",
+                    "notes":
+                        "Later cheque payment",
+                },
+            ]
+        },
+    )
+
+    assert split_response.status_code == 201, (
+        split_response.text
+    )
+
+    result = split_response.json()
+
+    assert len(
+        result["payments"]
+    ) == 2
+
+    assert {
+        payment["payment_method"]
+        for payment in result["payments"]
+    } == {
+        "card",
+        "cheque",
+    }
+
+    invoice = result["invoice"]
+
+    assert (
+        invoice["payment_status"]
+        == "paid"
+    )
+
+    assert dec(
+        invoice["paid_amount"]
+    ) == Decimal("100000.00")
+
+    assert dec(
+        invoice["balance_amount"]
+    ) == Decimal("0.00")
+
+    await db_session.refresh(
+        customer_row
+    )
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("0.00")
+
+
+@pytest.mark.asyncio
+async def test_split_payment_overpayment_is_rejected_atomically(
+    client,
+    admin_headers,
+    db_session,
+):
+    suffix = "312"
+
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    product = await create_non_serialized_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix=suffix,
+        selling_price="100000.00",
+    )
+
+    warehouse = await get_main_warehouse(
+        client,
+        admin_headers,
+    )
+
+    await receive_stock(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        suffix=suffix,
+        quantity="2.000",
+    )
+
+    branch_id = await get_main_branch_id(
+        db_session
+    )
+
+    create_response = await client.post(
+        "/api/v1/sales/invoices",
+        headers=admin_headers,
+        json={
+            "branch_id":
+                branch_id,
+            "customer_id":
+                customer["id"],
+            "invoice_discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+            "items": [
+                {
+                    "product_id":
+                        product["id"],
+                    "warehouse_id":
+                        warehouse["id"],
+                    "serial_number_id":
+                        None,
+                    "quantity":
+                        "1.000",
+                    "unit_price":
+                        "100000.00",
+                    "discount_amount":
+                        "0.00",
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201, (
+        create_response.text
+    )
+
+    draft = create_response.json()
+
+    confirm_response = await client.post(
+        (
+            "/api/v1/sales/invoices/"
+            f"{draft['id']}/confirm"
+        ),
+        headers=admin_headers,
+        json={
+            "initial_payments": [
+                {
+                    "amount":
+                        "40000.00",
+                    "payment_method":
+                        "cash",
+                }
+            ]
+        },
+    )
+
+    assert confirm_response.status_code == 200, (
+        confirm_response.text
+    )
+
+    #
+    # Balance is 60,000.
+    # Attempting 35,000 + 30,000 = 65,000
+    # must fail before any payment record is committed.
+    #
+    response = await client.post(
+        (
+            "/api/v1/sales/invoices/"
+            f"{draft['id']}/split-payments"
+        ),
+        headers=admin_headers,
+        json={
+            "payments": [
+                {
+                    "amount":
+                        "35000.00",
+                    "payment_method":
+                        "card",
+                    "reference_number":
+                        "CARD-OVERPAY-312",
+                },
+                {
+                    "amount":
+                        "30000.00",
+                    "payment_method":
+                        "cheque",
+                    "reference_number":
+                        "CHQ-OVERPAY-312",
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 422, (
+        response.text
+    )
+
+    assert (
+        response.json()["detail"]
+        == (
+            "Combined payments cannot exceed "
+            "invoice balance"
+        )
+    )
+
+    detail_response = await client.get(
+        (
+            "/api/v1/sales/invoices/"
+            f"{draft['id']}"
+        ),
+        headers=admin_headers,
+    )
+
+    assert detail_response.status_code == 200
+
+    detail = detail_response.json()
+
+    assert dec(
+        detail["paid_amount"]
+    ) == Decimal("40000.00")
+
+    assert dec(
+        detail["balance_amount"]
+    ) == Decimal("60000.00")
+
+    assert len(
+        detail["payments"]
+    ) == 1

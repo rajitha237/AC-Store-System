@@ -303,16 +303,21 @@ export async function createDraftInvoice(
   );
 }
 
+export type QuickSalePaymentInput = {
+  amount: number;
+  payment_method: string;
+  reference_number?: string | null;
+  notes?: string | null;
+};
+
+
 export async function confirmInvoice(
   invoiceId: number,
   initialPayment:
-    | {
-        amount: number;
-        payment_method: string;
-        reference_number?: string | null;
-        notes?: string | null;
-      }
-    | null,
+    | QuickSalePaymentInput
+    | null = null,
+  initialPayments:
+    QuickSalePaymentInput[] = [],
 ): Promise<QuickSaleConfirmResponse> {
   return request<QuickSaleConfirmResponse>(
     `/sales/invoices/${invoiceId}/confirm`,
@@ -321,6 +326,33 @@ export async function confirmInvoice(
       body: JSON.stringify({
         initial_payment:
           initialPayment,
+        initial_payments:
+          initialPayments,
+      }),
+    },
+  );
+}
+
+
+export async function receiveQuickSaleSplitPayments(
+  invoiceId: number,
+  payments: QuickSalePaymentInput[],
+): Promise<{
+  payments: Array<{
+    id: number;
+    receipt_number: string;
+    amount: string;
+    payment_method: string;
+    reference_number?: string | null;
+  }>;
+  invoice: QuickSaleConfirmResponse;
+}> {
+  return request(
+    `/sales/invoices/${invoiceId}/split-payments`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        payments,
       }),
     },
   );

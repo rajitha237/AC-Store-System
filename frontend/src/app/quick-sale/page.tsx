@@ -37,6 +37,7 @@ import {
   getQuickSaleAverageCost,
   searchCustomers,
   searchProducts,
+  type QuickSalePaymentInput,
 } from "@/lib/quick-sale-api";
 
 import {
@@ -63,6 +64,19 @@ import type {
 } from "@/types/quick-sale";
 
 import styles from "./quick-sale.module.css";
+
+type QuickSalePaymentRow = {
+  id: number;
+  paymentMethod:
+    | "cash"
+    | "card"
+    | "bank_transfer"
+    | "cheque"
+    | "other";
+  amount: string;
+  referenceNumber: string;
+};
+
 
 function money(
   value:
@@ -284,6 +298,28 @@ export default function QuickSalePage() {
   });
 
   const [
+    paymentRows,
+    setPaymentRows,
+  ] = useState<
+    QuickSalePaymentRow[]
+  >([
+    {
+      id: 1,
+      paymentMethod: "cash",
+      amount: "",
+      referenceNumber: "",
+    },
+  ]);
+
+  const [
+    savedDraft,
+    setSavedDraft,
+  ] = useState<
+    QuickSaleDraftInvoice | null
+  >(null);
+
+
+  const [
     tradeInEnabled,
     setTradeInEnabled,
   ] = useState(false);
@@ -399,12 +435,40 @@ export default function QuickSalePage() {
     );
 
 
+  const paidNow =
+    paymentRows.reduce(
+      (
+        total,
+        payment,
+      ) => {
+        const amount =
+          Number(
+            payment.amount || 0,
+          );
+
+        return (
+          total
+          + (
+            Number.isFinite(amount)
+              ? Math.max(
+                  0,
+                  amount,
+                )
+              : 0
+          )
+        );
+      },
+      0,
+    );
+
   const downPayment =
+    paidNow;
+
+  const paymentRemaining =
     Math.max(
       0,
-      Number(
-        form.downPayment || 0,
-      ) || 0,
+      customerPayable
+      - paidNow,
     );
 
   const financedAmount =
@@ -881,6 +945,167 @@ export default function QuickSalePage() {
     );
   }
 
+  function addPaymentRow() {
+    setPaymentRows(
+      (current) => {
+        const nextId =
+          current.reduce(
+            (
+              highest,
+              item,
+            ) =>
+              Math.max(
+                highest,
+                item.id,
+              ),
+            0,
+          ) + 1;
+
+        return [
+          ...current,
+          {
+            id: nextId,
+            paymentMethod: "cash",
+            amount: "",
+            referenceNumber: "",
+          },
+        ];
+      },
+    );
+  }
+
+
+  function removePaymentRow(
+    id: number,
+  ) {
+    setPaymentRows(
+      (current) => {
+        if (
+          current.length <= 1
+        ) {
+          return [
+            {
+              id: current[0]?.id ?? 1,
+              paymentMethod: "cash",
+              amount: "",
+              referenceNumber: "",
+            },
+          ];
+        }
+
+        return current.filter(
+          (item) =>
+            item.id !== id,
+        );
+      },
+    );
+  }
+
+
+  function updatePaymentRow(
+    id: number,
+    patch:
+      Partial<
+        QuickSalePaymentRow
+      >,
+  ) {
+    setPaymentRows(
+      (current) =>
+        current.map(
+          (item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  ...patch,
+                }
+              : item,
+        ),
+    );
+  }
+
+
+  function fillPaymentBalance(
+    id: number,
+  ) {
+    const otherPayments =
+      paymentRows.reduce(
+        (
+          total,
+          payment,
+        ) => {
+          if (
+            payment.id === id
+          ) {
+            return total;
+          }
+
+          const amount =
+            Number(
+              payment.amount || 0,
+            );
+
+          return (
+            total
+            + (
+              Number.isFinite(
+                amount,
+              )
+                ? Math.max(
+                    0,
+                    amount,
+                  )
+                : 0
+            )
+          );
+        },
+        0,
+      );
+
+    updatePaymentRow(
+      id,
+      {
+        amount:
+          Math.max(
+            0,
+            customerPayable
+            - otherPayments,
+          ).toFixed(2),
+      },
+    );
+  }
+
+
+  function paymentInputs():
+    QuickSalePaymentInput[] {
+    return paymentRows
+      .map(
+        (payment) => ({
+          amount:
+            Math.max(
+              0,
+              Number(
+                payment.amount
+                || 0,
+              ) || 0,
+            ),
+          payment_method:
+            payment.paymentMethod,
+          reference_number:
+            payment.referenceNumber
+              .trim()
+              || null,
+          notes:
+            form.notes.trim()
+            || null,
+        }),
+      )
+      .filter(
+        (payment) =>
+          payment.amount > 0,
+      );
+  }
+
+
   async function registerCustomer() {
     if (
       !customerForm.fullName
@@ -967,7 +1192,9 @@ export default function QuickSalePage() {
     }
   }
 
-  async function completeSale() {
+  async function completeSale(
+    saveAsDraft = false,
+  ) {
     setError("");
     setSuccess("");
 
@@ -1060,11 +1287,23 @@ export default function QuickSalePage() {
     }
 
     if (
-      downPayment >
+      paidNow >
       customerPayable
     ) {
       setError(
-        "Down payment cannot exceed the customer payable balance.",
+        "Combined payments cannot exceed the customer payable balance.",
+      );
+      return;
+    }
+
+    if (
+      !saveAsDraft
+      && form.paymentMode ===
+        "cash"
+      && paidNow <= 0
+    ) {
+      setError(
+        "Enter a payment amount or use Save as Draft to collect payment later.",
       );
       return;
     }
@@ -1090,7 +1329,8 @@ export default function QuickSalePage() {
 
     try {
       const invoice =
-        await createDraftInvoice({
+        savedDraft
+        ?? await createDraftInvoice({
           branch_id:
             form.branchId,
           customer_id:
@@ -1148,31 +1388,31 @@ export default function QuickSalePage() {
             ),
         });
 
-      const initialPaymentAmount =
-        form.paymentMode ===
-        "cash"
-          ? customerPayable
-          : downPayment;
+      if (saveAsDraft) {
+        setSavedDraft(
+          invoice,
+        );
+
+        setSuccess(
+          `Draft ${invoice.invoice_number ?? `#${invoice.id}`} saved. Payment can be received later from Sales.`,
+        );
+
+        return;
+      }
+
+      const initialPayments =
+        paymentInputs();
 
       const confirmation =
         await confirmInvoice(
           invoice.id,
-          initialPaymentAmount > 0
-            ? {
-                amount:
-                  initialPaymentAmount,
-                payment_method:
-                  form.paymentMethod,
-                reference_number:
-                  form.referenceNumber
-                    .trim() ||
-                  null,
-                notes:
-                  form.notes.trim() ||
-                  null,
-              }
-            : null,
+          null,
+          initialPayments,
         );
+
+      setSavedDraft(
+        null,
+      );
 
       let plan:
         | InstallmentPlan
@@ -1266,6 +1506,16 @@ export default function QuickSalePage() {
     setStatement(null);
     setError("");
     setSuccess("");
+    setSavedDraft(null);
+
+    setPaymentRows([
+      {
+        id: 1,
+        paymentMethod: "cash",
+        amount: "",
+        referenceNumber: "",
+      },
+    ]);
 
     setTradeInEnabled(false);
 
@@ -2058,9 +2308,9 @@ export default function QuickSalePage() {
                 <CircleDollarSign
                   size={20}
                 />
-                Pay in full
+                Pay now
                 <small>
-                  Complete payment now
+                  Full or split payment
                 </small>
               </button>
 
@@ -2089,9 +2339,275 @@ export default function QuickSalePage() {
                 />
                 Installment
                 <small>
-                  Down payment + schedule
+                  Split down payment + schedule
                 </small>
               </button>
+            </div>
+
+            <div
+              className={
+                styles.splitPaymentSection
+              }
+            >
+              <div
+                className={
+                  styles.splitPaymentHeader
+                }
+              >
+                <div>
+                  <strong>
+                    Split payment
+                  </strong>
+
+                  <span>
+                    Use one or more payment methods.
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  className={
+                    styles.secondaryButton
+                  }
+                  onClick={
+                    addPaymentRow
+                  }
+                  disabled={
+                    paymentRows.length >= 10
+                  }
+                >
+                  <Plus size={16} />
+                  Add payment
+                </button>
+              </div>
+
+              <div
+                className={
+                  styles.paymentRows
+                }
+              >
+                {paymentRows.map(
+                  (
+                    payment,
+                    index,
+                  ) => (
+                    <div
+                      className={
+                        styles.paymentRow
+                      }
+                      key={payment.id}
+                    >
+                      <div
+                        className={
+                          styles.paymentNumber
+                        }
+                      >
+                        {index + 1}
+                      </div>
+
+                      <label>
+                        <span>
+                          Method
+                        </span>
+
+                        <select
+                          value={
+                            payment
+                              .paymentMethod
+                          }
+                          onChange={
+                            (event) =>
+                              updatePaymentRow(
+                                payment.id,
+                                {
+                                  paymentMethod:
+                                    event.target
+                                      .value as QuickSalePaymentRow["paymentMethod"],
+                                },
+                              )
+                          }
+                        >
+                          <option value="cash">
+                            Cash
+                          </option>
+
+                          <option value="card">
+                            Card
+                          </option>
+
+                          <option value="bank_transfer">
+                            Bank transfer
+                          </option>
+
+                          <option value="cheque">
+                            Cheque
+                          </option>
+
+                          <option value="other">
+                            Other
+                          </option>
+                        </select>
+                      </label>
+
+                      <label>
+                        <span>
+                          Amount
+                        </span>
+
+                        <div
+                          className={
+                            styles.paymentAmountControl
+                          }
+                        >
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={
+                              payment.amount
+                            }
+                            onChange={
+                              (event) =>
+                                updatePaymentRow(
+                                  payment.id,
+                                  {
+                                    amount:
+                                      event.target
+                                        .value,
+                                  },
+                                )
+                            }
+                            placeholder="0.00"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              fillPaymentBalance(
+                                payment.id,
+                              )
+                            }
+                          >
+                            Balance
+                          </button>
+                        </div>
+                      </label>
+
+                      <label>
+                        <span>
+                          {payment
+                            .paymentMethod
+                            === "cheque"
+                            ? "Cheque / reference no."
+                            : "Reference"
+                          }
+                        </span>
+
+                        <input
+                          value={
+                            payment
+                              .referenceNumber
+                          }
+                          onChange={
+                            (event) =>
+                              updatePaymentRow(
+                                payment.id,
+                                {
+                                  referenceNumber:
+                                    event.target
+                                      .value,
+                                },
+                              )
+                          }
+                          placeholder={
+                            payment
+                              .paymentMethod
+                              === "cash"
+                              ? "Optional"
+                              : "Recommended"
+                          }
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        className={
+                          styles.paymentRemoveButton
+                        }
+                        onClick={() =>
+                          removePaymentRow(
+                            payment.id,
+                          )
+                        }
+                        aria-label={
+                          `Remove payment ${index + 1}`
+                        }
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ),
+                )}
+              </div>
+
+              <div
+                className={
+                  styles.paymentTotals
+                }
+              >
+                <div>
+                  <span>
+                    Customer payable
+                  </span>
+
+                  <strong>
+                    {money(
+                      customerPayable,
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Paid now
+                  </span>
+
+                  <strong>
+                    {money(
+                      paidNow,
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Remaining
+                  </span>
+
+                  <strong>
+                    {money(
+                      paymentRemaining,
+                    )}
+                  </strong>
+                </div>
+              </div>
+
+              {savedDraft ? (
+                <div
+                  className={
+                    styles.draftNotice
+                  }
+                >
+                  Draft{" "}
+                  <strong>
+                    {savedDraft
+                      .invoice_number
+                      ?? `#${savedDraft.id}`
+                    }
+                  </strong>{" "}
+                  is saved. Confirming now will use this same draft invoice.
+                </div>
+              ) : null}
             </div>
 
             <div className={styles.formGrid}>
@@ -2123,77 +2639,9 @@ export default function QuickSalePage() {
                 />
               </label>
 
-              <label>
-                <span>
-                  Payment method
-                </span>
-
-                <select
-                  value={
-                    form.paymentMethod
-                  }
-                  onChange={(event) =>
-                    setForm(
-                      (
-                        current,
-                      ) => ({
-                        ...current,
-                        paymentMethod:
-                          event.target
-                            .value as QuickSaleFormState["paymentMethod"],
-                      }),
-                    )
-                  }
-                >
-                  <option value="cash">
-                    Cash
-                  </option>
-                  <option value="card">
-                    Card
-                  </option>
-                  <option value="bank_transfer">
-                    Bank transfer
-                  </option>
-                  <option value="cheque">
-                    Cheque
-                  </option>
-                  <option value="other">
-                    Other
-                  </option>
-                </select>
-              </label>
-
               {form.paymentMode ===
               "installment" ? (
                 <>
-                  <label>
-                    <span>
-                      Down payment
-                    </span>
-
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={
-                        form.downPayment
-                      }
-                      onChange={(event) =>
-                        setForm(
-                          (
-                            current,
-                          ) => ({
-                            ...current,
-                            downPayment:
-                              event.target
-                                .value,
-                          }),
-                        )
-                      }
-                      placeholder="0.00"
-                    />
-                  </label>
-
                   <label>
                     <span>
                       Interest %
@@ -2348,31 +2796,6 @@ export default function QuickSalePage() {
                 </>
               ) : null}
 
-              <label>
-                <span>
-                  Reference
-                </span>
-
-                <input
-                  value={
-                    form.referenceNumber
-                  }
-                  onChange={(event) =>
-                    setForm(
-                      (
-                        current,
-                      ) => ({
-                        ...current,
-                        referenceNumber:
-                          event.target
-                            .value,
-                      }),
-                    )
-                  }
-                  placeholder="Optional"
-                />
-              </label>
-
               <label className={styles.fullField}>
                 <span>
                   Sale notes
@@ -2496,6 +2919,68 @@ export default function QuickSalePage() {
               </strong>
             </div>
 
+            {tradeInAllowance > 0 ? (
+              <div
+                className={
+                  styles.financeSummary
+                }
+              >
+                <div>
+                  <span>
+                    Trade-in allowance
+                  </span>
+
+                  <strong>
+                    -{money(
+                      tradeInAllowance,
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Customer payable
+                  </span>
+
+                  <strong>
+                    {money(
+                      customerPayable,
+                    )}
+                  </strong>
+                </div>
+              </div>
+            ) : null}
+
+            <div
+              className={
+                styles.paymentSummary
+              }
+            >
+              <div>
+                <span>
+                  Paid now
+                </span>
+
+                <strong>
+                  {money(
+                    paidNow,
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Remaining
+                </span>
+
+                <strong>
+                  {money(
+                    paymentRemaining,
+                  )}
+                </strong>
+              </div>
+            </div>
+
             {form.paymentMode ===
             "installment" ? (
               <div className={styles.financeSummary}>
@@ -2558,44 +3043,98 @@ export default function QuickSalePage() {
               </div>
             ) : null}
 
-            <button
-              type="button"
-              className={styles.primaryButton}
-              disabled={
-                busy ||
-                !selectedCustomer ||
-                cart.length === 0 ||
-                cart.some(
-                  (item) =>
-                    item.averageCost !== null &&
-                    item.unitPrice <
-                      item.averageCost,
-                )
-              }
-              onClick={() =>
-                void completeSale()
+            <div
+              className={
+                styles.saleActions
               }
             >
-              {busy ? (
-                <Loader2
-                  size={19}
-                  className={styles.spin}
-                />
-              ) : (
-                <Check size={19} />
-              )}
+              <button
+                type="button"
+                className={
+                  styles.draftButton
+                }
+                disabled={
+                  busy
+                  || !selectedCustomer
+                  || cart.length === 0
+                  || Boolean(
+                    savedDraft,
+                  )
+                }
+                onClick={() =>
+                  void completeSale(
+                    true,
+                  )
+                }
+              >
+                {busy ? (
+                  <Loader2
+                    size={18}
+                    className={
+                      styles.spin
+                    }
+                  />
+                ) : (
+                  <ReceiptText
+                    size={18}
+                  />
+                )}
 
-              {form.paymentMode ===
-              "installment"
-                ? "Confirm installment sale"
-                : "Confirm & receive payment"}
-            </button>
+                {savedDraft
+                  ? "Draft saved"
+                  : "Save as Draft"
+                }
+              </button>
+
+              <button
+                type="button"
+                className={
+                  styles.primaryButton
+                }
+                disabled={
+                  busy ||
+                  !selectedCustomer ||
+                  cart.length === 0 ||
+                  paidNow >
+                    customerPayable ||
+                  cart.some(
+                    (item) =>
+                      item.averageCost !== null &&
+                      effectiveUnitPrice(
+                        item,
+                      ) <
+                        item.averageCost,
+                  )
+                }
+                onClick={() =>
+                  void completeSale(
+                    false,
+                  )
+                }
+              >
+                {busy ? (
+                  <Loader2
+                    size={19}
+                    className={
+                      styles.spin
+                    }
+                  />
+                ) : (
+                  <Check size={19} />
+                )}
+
+                {savedDraft
+                  ? "Confirm saved draft"
+                  : form.paymentMode ===
+                    "installment"
+                    ? "Confirm installment sale"
+                    : "Confirm Sale"
+                }
+              </button>
+            </div>
 
             <p className={styles.safeNote}>
-              Sale confirmation,
-              stock posting and payment
-              remain controlled by backend
-              business rules.
+              Save as Draft does not finalize stock or payment. Confirm Sale posts stock and all entered payments under backend business rules.
             </p>
           </div>
 
