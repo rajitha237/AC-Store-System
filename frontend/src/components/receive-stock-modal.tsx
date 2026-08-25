@@ -246,6 +246,12 @@ export function ReceiveStockModal({
     useState(true);
 
   const [
+    productSearch,
+    setProductSearch,
+  ] =
+    useState("");
+
+  const [
     suppliers,
     setSuppliers,
   ] =
@@ -385,10 +391,50 @@ export function ReceiveStockModal({
             setError("");
 
             try {
+              const normalizedSearch =
+                productSearch.trim();
+
+              const selected =
+                products.find(
+                  (product) =>
+                    String(
+                      product.id,
+                    )
+                    === form.productId,
+                );
+
+              const selectedLabel =
+                selected
+                  ? `${selected.product_code} — ${selected.name}`
+                  : "";
+
+              if (
+                selected
+                && (
+                  normalizedSearch
+                    === selectedLabel
+                  || normalizedSearch
+                    === selected.product_code
+                  || normalizedSearch
+                    === selected.name
+                )
+              ) {
+                if (!cancelled) {
+                  setLoadingProducts(
+                    false,
+                  );
+                }
+
+                return;
+              }
+
               const response =
                 await getProducts({
                   page: 1,
                   pageSize: 100,
+                  search:
+                    normalizedSearch
+                    || undefined,
                 });
 
               if (cancelled) {
@@ -426,7 +472,7 @@ export function ReceiveStockModal({
 
           void load();
         },
-        0,
+        250,
       );
 
     return () => {
@@ -436,7 +482,7 @@ export function ReceiveStockModal({
         timer,
       );
     };
-  }, []);
+  }, [productSearch]);
 
 
   const selectedProduct =
@@ -869,20 +915,27 @@ export function ReceiveStockModal({
                   type="search"
                   list="receive-stock-products"
                   disabled={
-                    loadingProducts
-                    || saving
+                    saving
                   }
                   placeholder={
                     loadingProducts
                       ? "Loading products..."
                       : "Search product code or name..."
                   }
-                  defaultValue=""
+                  value={
+                    productSearch
+                  }
                   onChange={
                     (event) => {
+                      const rawValue =
+                        event.target.value;
+
                       const value =
-                        event.target.value
-                          .trim();
+                        rawValue.trim();
+
+                      setProductSearch(
+                        rawValue,
+                      );
 
                       const product =
                         products.find(
@@ -898,13 +951,24 @@ export function ReceiveStockModal({
                           },
                         );
 
-                      selectProduct(
-                        product
-                          ? String(
-                              product.id,
-                            )
-                          : "",
-                      );
+                      if (product) {
+                        selectProduct(
+                          String(
+                            product.id,
+                          ),
+                        );
+                      } else {
+                        setForm(
+                          (current) => ({
+                            ...current,
+                            productId: "",
+                          }),
+                        );
+
+                        setSerialInput(
+                          "",
+                        );
+                      }
                     }
                   }
                 />

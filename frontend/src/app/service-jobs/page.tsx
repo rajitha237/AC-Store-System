@@ -1901,10 +1901,28 @@ export default function ServiceJobsPage() {
   async function searchProductOptions(
     query: string,
   ) {
+    const normalizedQuery =
+      query.trim();
+
+    if (!normalizedQuery) {
+      try {
+        await loadLookups();
+      } catch (
+        requestError
+      ) {
+        console.error(
+          "Product lookup reload failed",
+          requestError,
+        );
+      }
+
+      return;
+    }
+
     try {
       const results =
         await getSalesProducts(
-          query,
+          normalizedQuery,
         );
 
       setProducts(
