@@ -1,3 +1,4 @@
+from app.models.cash_book import ManualCashBookEntry
 from app.models.audit import AuditLog
 from app.models.access_control import (
     Permission,

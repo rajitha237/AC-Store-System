@@ -21,6 +21,7 @@ import {
   Truck,
   Building2,
   ShoppingCart,
+  BookOpenText,
 } from "lucide-react";
 
 import Link from "next/link";
@@ -110,6 +111,12 @@ const navigation = [
     icon: CreditCard,
     available: true,
   },
+{
+  label: "Cash Book",
+  href: "/cash-book",
+  icon: BookOpenText,
+  available: true,
+},
 {
     label: "Installments",
     href: "/installments",

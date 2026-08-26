@@ -1,0 +1,760 @@
+.page {
+  display: grid;
+  gap: 24px;
+  padding: 28px;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.pageHeader h1 {
+  margin: 4px 0 8px;
+  font-size: clamp(
+    1.8rem,
+    3vw,
+    2.4rem
+  );
+  line-height: 1.1;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  opacity: 0.6;
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 640px;
+  opacity: 0.7;
+  line-height: 1.6;
+}
+
+.refreshButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid
+    rgba(127, 127, 127, 0.25);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.refreshButton:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.summaryCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid
+    rgba(127, 127, 127, 0.2);
+  border-radius: 16px;
+  background:
+    rgba(127, 127, 127, 0.04);
+}
+
+.summaryIcon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background:
+    rgba(127, 127, 127, 0.1);
+}
+
+.summaryCard > div:last-child {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.summaryCard span {
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+
+.summaryCard strong {
+  overflow: hidden;
+  font-size: 1.05rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.errorBox {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid
+    rgba(220, 38, 38, 0.35);
+  border-radius: 12px;
+  background:
+    rgba(220, 38, 38, 0.08);
+}
+
+.errorBox span {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.transactionsCard {
+  overflow: hidden;
+  border: 1px solid
+    rgba(127, 127, 127, 0.2);
+  border-radius: 16px;
+  background:
+    rgba(127, 127, 127, 0.025);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  border-bottom: 1px solid
+    rgba(127, 127, 127, 0.16);
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.cardTitle h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.cardHeader p {
+  margin: 5px 0 0;
+  font-size: 0.85rem;
+  opacity: 0.65;
+}
+
+.countBadge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background:
+    rgba(127, 127, 127, 0.1);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.tableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 1100px;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid
+    rgba(127, 127, 127, 0.12);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.58;
+}
+
+.table td {
+  font-size: 0.84rem;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.numberCell {
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.descriptionCell {
+  display: grid;
+  gap: 3px;
+  min-width: 180px;
+}
+
+.descriptionCell span {
+  font-size: 0.75rem;
+  opacity: 0.58;
+}
+
+.cashInBadge,
+.cashOutBadge {
+  display: inline-flex;
+  align-items: center;
+  min-width: 70px;
+  justify-content: center;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.cashInBadge {
+  background:
+    rgba(22, 163, 74, 0.12);
+}
+
+.cashOutBadge {
+  background:
+    rgba(220, 38, 38, 0.1);
+}
+
+.stateBox {
+  display: grid;
+  place-items: center;
+  gap: 9px;
+  min-height: 220px;
+  padding: 32px;
+  text-align: center;
+}
+
+.stateBox strong,
+.stateBox p {
+  margin: 0;
+}
+
+.stateBox p {
+  max-width: 420px;
+  font-size: 0.88rem;
+  opacity: 0.65;
+}
+
+@media (
+  max-width: 1100px
+) {
+  .summaryGrid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (
+  max-width: 700px
+) {
+  .page {
+    padding: 18px;
+  }
+
+  .pageHeader,
+  .cardHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .refreshButton {
+    width: 100%;
+  }
+
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .countBadge {
+    width: fit-content;
+  }
+}
+
+/* PHASE4C2B_DATE_FILTERS_PAGINATION */
+
+.filterCard {
+  display: grid;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid
+    rgba(127, 127, 127, 0.2);
+  border-radius: 16px;
+  background:
+    rgba(127, 127, 127, 0.025);
+}
+
+.filterHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.filterHeader > div {
+  display: grid;
+  gap: 4px;
+}
+
+.filterHeader strong {
+  font-size: 0.95rem;
+}
+
+.filterHeader span {
+  font-size: 0.8rem;
+  opacity: 0.62;
+}
+
+.filterGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 220px));
+  gap: 14px;
+}
+
+.filterField {
+  display: grid;
+  gap: 7px;
+}
+
+.filterField > span {
+  font-size: 0.76rem;
+  font-weight: 700;
+  opacity: 0.68;
+}
+
+.filterField input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid
+    rgba(127, 127, 127, 0.25);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+.filterField input:focus {
+  border-color:
+    rgba(127, 127, 127, 0.55);
+}
+
+.clearFilterButton,
+.paginationActions button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid
+    rgba(127, 127, 127, 0.24);
+  border-radius: 10px;
+  background:
+    rgba(127, 127, 127, 0.06);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.clearFilterButton:hover,
+.paginationActions button:hover:not(:disabled) {
+  background:
+    rgba(127, 127, 127, 0.12);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px solid
+    rgba(127, 127, 127, 0.2);
+  border-radius: 14px;
+  background:
+    rgba(127, 127, 127, 0.025);
+}
+
+.paginationInfo {
+  display: grid;
+  gap: 3px;
+}
+
+.paginationInfo strong {
+  font-size: 0.84rem;
+}
+
+.paginationInfo span {
+  font-size: 0.76rem;
+  opacity: 0.62;
+}
+
+.paginationActions {
+  display: flex;
+  gap: 8px;
+}
+
+.paginationActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+@media (max-width: 700px) {
+  .filterHeader,
+  .pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filterGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .clearFilterButton {
+    width: 100%;
+  }
+
+  .paginationActions {
+    display: grid;
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* CASH BOOK PHASE 4D-1 */
+
+.manualActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.cashInButton,
+.cashOutButton,
+.saveButton,
+.cancelButton,
+.entryTypeButton,
+.entryTypeActive,
+.modalClose {
+  font: inherit;
+}
+
+.cashInButton,
+.cashOutButton {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.cashInButton {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.cashOutButton {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 48%);
+}
+
+.manualEntryDialog {
+  width: min(680px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--background);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 24%);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modalHeader h2 {
+  margin: 4px 0 0;
+}
+
+.modalEyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  opacity: 0.65;
+}
+
+.modalClose {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.manualEntryForm {
+  padding: 24px;
+}
+
+.entryTypeSwitch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.entryTypeButton,
+.entryTypeActive {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.entryTypeButton {
+  background: transparent;
+  color: inherit;
+}
+
+.entryTypeActive {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.formGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.formGrid input,
+.formGrid select,
+.formGrid textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  color: inherit;
+  font: inherit;
+}
+
+.formGrid textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.fullField {
+  grid-column: 1 / -1;
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.cancelButton,
+.saveButton {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.cancelButton {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+}
+
+.saveButton {
+  border: 1px solid var(--foreground);
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.cancelButton:disabled,
+.saveButton:disabled,
+.modalClose:disabled,
+.entryTypeButton:disabled,
+.entryTypeActive:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (max-width: 640px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fullField {
+    grid-column: auto;
+  }
+
+  .modalFooter {
+    flex-direction: column-reverse;
+  }
+
+  .cancelButton,
+  .saveButton {
+    width: 100%;
+  }
+}
+
+/* Cash Book manual-entry reversal */
+
+.actionCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.reverseButton {
+  border: 1px solid rgba(220, 38, 38, 0.28);
+  border-radius: 8px;
+  background: transparent;
+  padding: 7px 11px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reverseButton:hover {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.noAction {
+  opacity: 0.45;
+}
+
+.reverseDialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-radius: 18px;
+  background: var(--surface, #ffffff);
+  box-shadow:
+    0 24px 70px rgba(15, 23, 42, 0.22);
+}
+
+.reverseSummary {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 24px 20px;
+}
+
+.reverseSummary > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.10);
+  padding: 12px;
+}
+
+.reverseSummary span {
+  font-size: 0.76rem;
+  opacity: 0.65;
+}
+
+.reverseSummary strong {
+  overflow-wrap: anywhere;
+}
+
+.reverseConfirmButton {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  background: #b91c1c;
+  color: #ffffff;
+}
+
+.reverseConfirmButton:hover:not(:disabled) {
+  background: #991b1b;
+}
+
+.reverseConfirmButton:disabled,
+.reverseButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 640px) {
+  .reverseSummary {
+    grid-template-columns: 1fr;
+  }
+}
