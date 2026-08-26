@@ -3372,6 +3372,11 @@ export default function ServiceJobsPage() {
         invoice.id,
       );
 
+      const loadedInvoice =
+        await loadServiceInvoice(
+          invoice.id,
+        );
+
       await refreshDetail(
         selected.id,
       );
@@ -3379,6 +3384,45 @@ export default function ServiceJobsPage() {
       setActionMode(
         null,
       );
+
+      if (
+        serviceInvoiceTerms
+          === "now"
+        && loadedInvoice
+        && numberValue(
+          loadedInvoice
+            .balance_amount,
+        ) > 0
+      ) {
+        setServicePaymentAmount(
+          numberValue(
+            loadedInvoice
+              .balance_amount,
+          ).toFixed(
+            2,
+          ),
+        );
+
+        setServicePaymentMethod(
+          "cash",
+        );
+
+        setServicePaymentReference(
+          "",
+        );
+
+        setServicePaymentNotes(
+          "",
+        );
+
+        setError(
+          "",
+        );
+
+        setReceivePaymentOpen(
+          true,
+        );
+      }
 
       await loadJobs(
         true,
