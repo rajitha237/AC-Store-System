@@ -454,11 +454,20 @@ export default function TechnicianJobPage() {
       void writeTechnicianLocation({
         service_job_id: jobId,
         latitude:
-          position.coords.latitude,
+          Number(
+            position.coords.latitude
+              .toFixed(6),
+          ),
         longitude:
-          position.coords.longitude,
+          Number(
+            position.coords.longitude
+              .toFixed(6),
+          ),
         accuracy_meters:
-          position.coords.accuracy,
+          Number(
+            position.coords.accuracy
+              .toFixed(2),
+          ),
         client_recorded_at:
           new Date(
             position.timestamp,

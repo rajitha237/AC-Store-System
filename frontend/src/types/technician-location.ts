@@ -1,6 +1,5 @@
 export type TechnicianTrackingState =
   | "active"
-  | "paused"
   | "stopped";
 
 
@@ -8,8 +7,6 @@ export interface TechnicianLocationUpdateRequest {
   latitude: number;
   longitude: number;
   accuracy_meters?: number | null;
-  heading_degrees?: number | null;
-  speed_mps?: number | null;
   service_job_id?: number | null;
   client_recorded_at?: string | null;
   tracking_state?: TechnicianTrackingState;
@@ -23,8 +20,6 @@ export interface TechnicianLocationResponse {
   latitude: number;
   longitude: number;
   accuracy_meters?: number | null;
-  heading_degrees?: number | null;
-  speed_mps?: number | null;
   tracking_state: string;
   recorded_at?: string | null;
   created_at?: string | null;

@@ -331,15 +331,24 @@ export default function TechnicianPage() {
 
           await writeTechnicianLocation({
             latitude:
-              position.coords.latitude,
+              Number(
+                position.coords.latitude
+                  .toFixed(6),
+              ),
             longitude:
-              position.coords.longitude,
+              Number(
+                position.coords.longitude
+                  .toFixed(6),
+              ),
             accuracy_meters:
-              position.coords.accuracy,
-            heading_degrees:
-              position.coords.heading,
-            speed_mps:
-              position.coords.speed,
+              Number(
+                position.coords.accuracy
+                  .toFixed(2),
+              ),
+            client_recorded_at:
+              new Date(
+                position.timestamp,
+              ).toISOString(),
             tracking_state: "active",
           });
 
