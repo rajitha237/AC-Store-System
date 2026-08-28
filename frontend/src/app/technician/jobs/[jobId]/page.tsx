@@ -69,10 +69,13 @@ type TechnicianPartBalance = {
   product_id: number;
   warehouse_id: number;
   quantity?: string | number;
-  available_quantity?: string | number;
   product_name?: string | null;
   product_sku?: string | null;
   warehouse_name?: string | null;
+  quantity_available?:
+    | string
+    | number
+    | null;
 };
 
 
@@ -611,12 +614,144 @@ export default function TechnicianJobPage() {
     selectedPartBalance
       ? Number(
           selectedPartBalance
-            .available_quantity
-          ?? selectedPartBalance
-            .quantity
+            .quantity_available
           ?? 0,
         )
       : 0;
+
+
+  const selectedPartWarehouse =
+    useMemo(
+      () =>
+        partWarehouses.find(
+          (warehouse) =>
+            String(
+              warehouse.id,
+            ) === warehouseId,
+        ) ?? null,
+      [
+        partWarehouses,
+        warehouseId,
+      ],
+    );
+
+
+  function resolveTechnicianPart(
+    nextProductId: string,
+    products:
+      TechnicianPartProduct[] =
+        partProducts,
+    warehouses:
+      TechnicianPartWarehouse[] =
+        partWarehouses,
+    balances:
+      TechnicianPartBalance[] =
+        partBalances,
+  ) {
+    setProductId(
+      nextProductId,
+    );
+
+    setWarehouseId("");
+    setUnitPrice("");
+
+    if (!nextProductId) {
+      return;
+    }
+
+    const selectedProduct =
+      products.find(
+        (product) =>
+          String(
+            product.id,
+          ) === nextProductId,
+      );
+
+    if (selectedProduct) {
+      const productWithPrice =
+        selectedProduct as unknown as {
+          selling_price?:
+            | string
+            | number
+            | null;
+        };
+
+      const sellingPrice =
+        productWithPrice.selling_price;
+
+      if (
+        sellingPrice !== undefined
+        && sellingPrice !== null
+        && String(
+          sellingPrice,
+        ).trim() !== ""
+      ) {
+        setUnitPrice(
+          String(
+            sellingPrice,
+          ),
+        );
+      }
+    }
+
+    const bestBalance =
+      balances
+        .filter(
+          (balance) =>
+            String(
+              balance.product_id,
+            ) === nextProductId
+            && Number(
+              balance.quantity_available
+              ?? 0,
+            ) > 0,
+        )
+        .sort(
+          (
+            first,
+            second,
+          ) =>
+            Number(
+              second.quantity_available
+              ?? 0,
+            )
+            - Number(
+              first.quantity_available
+              ?? 0,
+            ),
+        )[0];
+
+    if (!bestBalance) {
+      return;
+    }
+
+    const selectedWarehouse =
+      warehouses.find(
+        (warehouse) =>
+          warehouse.id
+          === bestBalance
+            .warehouse_id
+          && warehouse.is_active
+            !== false,
+      );
+
+    if (selectedWarehouse) {
+      setWarehouseId(
+        String(
+          selectedWarehouse.id,
+        ),
+      );
+    }
+  }
+
+
+  function selectTechnicianPart(
+    nextProductId: string,
+  ) {
+    resolveTechnicianPart(
+      nextProductId,
+    );
+  }
 
 
   async function loadPartPicker() {
@@ -628,59 +763,220 @@ export default function TechnicianJobPage() {
       setPartPickerLoading(true);
       setError("");
 
-      const productResponse =
-        await getProducts({
-          page: 1,
-          pageSize: 100,
-          search:
-            partSearch.trim()
-            || undefined,
-        });
+      const cleanedSearch =
+        partSearch
+          .trim()
+          .toLowerCase();
 
-      const productCandidate =
-        productResponse as unknown as {
-          items?: TechnicianPartProduct[];
-          data?: TechnicianPartProduct[];
-          results?: TechnicianPartProduct[];
-        };
+      const [
+        searchedResponse,
+        fallbackResponse,
+        warehousesResponse,
+        balancesResponse,
+      ] =
+        await Promise.all([
+          getProducts({
+            page: 1,
+            pageSize: 100,
+            search:
+              partSearch.trim()
+              || undefined,
+          }),
+          cleanedSearch
+            ? getProducts({
+                page: 1,
+                pageSize: 100,
+              })
+            : Promise.resolve(null),
+          getWarehouses(true),
+          getStockBalances({}),
+        ]);
 
-      const products =
-        productCandidate.items
-        ?? productCandidate.data
-        ?? productCandidate.results
-        ?? [];
+      const extractProducts = (
+        response: unknown,
+      ) => {
+        if (!response) {
+          return [] as TechnicianPartProduct[];
+        }
 
-      const warehouses =
-        await getWarehouses(true);
+        const candidate =
+          response as {
+            items?:
+              TechnicianPartProduct[];
+            data?:
+              TechnicianPartProduct[];
+            results?:
+              TechnicianPartProduct[];
+          };
 
-      const balances =
-        await getStockBalances({
-          search:
-            partSearch.trim()
-            || undefined,
-        });
+        return (
+          candidate.items
+          ?? candidate.data
+          ?? candidate.results
+          ?? []
+        );
+      };
 
-      setPartProducts(
-        products.filter(
+      const searchedProducts =
+        extractProducts(
+          searchedResponse,
+        );
+
+      const fallbackProducts =
+        extractProducts(
+          fallbackResponse,
+        );
+
+      const combinedProducts =
+        [
+          ...searchedProducts,
+          ...fallbackProducts,
+        ];
+
+      const uniqueProducts =
+        Array.from(
+          new Map(
+            combinedProducts.map(
+              (product) => [
+                product.id,
+                product,
+              ],
+            ),
+          ).values(),
+        );
+
+      const activeProducts =
+        uniqueProducts.filter(
           (product) =>
             product.is_active
             !== false,
-        ),
-      );
+        );
 
-      setPartWarehouses(
+      const matchesSearch = (
+        product:
+          TechnicianPartProduct,
+      ) => {
+        if (!cleanedSearch) {
+          return true;
+        }
+
+        const searchableProduct =
+          product as unknown as {
+            id: number;
+            name?: string | null;
+            sku?: string | null;
+            product_code?:
+              string | null;
+            code?: string | null;
+            barcode?: string | null;
+          };
+
+        const values = [
+          searchableProduct.name,
+          searchableProduct.sku,
+          searchableProduct
+            .product_code,
+          searchableProduct.code,
+          searchableProduct.barcode,
+          String(
+            searchableProduct.id,
+          ),
+          `prd-${String(
+            searchableProduct.id,
+          ).padStart(
+            6,
+            "0",
+          )}`,
+        ];
+
+        return values.some(
+          (value) =>
+            String(
+              value ?? "",
+            )
+              .toLowerCase()
+              .includes(
+                cleanedSearch,
+              ),
+        );
+      };
+
+      const matchedProducts =
+        activeProducts.filter(
+          matchesSearch,
+        );
+
+      const products =
+        matchedProducts.length
+          ? matchedProducts
+          : searchedProducts.filter(
+              (product) =>
+                product.is_active
+                !== false,
+            );
+
+      const warehouses =
         (
-          warehouses as TechnicianPartWarehouse[]
+          warehousesResponse as TechnicianPartWarehouse[]
         ).filter(
           (warehouse) =>
             warehouse.is_active
             !== false,
-        ),
+        );
+
+      const balances =
+        balancesResponse as TechnicianPartBalance[];
+
+      setPartProducts(
+        products,
+      );
+
+      setPartWarehouses(
+        warehouses,
       );
 
       setPartBalances(
-        balances as TechnicianPartBalance[],
+        balances,
       );
+
+      if (products.length === 1) {
+        resolveTechnicianPart(
+          String(
+            products[0].id,
+          ),
+          products,
+          warehouses,
+          balances,
+        );
+      } else if (
+        productId
+        && products.some(
+          (product) =>
+            String(
+              product.id,
+            ) === productId,
+        )
+      ) {
+        resolveTechnicianPart(
+          productId,
+          products,
+          warehouses,
+          balances,
+        );
+      } else {
+        setProductId("");
+        setWarehouseId("");
+        setUnitPrice("");
+      }
+
+      if (
+        cleanedSearch
+        && products.length === 0
+      ) {
+        setError(
+          "No matching parts found. Search by product name, SKU, product code, or product ID.",
+        );
+      }
     } catch (requestError) {
       setError(
         apiErrorMessage(
@@ -1591,13 +1887,11 @@ export default function TechnicianJobPage() {
                     }
                     onChange={(
                       event,
-                    ) => {
-                      setProductId(
+                    ) =>
+                      selectTechnicianPart(
                         event.target.value,
-                      );
-
-                      setWarehouseId("");
-                    }}
+                      )
+                    }
                   >
                     <option value="">
                       Select part
@@ -1639,118 +1933,37 @@ export default function TechnicianJobPage() {
                   }
                 >
                   <span>
-                    Select Warehouse *
+                    Warehouse
                   </span>
 
-                  <select
-                    required
+                  <input
+                    type="text"
+                    readOnly
                     value={
-                      warehouseId
+                      selectedPartWarehouse
+                        ? selectedPartWarehouse.name
+                        : productId
+                          ? "No warehouse with available stock"
+                          : "Select a part first"
                     }
-                    disabled={
-                      !productId
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setWarehouseId(
-                        event.target.value,
-                      )
-                    }
-                  >
-                    <option value="">
-                      Select warehouse
-                    </option>
+                  />
 
-                    {partWarehouses
-                      .filter(
-                        (warehouse) =>
-                          partBalances.some(
-                            (balance) =>
-                              String(
-                                balance.product_id,
-                              ) === productId
-                              && balance.warehouse_id
-                                === warehouse.id
-                              && Number(
-                                balance.available_quantity
-                                ?? balance.quantity
-                                ?? 0,
-                              ) > 0,
-                          ),
-                      )
-                      .map(
-                        (warehouse) => {
-                          const balance =
-                            partBalances.find(
-                              (item) =>
-                                String(
-                                  item.product_id,
-                                ) === productId
-                                && item.warehouse_id
-                                  === warehouse.id,
-                            );
-
-                          const available =
-                            Number(
-                              balance
-                                ?.available_quantity
-                              ?? balance
-                                ?.quantity
-                              ?? 0,
-                            );
-
-                          return (
-                            <option
-                              key={
-                                warehouse.id
-                              }
-                              value={
-                                warehouse.id
-                              }
-                            >
-                              {warehouse.name}
-                              {" - Stock: "}
-                              {available}
-                            </option>
-                          );
-                        },
-                      )}
-                  </select>
-
-                  {productId
-                  && partWarehouses.length
-                    > 0
-                  && !partWarehouses.some(
-                    (warehouse) =>
-                      partBalances.some(
-                        (balance) =>
-                          String(
-                            balance.product_id,
-                          ) === productId
-                          && balance.warehouse_id
-                            === warehouse.id
-                          && Number(
-                            balance.available_quantity
-                            ?? balance.quantity
-                            ?? 0,
-                          ) > 0,
-                      ),
-                  ) ? (
+                  {selectedPartBalance ? (
                     <small>
-                      No available stock found
-                      for this part.
-                    </small>
-                  ) : null}
-
-                  {warehouseId ? (
-                    <small>
-                      Available stock:{" "}
+                      Auto selected · Available stock:{" "}
                       {
                         selectedAvailableQuantity
                       }
                     </small>
-                  ) : null}
+                  ) : productId ? (
+                    <small>
+                      No available stock found for this part.
+                    </small>
+                  ) : (
+                    <small>
+                      Warehouse will be selected automatically.
+                    </small>
+                  )}
                 </label>
 
                 <label
@@ -1796,6 +2009,7 @@ export default function TechnicianJobPage() {
                     value={
                       unitPrice
                     }
+                    readOnly
                     onChange={(
                       event,
                     ) =>
@@ -1804,6 +2018,10 @@ export default function TechnicianJobPage() {
                       )
                     }
                   />
+
+                  <small>
+                    Selling price is filled automatically.
+                  </small>
                 </label>
 
                 <label
