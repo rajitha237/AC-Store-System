@@ -71,6 +71,7 @@ import {
 import {
   addServiceLabour,
   addServicePart,
+  completeServiceJob,
   createServiceInvoice,
   createServiceJob,
   deleteServiceJob,
@@ -79,6 +80,7 @@ import {
   updateLegacyServiceJobStatus,
   getServiceJob,
   getServiceJobs,
+  getServiceTechnicians,
   updateServiceApproval,
   updateServiceJob,
   updateServiceStatus,
@@ -123,9 +125,11 @@ import type {
   ServiceJobStatus,
   ServiceJobUpdate,
   ServiceType,
+  TechnicianDirectoryItem,
 } from "@/types/service-jobs";
 
 import styles from "./service-jobs.module.css";
+import TechnicianLiveLocations from "@/components/technician-live-locations";
 
 
 const PAGE_SIZE = 20;
@@ -870,6 +874,7 @@ export default function ServiceJobsPage() {
       | "approval"
       | "labour"
       | "part"
+      | "complete"
       | "invoice"
       | null
     >(
@@ -890,6 +895,19 @@ export default function ServiceJobsPage() {
   const [
     actionLoading,
     setActionLoading,
+  ] =
+    useState(false);
+
+
+  const [
+    technicians,
+    setTechnicians,
+  ] =
+    useState<TechnicianDirectoryItem[]>([]);
+
+  const [
+    techniciansLoading,
+    setTechniciansLoading,
   ] =
     useState(false);
 
@@ -948,6 +966,25 @@ export default function ServiceJobsPage() {
     setEditNextServiceDate,
   ] =
     useState("");
+
+
+  const [
+    completeJobResult,
+    setCompleteJobResult,
+  ] =
+    useState("");
+
+  const [
+    completeJobNotes,
+    setCompleteJobNotes,
+  ] =
+    useState("");
+
+  const [
+    completeJobSaving,
+    setCompleteJobSaving,
+  ] =
+    useState(false);
 
 
   const [
@@ -1939,11 +1976,34 @@ export default function ServiceJobsPage() {
   }
 
 
+  async function loadTechnicians() {
+    setTechniciansLoading(
+      true,
+    );
+
+    try {
+      const result =
+        await getServiceTechnicians();
+
+      setTechnicians(
+        result,
+      );
+    } finally {
+      setTechniciansLoading(
+        false,
+      );
+    }
+  }
+
+
   async function openCreate() {
     setError("");
 
     try {
-      await loadLookups();
+      await Promise.all([
+        loadLookups(),
+        loadTechnicians(),
+      ]);
     } catch (
       requestError
     ) {
@@ -2198,8 +2258,24 @@ export default function ServiceJobsPage() {
   }
 
 
-  function openEdit() {
+  async function openEdit() {
     if (!selected) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      await loadTechnicians();
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+
       return;
     }
 
@@ -2673,6 +2749,121 @@ export default function ServiceJobsPage() {
       );
     } finally {
       setActionLoading(
+        false,
+      );
+    }
+  }
+
+
+  function openSimpleCompleteJob() {
+    if (!selected) {
+      return;
+    }
+
+    if (
+      selected.status === "ready"
+      || selected.status === "delivered"
+      || selected.status === "cancelled"
+    ) {
+      return;
+    }
+
+    setCompleteJobResult(
+      selected.work_performed
+      || selected.testing_result
+      || "",
+    );
+
+    setCompleteJobNotes("");
+    setError("");
+
+    setActionMode(
+      "complete",
+    );
+  }
+
+
+  async function submitSimpleCompleteJob(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (
+      completeJobSaving
+      || !selected
+    ) {
+      return;
+    }
+
+    const jobResult =
+      completeJobResult.trim();
+
+    if (!jobResult) {
+      setError(
+        "Enter the job result before completing the job.",
+      );
+      return;
+    }
+
+    if (
+      jobResult.length
+      > 2000
+    ) {
+      setError(
+        "Job result must be 2000 characters or less.",
+      );
+      return;
+    }
+
+    const notes =
+      completeJobNotes.trim();
+
+    if (
+      notes.length
+      > 1000
+    ) {
+      setError(
+        "Completion notes must be 1000 characters or less.",
+      );
+      return;
+    }
+
+    setCompleteJobSaving(
+      true,
+    );
+
+    setError("");
+
+    try {
+      await completeServiceJob(
+        selected.id,
+        {
+          job_result:
+            jobResult,
+          notes:
+            notes || null,
+        },
+      );
+
+      setCompleteJobResult("");
+      setCompleteJobNotes("");
+
+      setActionMode(
+        null,
+      );
+
+      await refreshDetail(selected.id);
+
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    } finally {
+      setCompleteJobSaving(
         false,
       );
     }
@@ -3473,6 +3664,8 @@ export default function ServiceJobsPage() {
 
   return (
     <AppShell user={user}>
+      <TechnicianLiveLocations />
+
       <section
         className={
           styles.pageHeader
@@ -6332,15 +6525,16 @@ export default function ServiceJobsPage() {
                   </label>
 
                   <label>
-                    Technician ID
+                    Assigned Technician
 
-                    <input
-                      type="number"
-                      min="1"
+                    <select
                       value={
                         createForm
                           .technician_id
                         ?? ""
+                      }
+                      disabled={
+                        techniciansLoading
                       }
                       onChange={
                         (event) =>
@@ -6355,7 +6549,35 @@ export default function ServiceJobsPage() {
                               ),
                           })
                       }
-                    />
+                    >
+                      <option value="">
+                        Unassigned
+                      </option>
+
+                      {technicians.map(
+                        (technician) => (
+                          <option
+                            key={
+                              technician.id
+                            }
+                            value={
+                              technician.id
+                            }
+                          >
+                            {
+                              technician
+                                .full_name
+                            }
+                            {" ("}
+                            {
+                              technician
+                                .username
+                            }
+                            {")"}
+                          </option>
+                        ),
+                      )}
+                    </select>
                   </label>
 
                   <label>
@@ -7413,6 +7635,22 @@ export default function ServiceJobsPage() {
                           Add part
                         </button>
                       )}
+
+                      {selected.status !== "ready"
+                      && selected.status !== "delivered"
+                      && selected.status !== "cancelled" ? (
+                        <button
+                          type="button"
+                          className={
+                            styles.smallButton
+                          }
+                          onClick={
+                            openSimpleCompleteJob
+                          }
+                        >
+                          Complete Job
+                        </button>
+                      ) : null}
                     </div>
 
                     {selected.parts.length
@@ -7743,13 +7981,14 @@ export default function ServiceJobsPage() {
                 === "edit" && (
                 <>
                   <label>
-                    Technician ID
+                    Assigned Technician
 
-                    <input
-                      type="number"
-                      min="1"
+                    <select
                       value={
                         editTechnicianId
+                      }
+                      disabled={
+                        techniciansLoading
                       }
                       onChange={
                         (event) =>
@@ -7759,7 +7998,35 @@ export default function ServiceJobsPage() {
                               .value,
                           )
                       }
-                    />
+                    >
+                      <option value="">
+                        Unassigned
+                      </option>
+
+                      {technicians.map(
+                        (technician) => (
+                          <option
+                            key={
+                              technician.id
+                            }
+                            value={
+                              technician.id
+                            }
+                          >
+                            {
+                              technician
+                                .full_name
+                            }
+                            {" ("}
+                            {
+                              technician
+                                .username
+                            }
+                            {")"}
+                          </option>
+                        ),
+                      )}
+                    </select>
                   </label>
 
                   <label>
@@ -8173,6 +8440,109 @@ export default function ServiceJobsPage() {
                 </>
               )}
 
+
+              {actionMode
+                === "complete" && (
+                <form
+                  onSubmit={
+                    submitSimpleCompleteJob
+                  }
+                >
+                  <div>
+                    <h3>
+                      Complete Job
+                    </h3>
+
+                    <p>
+                      Add any parts used first,
+                      then enter the final job
+                      result and complete the job.
+                    </p>
+                  </div>
+
+                  <label>
+                    Job Result *
+
+                    <textarea
+                      value={
+                        completeJobResult
+                      }
+                      onChange={(
+                        event,
+                      ) =>
+                        setCompleteJobResult(
+                          event.target.value,
+                        )
+                      }
+                      maxLength={2000}
+                      required
+                      rows={5}
+                      placeholder="Example: Replaced faulty capacitor and tested the unit successfully."
+                    />
+                  </label>
+
+                  <label>
+                    Completion Notes
+
+                    <textarea
+                      value={
+                        completeJobNotes
+                      }
+                      onChange={(
+                        event,
+                      ) =>
+                        setCompleteJobNotes(
+                          event.target.value,
+                        )
+                      }
+                      maxLength={1000}
+                      rows={3}
+                      placeholder="Optional notes"
+                    />
+                  </label>
+
+                  <div>
+                    <button
+                      type="button"
+                      disabled={
+                        completeJobSaving
+                      }
+                      onClick={() => {
+                        if (
+                          completeJobSaving
+                        ) {
+                          return;
+                        }
+
+                        setActionMode(
+                          null,
+                        );
+
+                        setCompleteJobResult(
+                          "",
+                        );
+
+                        setCompleteJobNotes(
+                          "",
+                        );
+                      }}
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={
+                        completeJobSaving
+                      }
+                    >
+                      {completeJobSaving
+                        ? "Completing..."
+                        : "Complete Job"}
+                    </button>
+                  </div>
+                </form>
+              )}
 
               {actionMode
                 === "part" && (

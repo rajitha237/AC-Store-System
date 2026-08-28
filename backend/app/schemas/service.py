@@ -145,6 +145,17 @@ class ServiceJobUpdate(BaseModel):
         return clean_optional_text(value)
 
 
+class ServiceJobCompleteRequest(BaseModel):
+    job_result: str = Field(
+        min_length=1,
+        max_length=2000,
+    )
+    notes: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
+
+
 class ServiceStatusChangeRequest(BaseModel):
     new_status: ServiceJobStatus
     remarks: str | None = Field(default=None, max_length=2000)

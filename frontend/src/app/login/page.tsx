@@ -27,6 +27,33 @@ import {
   setStoredUser,
 } from "@/lib/auth";
 
+function isTechnicianRole(
+  role: string | null | undefined,
+): boolean {
+  const normalized =
+    (role ?? "")
+      .trim()
+      .toLowerCase()
+      .replaceAll("-", "_")
+      .replaceAll(" ", "_");
+
+  return (
+    normalized === "technician"
+    || normalized === "service_technician"
+    || normalized.includes("technician")
+  );
+}
+
+
+function routeForRole(
+  role: string | null | undefined,
+): string {
+  return isTechnicianRole(role)
+    ? "/technician"
+    : "/dashboard";
+}
+
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -56,9 +83,49 @@ export default function LoginPage() {
   ] = useState("");
 
   useEffect(() => {
-    if (getAccessToken()) {
-      router.replace("/dashboard");
+    if (!getAccessToken()) {
+      return;
     }
+
+    let active = true;
+
+    const timer =
+      window.setTimeout(
+        () => {
+          void (async () => {
+            try {
+              const currentUser =
+                await getCurrentUser();
+
+              if (!active) {
+                return;
+              }
+
+              setStoredUser(
+                currentUser,
+              );
+
+              router.replace(
+                routeForRole(
+                  currentUser.role,
+                ),
+              );
+            } catch {
+              // Keep the login page available if
+              // the stored session cannot be resolved.
+            }
+          })();
+        },
+        0,
+      );
+
+    return () => {
+      active = false;
+
+      window.clearTimeout(
+        timer,
+      );
+    };
   }, [router]);
 
   async function handleSubmit(
@@ -84,7 +151,11 @@ export default function LoginPage() {
 
       setStoredUser(user);
 
-      router.replace("/dashboard");
+      router.replace(
+        routeForRole(
+          user.role,
+        ),
+      );
     } catch (requestError) {
       if (axios.isAxiosError(requestError)) {
         const detail =

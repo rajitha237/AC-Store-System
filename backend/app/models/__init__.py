@@ -180,3 +180,4 @@ from app.models.legacy_service_job import (
     LegacyServiceJob,
     LegacyServiceJobLine,
 )
+from app.models.technician_location import TechnicianLocation

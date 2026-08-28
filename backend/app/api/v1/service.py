@@ -1,8 +1,12 @@
 from typing import Annotated
 
+from sqlalchemy import select
+from pydantic import BaseModel
+
 from fastapi import (
     APIRouter,
     Depends,
+    HTTPException,
     Query,
     status,
 )
@@ -11,7 +15,7 @@ from app.api.deps import (
     DatabaseSession,
     require_permission,
 )
-from app.models import User
+from app.models import User, UserRole
 from app.models.service import (
     ServiceJobPriority,
     ServiceJobStatus,
@@ -24,6 +28,7 @@ from app.schemas.sales import (
 from app.schemas.service import (
     ServiceApprovalRequest,
     ServiceJobCreate,
+    ServiceJobCompleteRequest,
     ServiceJobDetailResponse,
     ServiceJobListResponse,
     ServiceJobUpdate,
@@ -42,13 +47,21 @@ from app.services.service import (
     add_service_part,
     build_job_detail,
     change_job_status,
+    complete_service_job,
     create_job_card,
     delete_service_job,
     get_job_card,
+    ensure_technician_job_access,
     list_job_cards,
     update_approval,
     update_job_card,
 )
+
+
+class TechnicianDirectoryItem(BaseModel):
+    id: int
+    username: str
+    full_name: str
 
 
 router = APIRouter(
@@ -87,6 +100,42 @@ CanUpdateJobs = Annotated[
 ]
 
 
+@router.get(
+    "/technicians",
+    response_model=list[TechnicianDirectoryItem],
+)
+async def list_service_technicians(
+    session: DatabaseSession,
+    current_user: CanViewJobs,
+) -> list[TechnicianDirectoryItem]:
+    if str(current_user.role) == UserRole.TECHNICIAN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Technician directory is for service management only",
+        )
+
+    result = await session.execute(
+        select(User)
+        .where(
+            User.role == UserRole.TECHNICIAN.value,
+            User.is_active.is_(True),
+        )
+        .order_by(
+            User.full_name,
+            User.id,
+        )
+    )
+
+    return [
+        TechnicianDirectoryItem(
+            id=user.id,
+            username=user.username,
+            full_name=user.full_name,
+        )
+        for user in result.scalars().all()
+    ]
+
+
 @router.post(
     "/jobs",
     response_model=ServiceJobDetailResponse,
@@ -112,7 +161,7 @@ async def create_service_job(
 )
 async def read_service_jobs(
     session: DatabaseSession,
-    _: CanViewJobs,
+    current_user: CanViewJobs,
     page: int = Query(
         default=1,
         ge=1,
@@ -139,6 +188,13 @@ async def read_service_jobs(
     ),
     warranty_only: bool = False,
 ) -> ServiceJobListResponse:
+    effective_technician_id = (
+        current_user.id
+        if str(current_user.role)
+        == "technician"
+        else technician_id
+    )
+
     return await list_job_cards(
         session=session,
         page=page,
@@ -159,7 +215,7 @@ async def read_service_jobs(
             if priority is not None
             else None
         ),
-        technician_id=technician_id,
+        technician_id=effective_technician_id,
         customer_id=customer_id,
         warranty_only=warranty_only,
     )
@@ -188,11 +244,16 @@ async def delete_service_job_record(
 async def read_service_job(
     job_id: int,
     session: DatabaseSession,
-    _: CanViewJobs,
+    current_user: CanViewJobs,
 ) -> ServiceJobDetailResponse:
     job = await get_job_card(
         session,
         job_id,
+    )
+
+    ensure_technician_job_access(
+        job,
+        current_user,
     )
 
     return await build_job_detail(job)
@@ -209,6 +270,26 @@ async def patch_service_job(
     current_user: CanUpdateJobs,
 ) -> ServiceJobDetailResponse:
     job = await update_job_card(
+        session=session,
+        job_id=job_id,
+        payload=payload,
+        current_user=current_user,
+    )
+
+    return await build_job_detail(job)
+
+
+@router.post(
+    "/jobs/{job_id}/complete",
+    response_model=ServiceJobDetailResponse,
+)
+async def complete_service_job_route(
+    job_id: int,
+    payload: ServiceJobCompleteRequest,
+    session: DatabaseSession,
+    current_user: CanUpdateJobs,
+) -> ServiceJobDetailResponse:
+    job = await complete_service_job(
         session=session,
         job_id=job_id,
         payload=payload,

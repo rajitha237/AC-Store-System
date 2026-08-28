@@ -153,6 +153,15 @@ export type ServiceApprovalRequest = {
 };
 
 
+export type ServiceJobCompleteRequest = {
+  job_result:
+    string;
+
+  notes?:
+    string | null;
+};
+
+
 export type ServiceStatusChangeRequest = {
   new_status:
     ServiceJobStatus;
@@ -629,3 +638,10 @@ export type LegacyServiceJobStatusUpdateResponse = {
   status_updated_at: string;
   status_updated_by_id: number | null;
 };
+
+
+export interface TechnicianDirectoryItem {
+  id: number;
+  username: string;
+  full_name: string;
+}

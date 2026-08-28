@@ -60,6 +60,8 @@ from app.api.v1.legacy_grns import (
 
 from app.api.v1 import cash_book
 
+from app.api.v1.technician_location import router as technician_location_router
+
 api_router = APIRouter()
 
 api_router.include_router(
@@ -136,3 +138,7 @@ api_router.include_router(
     legacy_grns_router
 )
 api_router.include_router(cash_book.router)
+
+api_router.include_router(
+    technician_location_router
+)

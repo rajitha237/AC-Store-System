@@ -32,6 +32,7 @@ from app.services.sms import queue_customer_service_status_notification
 from app.schemas.service import (
     ServiceApprovalRequest,
     ServiceJobCreate,
+    ServiceJobCompleteRequest,
     ServiceJobDetailResponse,
     ServiceJobListResponse,
     ServiceJobStatusHistoryResponse,
@@ -773,6 +774,11 @@ async def delete_service_job(
         job_id,
     )
 
+    ensure_technician_job_access(
+        job,
+        current_user,
+    )
+
     if job.related_invoice_id is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -816,6 +822,37 @@ async def delete_service_job(
         await session.rollback()
         raise
 
+
+
+def is_technician_user(
+    user: User,
+) -> bool:
+    return (
+        str(user.role)
+        == "technician"
+    )
+
+
+def ensure_technician_job_access(
+    job: ServiceJobCard,
+    current_user: User,
+) -> None:
+    if (
+        is_technician_user(
+            current_user
+        )
+        and job.technician_id
+        != current_user.id
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_403_FORBIDDEN
+            ),
+            detail=(
+                "Technicians can only access "
+                "service jobs assigned to them"
+            ),
+        )
 
 
 async def get_job_card(
@@ -929,6 +966,11 @@ async def add_service_part(
     job = await get_job_card(
         session,
         job_id,
+    )
+
+    ensure_technician_job_access(
+        job,
+        current_user,
     )
 
     if job.status not in (
@@ -1098,6 +1140,11 @@ async def add_service_labour(
         job_id,
     )
 
+    ensure_technician_job_access(
+        job,
+        current_user,
+    )
+
     if job.status not in (
         LABOUR_ALLOWED_STATUSES
     ):
@@ -1160,6 +1207,11 @@ async def update_job_card(
         job_id,
     )
 
+    ensure_technician_job_access(
+        job,
+        current_user,
+    )
+
     if job.status in {
         ServiceJobStatus.DELIVERED.value,
         ServiceJobStatus.CANCELLED.value,
@@ -1175,6 +1227,23 @@ async def update_job_card(
     update_data = payload.model_dump(
         exclude_unset=True
     )
+
+    if (
+        is_technician_user(
+            current_user
+        )
+        and "technician_id"
+        in update_data
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_403_FORBIDDEN
+            ),
+            detail=(
+                "Technicians cannot reassign "
+                "service jobs"
+            ),
+        )
 
     if "technician_id" in update_data:
         technician_id = update_data[
@@ -1286,6 +1355,105 @@ def validate_status_transition(
         )
 
 
+async def complete_service_job(
+    session: AsyncSession,
+    job_id: int,
+    payload: ServiceJobCompleteRequest,
+    current_user: User,
+) -> ServiceJobCard:
+    job = await get_job_card(
+        session,
+        job_id,
+    )
+
+    ensure_technician_job_access(
+        job,
+        current_user,
+    )
+
+    if job.status in {
+        ServiceJobStatus.READY.value,
+        ServiceJobStatus.DELIVERED.value,
+        ServiceJobStatus.CANCELLED.value,
+    }:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=(
+                "Completed, delivered or cancelled "
+                "service jobs cannot be completed again"
+            ),
+        )
+
+    result = payload.job_result.strip()
+
+    if not result:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Job result is required "
+                "before completion"
+            ),
+        )
+
+    old_status = job.status
+
+    now = datetime.now(
+        timezone.utc
+    )
+
+    job.work_performed = result
+    job.testing_result = result
+    job.status = (
+        ServiceJobStatus.READY.value
+    )
+    job.completed_at = now
+    job.updated_by_id = (
+        current_user.id
+    )
+
+    remarks = (
+        payload.notes.strip()
+        if payload.notes
+        and payload.notes.strip()
+        else "Completed using simplified technician workflow"
+    )
+
+    history = ServiceJobStatusHistory(
+        job_card_id=job.id,
+        old_status=old_status,
+        new_status=(
+            ServiceJobStatus.READY.value
+        ),
+        remarks=remarks,
+        changed_by_id=current_user.id,
+    )
+
+    session.add(history)
+
+    await queue_customer_service_status_notification(
+        session,
+        job=job,
+        status_value=(
+            ServiceJobStatus.READY.value
+        ),
+    )
+
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    return await get_job_card(
+        session,
+        job.id,
+    )
+
+
 async def change_job_status(
     session: AsyncSession,
     job_id: int,
@@ -1295,6 +1463,11 @@ async def change_job_status(
     job = await get_job_card(
         session,
         job_id,
+    )
+
+    ensure_technician_job_access(
+        job,
+        current_user,
     )
 
     old_status = job.status
@@ -1428,6 +1601,11 @@ async def update_approval(
     job = await get_job_card(
         session,
         job_id,
+    )
+
+    ensure_technician_job_access(
+        job,
+        current_user,
     )
 
     if job.status in {

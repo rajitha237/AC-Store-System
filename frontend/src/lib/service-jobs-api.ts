@@ -15,6 +15,7 @@ import {
 import type {
   ServiceApprovalRequest,
   ServiceJobCreate,
+  ServiceJobCompleteRequest,
   ServiceJobDetailResponse,
   ServiceJobListParams,
   ServiceJobListResponse,
@@ -22,7 +23,19 @@ import type {
   ServiceLabourCreate,
   ServicePartCreate,
   ServiceStatusChangeRequest,
+  TechnicianDirectoryItem,
 } from "@/types/service-jobs";
+
+
+export async function getServiceTechnicians():
+  Promise<TechnicianDirectoryItem[]> {
+  const response =
+    await api.get<TechnicianDirectoryItem[]>(
+      "/service/technicians",
+    );
+
+  return response.data;
+}
 
 
 export async function getServiceJobs(
@@ -136,6 +149,27 @@ export async function updateServiceJob(
       ServiceJobDetailResponse
     >(
       `/service/jobs/${jobId}`,
+      payload,
+    );
+
+  return response.data;
+}
+
+
+export async function completeServiceJob(
+  jobId:
+    number,
+
+  payload:
+    ServiceJobCompleteRequest,
+): Promise<
+  ServiceJobDetailResponse
+> {
+  const response =
+    await api.post<
+      ServiceJobDetailResponse
+    >(
+      `/service/jobs/${jobId}/complete`,
       payload,
     );
 
