@@ -16,12 +16,14 @@ import {
 } from "react";
 
 import {
+  getCompletedServiceJobLocations,
   getTechnicianLocations,
 } from "@/lib/technician-location-api";
 
 import TechnicianLiveMap from "@/components/technician-live-map";
 
 import type {
+  CompletedServiceJobLocationResponse,
   TechnicianLocationAdminResponse,
 } from "@/types/technician-location";
 
@@ -94,6 +96,13 @@ export default function TechnicianLiveLocations() {
   >([]);
 
   const [
+    completedJobLocations,
+    setCompletedJobLocations,
+  ] = useState<
+    CompletedServiceJobLocationResponse[]
+  >([]);
+
+  const [
     loading,
     setLoading,
   ] = useState(true);
@@ -121,10 +130,18 @@ export default function TechnicianLiveLocations() {
 
           setError("");
 
-          const response =
-            await getTechnicianLocations();
+          const [
+            locationResponse,
+            completedJobResponse,
+          ] = await Promise.all([
+            getTechnicianLocations(),
+            getCompletedServiceJobLocations(),
+          ]);
 
-          setLocations(response);
+          setLocations(locationResponse);
+          setCompletedJobLocations(
+            completedJobResponse,
+          );
         } catch (requestError) {
           const message =
             requestError instanceof Error
@@ -257,6 +274,9 @@ export default function TechnicianLiveLocations() {
 
       <TechnicianLiveMap
         locations={locations}
+        completedJobLocations={
+          completedJobLocations
+        }
       />
 
       {error ? (

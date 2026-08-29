@@ -1173,6 +1173,51 @@ export default function TechnicianJobPage() {
       setCompleteSaving(true);
       setError("");
 
+      if (!navigator.geolocation) {
+        throw new Error(
+          "Current location is required to complete this job. Location services are not available on this device.",
+        );
+      }
+
+      const completionPosition =
+        await new Promise<GeolocationPosition>(
+          (resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+              resolve,
+              reject,
+              {
+                enableHighAccuracy: true,
+                timeout: 20000,
+                maximumAge: 0,
+              },
+            );
+          },
+        );
+
+      await writeTechnicianLocation({
+        service_job_id: job.id,
+        latitude:
+          Number(
+            completionPosition.coords.latitude
+              .toFixed(6),
+          ),
+        longitude:
+          Number(
+            completionPosition.coords.longitude
+              .toFixed(6),
+          ),
+        accuracy_meters:
+          Number(
+            completionPosition.coords.accuracy
+              .toFixed(2),
+          ),
+        client_recorded_at:
+          new Date(
+            completionPosition.timestamp,
+          ).toISOString(),
+        tracking_state: "active",
+      });
+
       await completeServiceJob(
         job.id,
         {

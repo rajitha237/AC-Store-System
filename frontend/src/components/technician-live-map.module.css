@@ -94,6 +94,10 @@
   background: #64748b;
 }
 
+.completedDot {
+  background: #7c3aed;
+}
+
 .mapFrame {
   position: relative;
   height: 430px;
@@ -183,11 +187,32 @@
   color: #2563eb;
 }
 
+.completedPopupAvatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
 .popupStatus {
   display: inline-flex;
   margin-top: 11px;
   padding: 5px 8px;
   border-radius: 999px;
+  font-size: 0.69rem;
+  font-weight: 800;
+}
+
+.completedStatus {
+  display: inline-flex;
+  margin-top: 11px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #f3e8ff;
+  color: #6d28d9;
   font-size: 0.69rem;
   font-weight: 800;
 }

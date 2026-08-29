@@ -20,8 +20,10 @@ from app.models import (
     ServiceJobPart,
     ServiceJobStatus,
     ServiceJobStatusHistory,
+    ServiceJobLocationRecord,
     ServiceLabourItem,
     StockItem,
+    TechnicianLocation,
     StockMovement,
     User,
     Warehouse,
@@ -1399,6 +1401,58 @@ async def complete_service_job(
             ),
         )
 
+    completion_location = None
+
+    if str(current_user.role) == "technician":
+        location_result = await session.execute(
+            select(
+                TechnicianLocation
+            ).where(
+                TechnicianLocation
+                .technician_id
+                == current_user.id
+            )
+        )
+
+        completion_location = (
+            location_result
+            .scalar_one_or_none()
+        )
+
+        if (
+            completion_location is None
+            or completion_location.latitude
+            is None
+            or completion_location.longitude
+            is None
+        ):
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_409_CONFLICT
+                ),
+                detail=(
+                    "Current technician location "
+                    "is required before completing "
+                    "the service job"
+                ),
+            )
+
+        if (
+            completion_location
+            .service_job_id
+            != job.id
+        ):
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_409_CONFLICT
+                ),
+                detail=(
+                    "Current technician location "
+                    "must be associated with this "
+                    "service job before completion"
+                ),
+            )
+
     old_status = job.status
 
     now = datetime.now(
@@ -1433,6 +1487,62 @@ async def complete_service_job(
     )
 
     session.add(history)
+
+    if completion_location is not None:
+        existing_snapshot_result = (
+            await session.execute(
+                select(
+                    ServiceJobLocationRecord
+                ).where(
+                    ServiceJobLocationRecord
+                    .service_job_id
+                    == job.id
+                )
+            )
+        )
+
+        existing_snapshot = (
+            existing_snapshot_result
+            .scalar_one_or_none()
+        )
+
+        if existing_snapshot is not None:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_409_CONFLICT
+                ),
+                detail=(
+                    "A completion location record "
+                    "already exists for this "
+                    "service job"
+                ),
+            )
+
+        completion_snapshot = (
+            ServiceJobLocationRecord(
+                service_job_id=job.id,
+                technician_id=(
+                    current_user.id
+                ),
+                latitude=(
+                    completion_location
+                    .latitude
+                ),
+                longitude=(
+                    completion_location
+                    .longitude
+                ),
+                accuracy_meters=(
+                    completion_location
+                    .accuracy_meters
+                ),
+                completed_at=now,
+            )
+        )
+
+        session.add(
+            completion_snapshot
+        )
 
     await queue_customer_service_status_notification(
         session,

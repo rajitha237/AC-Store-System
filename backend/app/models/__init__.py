@@ -181,3 +181,5 @@ from app.models.legacy_service_job import (
     LegacyServiceJobLine,
 )
 from app.models.technician_location import TechnicianLocation
+
+from app.models.service_job_location_record import ServiceJobLocationRecord

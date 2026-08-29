@@ -14,10 +14,12 @@ from sqlalchemy.ext.asyncio import (
 
 from app.models import (
     ServiceJobCard,
+    ServiceJobLocationRecord,
     TechnicianLocation,
     User,
 )
 from app.schemas.technician_location import (
+    CompletedServiceJobLocationResponse,
     TechnicianLocationAdminResponse,
     TechnicianLocationResponse,
     TechnicianLocationUpdateRequest,
@@ -385,3 +387,74 @@ async def list_technician_locations(
         )
 
     return response
+
+
+async def list_completed_service_job_locations(
+    session: AsyncSession,
+) -> list[CompletedServiceJobLocationResponse]:
+    result = await session.execute(
+        select(
+            ServiceJobLocationRecord,
+            ServiceJobCard.job_number,
+            User.full_name,
+        )
+        .join(
+            ServiceJobCard,
+            ServiceJobCard.id
+            == ServiceJobLocationRecord.service_job_id,
+        )
+        .join(
+            User,
+            User.id
+            == ServiceJobLocationRecord.technician_id,
+        )
+        .order_by(
+            ServiceJobLocationRecord.completed_at.desc(),
+            ServiceJobLocationRecord.id.desc(),
+        )
+    )
+
+    records: list[
+        CompletedServiceJobLocationResponse
+    ] = []
+
+    for (
+        location,
+        job_number,
+        technician_name,
+    ) in result.all():
+        records.append(
+            CompletedServiceJobLocationResponse(
+                id=location.id,
+                service_job_id=(
+                    location.service_job_id
+                ),
+                service_job_number=(
+                    job_number
+                    or f"JOB-{location.service_job_id}"
+                ),
+                technician_id=(
+                    location.technician_id
+                ),
+                technician_name=(
+                    technician_name
+                    or (
+                        "Technician "
+                        f"#{location.technician_id}"
+                    )
+                ),
+                latitude=location.latitude,
+                longitude=location.longitude,
+                accuracy_meters=(
+                    location.accuracy_meters
+                ),
+                completed_at=(
+                    location.completed_at
+                ),
+                recorded_at=(
+                    location.recorded_at
+                ),
+            )
+        )
+
+    return records

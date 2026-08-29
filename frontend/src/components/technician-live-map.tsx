@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 
 import type {
+  CompletedServiceJobLocationResponse,
   TechnicianLocationAdminResponse,
 } from "@/types/technician-location";
 
@@ -12,6 +13,9 @@ import styles from "./technician-live-map.module.css";
 interface TechnicianLiveMapProps {
   locations:
     TechnicianLocationAdminResponse[];
+
+  completedJobLocations:
+    CompletedServiceJobLocationResponse[];
 }
 
 
@@ -38,10 +42,14 @@ const TechnicianLiveMapClient =
 
 export default function TechnicianLiveMap({
   locations,
+  completedJobLocations,
 }: TechnicianLiveMapProps) {
   return (
     <TechnicianLiveMapClient
       locations={locations}
+      completedJobLocations={
+        completedJobLocations
+      }
     />
   );
 }

@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 
 import type {
+  CompletedServiceJobLocationResponse,
   TechnicianLocationAdminResponse,
 } from "@/types/technician-location";
 
@@ -39,12 +40,23 @@ import styles from "./technician-live-map.module.css";
 interface TechnicianLiveMapClientProps {
   locations:
     TechnicianLocationAdminResponse[];
+
+  completedJobLocations:
+    CompletedServiceJobLocationResponse[];
 }
 
 
 interface ValidMapLocation {
   location:
     TechnicianLocationAdminResponse;
+
+  latitude: number;
+  longitude: number;
+}
+
+interface ValidCompletedJobLocation {
+  location:
+    CompletedServiceJobLocationResponse;
 
   latitude: number;
   longitude: number;
@@ -170,6 +182,7 @@ function FitTechnicianLocations({
 
 export default function TechnicianLiveMapClient({
   locations,
+  completedJobLocations,
 }: TechnicianLiveMapClientProps) {
   const mapLocations =
     useMemo<ValidMapLocation[]>(
@@ -213,9 +226,84 @@ export default function TechnicianLiveMapClient({
       [locations],
     );
 
+  const completedMapLocations =
+    useMemo<ValidCompletedJobLocation[]>(
+      () =>
+        completedJobLocations.flatMap(
+          (location) => {
+            const latitude =
+              Number(location.latitude);
+
+            const longitude =
+              Number(location.longitude);
+
+            if (
+              !Number.isFinite(latitude)
+              || !Number.isFinite(longitude)
+              || latitude < -90
+              || latitude > 90
+              || longitude < -180
+              || longitude > 180
+            ) {
+              return [];
+            }
+
+            return [
+              {
+                location,
+                latitude,
+                longitude,
+              },
+            ];
+          },
+        ),
+      [completedJobLocations],
+    );
+
+  const fitLocations =
+    useMemo<ValidMapLocation[]>(
+      () => [
+        ...mapLocations,
+        ...completedMapLocations.map(
+          ({
+            location,
+            latitude,
+            longitude,
+          }) => ({
+            location: {
+              id: location.id,
+              technician_id:
+                location.technician_id,
+              service_job_id:
+                location.service_job_id,
+              latitude,
+              longitude,
+              accuracy_meters:
+                location.accuracy_meters,
+              tracking_state: "stopped",
+              recorded_at:
+                location.recorded_at,
+              technician_name:
+                location.technician_name,
+              service_job_number:
+                location.service_job_number,
+              presence_status: "offline" as const,
+              age_seconds: 0,
+            },
+            latitude,
+            longitude,
+          }),
+        ),
+      ],
+      [
+        mapLocations,
+        completedMapLocations,
+      ],
+    );
+
 
   if (
-    mapLocations.length === 0
+    fitLocations.length === 0
   ) {
     return (
       <div
@@ -317,6 +405,15 @@ export default function TechnicianLiveMapClient({
             />
             Offline
           </span>
+
+          <span>
+            <i
+              className={
+                styles.completedDot
+              }
+            />
+            Completed Job
+          </span>
         </div>
       </div>
 
@@ -327,9 +424,9 @@ export default function TechnicianLiveMapClient({
       >
         <MapContainer
           center={[
-            mapLocations[0]
+            fitLocations[0]
               .latitude,
-            mapLocations[0]
+            fitLocations[0]
               .longitude,
           ]}
           zoom={13}
@@ -349,7 +446,7 @@ export default function TechnicianLiveMapClient({
 
           <FitTechnicianLocations
             locations={
-              mapLocations
+              fitLocations
             }
           />
 
@@ -597,6 +694,235 @@ export default function TechnicianLiveMapClient({
               );
             },
           )}
+
+          {completedMapLocations.map(
+            ({
+              location,
+              latitude,
+              longitude,
+            }) => {
+              const accuracy =
+                Number(
+                  location.accuracy_meters,
+                );
+
+              const validAccuracy =
+                Number.isFinite(accuracy)
+                && accuracy > 0;
+
+              const completedAt =
+                new Date(
+                  location.completed_at,
+                );
+
+              const completedAtLabel =
+                Number.isNaN(
+                  completedAt.getTime(),
+                )
+                  ? location.completed_at
+                  : completedAt
+                      .toLocaleString();
+
+              return (
+                <CircleMarker
+                  key={
+                    `completed-${location.id}`
+                  }
+                  center={[
+                    latitude,
+                    longitude,
+                  ]}
+                  radius={9}
+                  pathOptions={{
+                    color: "#ffffff",
+                    fillColor: "#7c3aed",
+                    fillOpacity: 1,
+                    weight: 3,
+                  }}
+                >
+                  <Tooltip
+                    direction="top"
+                    offset={[0, -7]}
+                  >
+                    <strong>
+                      {
+                        location
+                          .service_job_number
+                      }
+                    </strong>
+
+                    <br />
+
+                    Completed Job
+                  </Tooltip>
+
+                  <Popup
+                    minWidth={240}
+                    maxWidth={310}
+                  >
+                    <div
+                      className={
+                        styles.popup
+                      }
+                    >
+                      <div
+                        className={
+                          styles.popupHeader
+                        }
+                      >
+                        <div
+                          className={
+                            styles
+                              .completedPopupAvatar
+                          }
+                        >
+                          <Wrench
+                            size={18}
+                          />
+                        </div>
+
+                        <div>
+                          <strong>
+                            {
+                              location
+                                .service_job_number
+                            }
+                          </strong>
+
+                          <span>
+                            Completed Job
+                          </span>
+                        </div>
+                      </div>
+
+                      <div
+                        className={
+                          styles.completedStatus
+                        }
+                      >
+                        Completed
+                      </div>
+
+                      <div
+                        className={
+                          styles.popupRow
+                        }
+                      >
+                        <UserRound
+                          size={15}
+                        />
+
+                        <span>
+                          {
+                            location
+                              .technician_name
+                          }
+                        </span>
+                      </div>
+
+                      <div
+                        className={
+                          styles.popupRow
+                        }
+                      >
+                        <Wrench
+                          size={15}
+                        />
+
+                        <span>
+                          {
+                            location
+                              .service_job_number
+                          }
+                        </span>
+                      </div>
+
+                      <div
+                        className={
+                          styles.popupRow
+                        }
+                      >
+                        <LocateFixed
+                          size={15}
+                        />
+
+                        <span>
+                          Completed:{" "}
+                          {
+                            completedAtLabel
+                          }
+                        </span>
+                      </div>
+
+                      <div
+                        className={
+                          styles.popupRow
+                        }
+                      >
+                        <Navigation
+                          size={15}
+                        />
+
+                        <span>
+                          {
+                            latitude
+                              .toFixed(6)
+                          }
+                          {", "}
+                          {
+                            longitude
+                              .toFixed(6)
+                          }
+                        </span>
+                      </div>
+
+                      {validAccuracy ? (
+                        <div
+                          className={
+                            styles.popupRow
+                          }
+                        >
+                          <LocateFixed
+                            size={15}
+                          />
+
+                          <span>
+                            Accuracy ±
+                            {
+                              Math.round(
+                                accuracy,
+                              )
+                            }
+                            m
+                          </span>
+                        </div>
+                      ) : null}
+
+                      <a
+                        href={
+                          googleMapsUrl(
+                            latitude,
+                            longitude,
+                          )
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className={
+                          styles.popupAction
+                        }
+                      >
+                        <ExternalLink
+                          size={15}
+                        />
+                        Open in Google Maps
+                      </a>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            },
+          )}
+
         </MapContainer>
       </div>
     </div>

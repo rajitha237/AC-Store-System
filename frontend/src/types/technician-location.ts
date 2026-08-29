@@ -39,3 +39,16 @@ export interface TechnicianLocationAdminResponse
   presence_status: TechnicianLocationPresenceStatus;
   age_seconds: number;
 }
+
+export interface CompletedServiceJobLocationResponse {
+  id: number;
+  service_job_id: number;
+  service_job_number: string;
+  technician_id: number;
+  technician_name: string;
+  latitude: number;
+  longitude: number;
+  accuracy_meters?: number | null;
+  completed_at: string;
+  recorded_at: string;
+}

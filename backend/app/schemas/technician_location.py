@@ -143,3 +143,20 @@ class TechnicianLocationAdminResponse(
     ]
 
     age_seconds: int
+
+
+class CompletedServiceJobLocationResponse(BaseModel):
+    id: int
+    service_job_id: int
+    service_job_number: str
+    technician_id: int
+    technician_name: str
+    latitude: Decimal
+    longitude: Decimal
+    accuracy_meters: Decimal | None = None
+    completed_at: datetime
+    recorded_at: datetime
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )

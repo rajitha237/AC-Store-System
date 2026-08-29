@@ -3,6 +3,7 @@ import {
 } from "@/lib/api";
 
 import type {
+  CompletedServiceJobLocationResponse,
   TechnicianLocationAdminResponse,
   TechnicianLocationResponse,
   TechnicianLocationUpdateRequest,
@@ -27,6 +28,16 @@ export async function getTechnicianLocations():
   const response =
     await api.get<TechnicianLocationAdminResponse[]>(
       "/service/technicians/locations",
+    );
+
+  return response.data;
+}
+
+export async function getCompletedServiceJobLocations():
+  Promise<CompletedServiceJobLocationResponse[]> {
+  const response =
+    await api.get<CompletedServiceJobLocationResponse[]>(
+      "/service/jobs/completed/locations",
     );
 
   return response.data;
