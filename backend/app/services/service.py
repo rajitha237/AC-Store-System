@@ -975,8 +975,14 @@ async def add_service_part(
         current_user,
     )
 
-    if job.status not in (
-        STOCK_CONSUMPTION_ALLOWED_STATUSES
+    technician_received_job = (
+        str(current_user.role) == "technician"
+        and job.status == ServiceJobStatus.RECEIVED.value
+    )
+
+    if (
+        job.status not in STOCK_CONSUMPTION_ALLOWED_STATUSES
+        and not technician_received_job
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
