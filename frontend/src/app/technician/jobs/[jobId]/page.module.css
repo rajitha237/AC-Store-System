@@ -765,3 +765,145 @@
     width: 100%;
   }
 }
+
+
+/* ===== Technician completion evidence ===== */
+
+.evidenceSection {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #dfe4ea;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.evidenceHeading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.evidenceHeading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.evidenceHeading strong {
+  font-size: 15px;
+}
+
+.evidenceHeading span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.photoActionRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.photoButton {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hiddenFileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.evidenceHint {
+  display: block;
+  margin-top: 9px;
+  color: #64748b;
+}
+
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.photoPreview {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  aspect-ratio: 1 / 1;
+  background: #e2e8f0;
+}
+
+.photoPreview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.photoRemoveButton {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.82);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.signatureCanvas {
+  width: 100%;
+  height: 180px;
+  display: block;
+  border: 2px dashed #94a3b8;
+  border-radius: 12px;
+  background: #ffffff;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.signatureFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.clearSignatureButton {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (min-width: 600px) {
+  .photoGrid {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}

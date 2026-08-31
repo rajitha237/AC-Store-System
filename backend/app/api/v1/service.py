@@ -490,3 +490,290 @@ async def change_legacy_service_job_status(
         remarks=payload.remarks,
         user_id=current_user.id,
     )
+
+
+# ===== TECHNICIAN COMPLETION EVIDENCE =====
+
+from fastapi import File, Form, UploadFile
+from fastapi.responses import Response
+from sqlalchemy import delete as sql_delete
+
+from app.models.service_completion_evidence import (
+    ServiceCompletionEvidence,
+)
+
+
+_COMPLETION_IMAGE_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
+
+_MAX_COMPLETION_IMAGE_BYTES = 1_500_000
+
+
+async def _validated_completion_image(
+    upload: UploadFile,
+) -> tuple[bytes, str]:
+    content_type = (
+        upload.content_type or ""
+    ).lower()
+
+    if content_type not in _COMPLETION_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Only JPEG, PNG or WebP images are allowed"
+            ),
+        )
+
+    content = await upload.read(
+        _MAX_COMPLETION_IMAGE_BYTES + 1
+    )
+
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Image cannot be empty",
+        )
+
+    if len(content) > _MAX_COMPLETION_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                "Each completion image must be "
+                "1.5 MB or smaller"
+            ),
+        )
+
+    return content, content_type
+
+
+@router.post(
+    "/jobs/{job_id}/completion-evidence",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_service_completion_evidence(
+    job_id: int,
+    session: DatabaseSession,
+    current_user: CanUpdateJobs,
+    photos: list[UploadFile] = File(...),
+    signature: UploadFile = File(...),
+    customer_name: str | None = Form(default=None),
+) -> dict[str, object]:
+    job = await get_job_card(
+        session,
+        job_id,
+    )
+
+    ensure_technician_job_access(
+        job,
+        current_user,
+    )
+
+    if str(current_user.role) != UserRole.TECHNICIAN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Completion evidence upload is "
+                "for assigned technicians only"
+            ),
+        )
+
+    if len(photos) < 1 or len(photos) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Upload between 1 and 5 work photos"
+            ),
+        )
+
+    validated_photos: list[
+        tuple[bytes, str, str | None]
+    ] = []
+
+    for photo in photos:
+        content, content_type = (
+            await _validated_completion_image(photo)
+        )
+
+        validated_photos.append(
+            (
+                content,
+                content_type,
+                photo.filename,
+            )
+        )
+
+    signature_content, signature_type = (
+        await _validated_completion_image(
+            signature
+        )
+    )
+
+    await session.execute(
+        sql_delete(
+            ServiceCompletionEvidence
+        ).where(
+            ServiceCompletionEvidence.job_card_id
+            == job.id,
+            ServiceCompletionEvidence.uploaded_by_id
+            == current_user.id,
+        )
+    )
+
+    for index, (
+        content,
+        content_type,
+        file_name,
+    ) in enumerate(
+        validated_photos,
+        start=1,
+    ):
+        session.add(
+            ServiceCompletionEvidence(
+                job_card_id=job.id,
+                evidence_type="work_photo",
+                sequence_number=index,
+                content_type=content_type,
+                file_name=file_name,
+                content=content,
+                uploaded_by_id=current_user.id,
+            )
+        )
+
+    signature_name = (
+        customer_name.strip()
+        if customer_name
+        and customer_name.strip()
+        else "Customer signature"
+    )
+
+    session.add(
+        ServiceCompletionEvidence(
+            job_card_id=job.id,
+            evidence_type="customer_signature",
+            sequence_number=1,
+            content_type=signature_type,
+            file_name=signature_name,
+            content=signature_content,
+            uploaded_by_id=current_user.id,
+        )
+    )
+
+    await session.commit()
+
+    return {
+        "job_id": job.id,
+        "photo_count": len(
+            validated_photos
+        ),
+        "signature_saved": True,
+    }
+
+
+@router.get(
+    "/jobs/{job_id}/completion-evidence",
+)
+async def read_service_completion_evidence(
+    job_id: int,
+    session: DatabaseSession,
+    current_user: CanViewJobs,
+) -> dict[str, object]:
+    job = await get_job_card(
+        session,
+        job_id,
+    )
+
+    ensure_technician_job_access(
+        job,
+        current_user,
+    )
+
+    result = await session.execute(
+        select(
+            ServiceCompletionEvidence
+        )
+        .where(
+            ServiceCompletionEvidence.job_card_id
+            == job.id
+        )
+        .order_by(
+            ServiceCompletionEvidence.evidence_type,
+            ServiceCompletionEvidence.sequence_number,
+        )
+    )
+
+    rows = list(
+        result.scalars().all()
+    )
+
+    return {
+        "job_id": job.id,
+        "items": [
+            {
+                "id": row.id,
+                "evidence_type":
+                    row.evidence_type,
+                "sequence_number":
+                    row.sequence_number,
+                "content_type":
+                    row.content_type,
+                "file_name":
+                    row.file_name,
+                "created_at":
+                    row.created_at,
+            }
+            for row in rows
+        ],
+    }
+
+
+@router.get(
+    "/jobs/{job_id}/completion-evidence/{evidence_id}/content",
+)
+async def read_service_completion_evidence_content(
+    job_id: int,
+    evidence_id: int,
+    session: DatabaseSession,
+    current_user: CanViewJobs,
+) -> Response:
+    job = await get_job_card(
+        session,
+        job_id,
+    )
+
+    ensure_technician_job_access(
+        job,
+        current_user,
+    )
+
+    result = await session.execute(
+        select(
+            ServiceCompletionEvidence
+        ).where(
+            ServiceCompletionEvidence.id
+            == evidence_id,
+            ServiceCompletionEvidence.job_card_id
+            == job.id,
+        )
+    )
+
+    evidence = (
+        result.scalar_one_or_none()
+    )
+
+    if evidence is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Completion evidence not found",
+        )
+
+    return Response(
+        content=evidence.content,
+        media_type=evidence.content_type,
+        headers={
+            "Cache-Control":
+                "private, max-age=300",
+        },
+    )

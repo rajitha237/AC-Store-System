@@ -5,11 +5,15 @@ import {
   ArrowLeft,
   CheckCircle2,
   ClipboardCheck,
+  Camera,
+  ImagePlus,
   LoaderCircle,
+  PenLine,
   MapPin,
   PackagePlus,
   Phone,
   RefreshCw,
+  Trash2,
   UserRound,
   Wrench,
 } from "lucide-react";
@@ -18,6 +22,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -33,6 +38,7 @@ import {
   addServicePart,
   completeServiceJob,
   getServiceJob,
+  uploadServiceCompletionEvidence,
 } from "@/lib/service-jobs-api";
 
 import {
@@ -295,6 +301,571 @@ export default function TechnicianJobPage() {
     completeSaving,
     setCompleteSaving,
   ] = useState(false);
+
+  const [
+    workPhotos,
+    setWorkPhotos,
+  ] = useState<File[]>([]);
+
+  const [
+    workPhotoPreviews,
+    setWorkPhotoPreviews,
+  ] = useState<string[]>([]);
+
+  const [
+    photoProcessing,
+    setPhotoProcessing,
+  ] = useState(false);
+
+  const signatureCanvasRef =
+    useRef<HTMLCanvasElement | null>(
+      null,
+    );
+
+  const signatureDrawingRef =
+    useRef(false);
+
+  const [
+    signatureHasInk,
+    setSignatureHasInk,
+  ] = useState(false);
+
+
+  async function fileToDataUrl(
+    file: Blob,
+  ): Promise<string> {
+    return await new Promise(
+      (
+        resolve,
+        reject,
+      ) => {
+        const reader =
+          new FileReader();
+
+        reader.onload = () =>
+          resolve(
+            String(
+              reader.result
+              ?? "",
+            ),
+          );
+
+        reader.onerror = () =>
+          reject(
+            new Error(
+              "Unable to preview image.",
+            ),
+          );
+
+        reader.readAsDataURL(
+          file,
+        );
+      },
+    );
+  }
+
+
+  async function compressWorkPhoto(
+    file: File,
+  ): Promise<File> {
+    if (
+      !file.type.startsWith(
+        "image/",
+      )
+    ) {
+      throw new Error(
+        "Only image files are allowed.",
+      );
+    }
+
+    const bitmap =
+      await createImageBitmap(
+        file,
+      );
+
+    const maxDimension = 1400;
+
+    const scale =
+      Math.min(
+        1,
+        maxDimension
+        / Math.max(
+          bitmap.width,
+          bitmap.height,
+        ),
+      );
+
+    const width =
+      Math.max(
+        1,
+        Math.round(
+          bitmap.width
+          * scale,
+        ),
+      );
+
+    const height =
+      Math.max(
+        1,
+        Math.round(
+          bitmap.height
+          * scale,
+        ),
+      );
+
+    const canvas =
+      document.createElement(
+        "canvas",
+      );
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const context =
+      canvas.getContext(
+        "2d",
+      );
+
+    if (!context) {
+      bitmap.close();
+
+      throw new Error(
+        "Unable to process photo.",
+      );
+    }
+
+    context.drawImage(
+      bitmap,
+      0,
+      0,
+      width,
+      height,
+    );
+
+    bitmap.close();
+
+    const blob =
+      await new Promise<Blob | null>(
+        (resolve) =>
+          canvas.toBlob(
+            resolve,
+            "image/jpeg",
+            0.76,
+          ),
+      );
+
+    if (!blob) {
+      throw new Error(
+        "Unable to compress photo.",
+      );
+    }
+
+    if (
+      blob.size
+      > 1_450_000
+    ) {
+      throw new Error(
+        "Photo is still too large after compression. Please take a lower resolution photo.",
+      );
+    }
+
+    const safeName =
+      file.name
+        .replace(
+          /\.[^/.]+$/,
+          "",
+        )
+      || "work-photo";
+
+    return new File(
+      [blob],
+      `${safeName}.jpg`,
+      {
+        type: "image/jpeg",
+        lastModified:
+          Date.now(),
+      },
+    );
+  }
+
+
+  async function addWorkPhotoFiles(
+    fileList:
+      FileList | null,
+  ) {
+    if (
+      !fileList
+      || fileList.length === 0
+    ) {
+      return;
+    }
+
+    const remaining =
+      5 - workPhotos.length;
+
+    if (remaining <= 0) {
+      setError(
+        "Maximum 5 work photos are allowed.",
+      );
+
+      return;
+    }
+
+    try {
+      setPhotoProcessing(
+        true,
+      );
+
+      setError("");
+
+      const selected =
+        Array.from(
+          fileList,
+        ).slice(
+          0,
+          remaining,
+        );
+
+      const compressed:
+        File[] = [];
+
+      for (
+        const file
+        of selected
+      ) {
+        compressed.push(
+          await compressWorkPhoto(
+            file,
+          ),
+        );
+      }
+
+      const nextPhotos = [
+        ...workPhotos,
+        ...compressed,
+      ];
+
+      const previews =
+        await Promise.all(
+          nextPhotos.map(
+            (
+              photo,
+            ) =>
+              fileToDataUrl(
+                photo,
+              ),
+          ),
+        );
+
+      setWorkPhotos(
+        nextPhotos,
+      );
+
+      setWorkPhotoPreviews(
+        previews,
+      );
+    } catch (
+      photoError
+    ) {
+      setError(
+        apiErrorMessage(
+          photoError,
+        ),
+      );
+    } finally {
+      setPhotoProcessing(
+        false,
+      );
+    }
+  }
+
+
+  async function removeWorkPhoto(
+    index: number,
+  ) {
+    const nextPhotos =
+      workPhotos.filter(
+        (
+          _,
+          photoIndex,
+        ) =>
+          photoIndex
+          !== index,
+      );
+
+    setWorkPhotos(
+      nextPhotos,
+    );
+
+    const previews =
+      await Promise.all(
+        nextPhotos.map(
+          (
+            photo,
+          ) =>
+            fileToDataUrl(
+              photo,
+            ),
+        ),
+      );
+
+    setWorkPhotoPreviews(
+      previews,
+    );
+  }
+
+
+  function signaturePoint(
+    event:
+      React.PointerEvent<
+        HTMLCanvasElement
+      >,
+  ) {
+    const canvas =
+      signatureCanvasRef
+        .current;
+
+    if (!canvas) {
+      return null;
+    }
+
+    const rect =
+      canvas
+        .getBoundingClientRect();
+
+    return {
+      x:
+        (
+          event.clientX
+          - rect.left
+        )
+        * (
+          canvas.width
+          / rect.width
+        ),
+
+      y:
+        (
+          event.clientY
+          - rect.top
+        )
+        * (
+          canvas.height
+          / rect.height
+        ),
+    };
+  }
+
+
+  function startSignature(
+    event:
+      React.PointerEvent<
+        HTMLCanvasElement
+      >,
+  ) {
+    const canvas =
+      signatureCanvasRef
+        .current;
+
+    const point =
+      signaturePoint(
+        event,
+      );
+
+    if (
+      !canvas
+      || !point
+    ) {
+      return;
+    }
+
+    const context =
+      canvas.getContext(
+        "2d",
+      );
+
+    if (!context) {
+      return;
+    }
+
+    event.preventDefault();
+
+    canvas.setPointerCapture(
+      event.pointerId,
+    );
+
+    signatureDrawingRef
+      .current = true;
+
+    context.beginPath();
+
+    context.moveTo(
+      point.x,
+      point.y,
+    );
+
+    context.lineWidth = 4;
+    context.lineCap =
+      "round";
+    context.lineJoin =
+      "round";
+    context.strokeStyle =
+      "#111827";
+  }
+
+
+  function drawSignature(
+    event:
+      React.PointerEvent<
+        HTMLCanvasElement
+      >,
+  ) {
+    if (
+      !signatureDrawingRef
+        .current
+    ) {
+      return;
+    }
+
+    const canvas =
+      signatureCanvasRef
+        .current;
+
+    const point =
+      signaturePoint(
+        event,
+      );
+
+    if (
+      !canvas
+      || !point
+    ) {
+      return;
+    }
+
+    const context =
+      canvas.getContext(
+        "2d",
+      );
+
+    if (!context) {
+      return;
+    }
+
+    event.preventDefault();
+
+    context.lineTo(
+      point.x,
+      point.y,
+    );
+
+    context.stroke();
+
+    setSignatureHasInk(
+      true,
+    );
+  }
+
+
+  function stopSignature(
+    event:
+      React.PointerEvent<
+        HTMLCanvasElement
+      >,
+  ) {
+    const canvas =
+      signatureCanvasRef
+        .current;
+
+    signatureDrawingRef
+      .current = false;
+
+    if (
+      canvas
+      && canvas.hasPointerCapture(
+        event.pointerId,
+      )
+    ) {
+      canvas.releasePointerCapture(
+        event.pointerId,
+      );
+    }
+  }
+
+
+  function clearSignature() {
+    const canvas =
+      signatureCanvasRef
+        .current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const context =
+      canvas.getContext(
+        "2d",
+      );
+
+    if (!context) {
+      return;
+    }
+
+    context.clearRect(
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+
+    setSignatureHasInk(
+      false,
+    );
+  }
+
+
+  async function signatureBlob():
+    Promise<Blob> {
+    const canvas =
+      signatureCanvasRef
+        .current;
+
+    if (!canvas) {
+      throw new Error(
+        "Customer signature is required.",
+      );
+    }
+
+    return await new Promise<
+      Blob
+    >(
+      (
+        resolve,
+        reject,
+      ) => {
+        canvas.toBlob(
+          (
+            blob,
+          ) => {
+            if (!blob) {
+              reject(
+                new Error(
+                  "Unable to save customer signature.",
+                ),
+              );
+
+              return;
+            }
+
+            resolve(
+              blob,
+            );
+          },
+          "image/png",
+        );
+      },
+    );
+  }
 
 
   const refreshJob =
@@ -569,6 +1140,17 @@ export default function TechnicianJobPage() {
     );
 
     setCompletionNotes("");
+    setWorkPhotos([]);
+    setWorkPhotoPreviews([]);
+    setSignatureHasInk(false);
+
+    window.setTimeout(
+      () => {
+        clearSignature();
+      },
+      0,
+    );
+
     setActionMode("complete");
   }
 
@@ -1169,9 +1751,37 @@ export default function TechnicianJobPage() {
       return;
     }
 
+    if (
+      workPhotos.length < 1
+      || workPhotos.length > 5
+    ) {
+      setError(
+        "Add between 1 and 5 work photos before completing the job.",
+      );
+
+      return;
+    }
+
+    if (!signatureHasInk) {
+      setError(
+        "Customer signature is required before completing the job.",
+      );
+
+      return;
+    }
+
     try {
       setCompleteSaving(true);
       setError("");
+
+      const customerSignature =
+        await signatureBlob();
+
+      await uploadServiceCompletionEvidence(
+        job.id,
+        workPhotos,
+        customerSignature,
+      );
 
       if (!navigator.geolocation) {
         throw new Error(
@@ -1235,6 +1845,9 @@ export default function TechnicianJobPage() {
 
       setActionMode(null);
       setCompletionNotes("");
+      setWorkPhotos([]);
+      setWorkPhotoPreviews([]);
+      setSignatureHasInk(false);
     } catch (
       requestError
     ) {
@@ -2224,6 +2837,255 @@ export default function TechnicianJobPage() {
                     {completionNotes.length}/1000
                   </small>
                 </label>
+
+                <section
+                  className={
+                    styles.evidenceSection
+                  }
+                >
+                  <div
+                    className={
+                      styles.evidenceHeading
+                    }
+                  >
+                    <ImagePlus
+                      size={20}
+                    />
+
+                    <div>
+                      <strong>
+                        Work Photos *
+                      </strong>
+
+                      <span>
+                        Add 1 to 5 photos showing the completed work.
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    className={
+                      styles.photoActionRow
+                    }
+                  >
+                    <label
+                      className={
+                        styles.photoButton
+                      }
+                    >
+                      <Camera
+                        size={18}
+                      />
+
+                      Camera
+
+                      <input
+                        className={
+                          styles.hiddenFileInput
+                        }
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        disabled={
+                          photoProcessing
+                          || workPhotos.length
+                            >= 5
+                        }
+                        onChange={(
+                          event,
+                        ) => {
+                          void addWorkPhotoFiles(
+                            event.target.files,
+                          );
+
+                          event.target.value =
+                            "";
+                        }}
+                      />
+                    </label>
+
+                    <label
+                      className={
+                        styles.photoButton
+                      }
+                    >
+                      <ImagePlus
+                        size={18}
+                      />
+
+                      Gallery
+
+                      <input
+                        className={
+                          styles.hiddenFileInput
+                        }
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        disabled={
+                          photoProcessing
+                          || workPhotos.length
+                            >= 5
+                        }
+                        onChange={(
+                          event,
+                        ) => {
+                          void addWorkPhotoFiles(
+                            event.target.files,
+                          );
+
+                          event.target.value =
+                            "";
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  <small
+                    className={
+                      styles.evidenceHint
+                    }
+                  >
+                    {photoProcessing
+                      ? "Processing photos..."
+                      : `${workPhotos.length}/5 photos added`}
+                  </small>
+
+                  {workPhotoPreviews.length
+                    > 0 ? (
+                    <div
+                      className={
+                        styles.photoGrid
+                      }
+                    >
+                      {workPhotoPreviews.map(
+                        (
+                          preview,
+                          index,
+                        ) => (
+                          <div
+                            className={
+                              styles.photoPreview
+                            }
+                            key={
+                              `${index}-${preview.length}`
+                            }
+                          >
+                            <img
+                              src={
+                                preview
+                              }
+                              alt={
+                                `Work photo ${index + 1}`
+                              }
+                            />
+
+                            <button
+                              type="button"
+                              className={
+                                styles.photoRemoveButton
+                              }
+                              onClick={() =>
+                                void removeWorkPhoto(
+                                  index,
+                                )
+                              }
+                              disabled={
+                                completeSaving
+                              }
+                              aria-label={
+                                `Remove photo ${index + 1}`
+                              }
+                            >
+                              <Trash2
+                                size={16}
+                              />
+                            </button>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  ) : null}
+                </section>
+
+                <section
+                  className={
+                    styles.evidenceSection
+                  }
+                >
+                  <div
+                    className={
+                      styles.evidenceHeading
+                    }
+                  >
+                    <PenLine
+                      size={20}
+                    />
+
+                    <div>
+                      <strong>
+                        Customer Signature *
+                      </strong>
+
+                      <span>
+                        Ask the customer to sign inside the box.
+                      </span>
+                    </div>
+                  </div>
+
+                  <canvas
+                    ref={
+                      signatureCanvasRef
+                    }
+                    width={700}
+                    height={260}
+                    className={
+                      styles.signatureCanvas
+                    }
+                    onPointerDown={
+                      startSignature
+                    }
+                    onPointerMove={
+                      drawSignature
+                    }
+                    onPointerUp={
+                      stopSignature
+                    }
+                    onPointerCancel={
+                      stopSignature
+                    }
+                    onPointerLeave={
+                      stopSignature
+                    }
+                  />
+
+                  <div
+                    className={
+                      styles.signatureFooter
+                    }
+                  >
+                    <span>
+                      {signatureHasInk
+                        ? "Signature captured"
+                        : "Signature required"}
+                    </span>
+
+                    <button
+                      type="button"
+                      className={
+                        styles.clearSignatureButton
+                      }
+                      onClick={
+                        clearSignature
+                      }
+                      disabled={
+                        completeSaving
+                      }
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </section>
 
                 <div
                   className={

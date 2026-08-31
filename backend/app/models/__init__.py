@@ -183,3 +183,5 @@ from app.models.legacy_service_job import (
 from app.models.technician_location import TechnicianLocation
 
 from app.models.service_job_location_record import ServiceJobLocationRecord
+
+from app.models.service_completion_evidence import ServiceCompletionEvidence

@@ -336,3 +336,47 @@ export async function updateLegacyServiceJobStatus(
 
   return response.data;
 }
+
+
+export async function uploadServiceCompletionEvidence(
+  jobId: number,
+  photos: File[],
+  signature: Blob,
+): Promise<{
+  job_id: number;
+  photo_count: number;
+  signature_saved: boolean;
+}> {
+  const formData =
+    new FormData();
+
+  photos.forEach(
+    (
+      photo,
+    ) => {
+      formData.append(
+        "photos",
+        photo,
+        photo.name,
+      );
+    },
+  );
+
+  formData.append(
+    "signature",
+    signature,
+    `job-${jobId}-customer-signature.png`,
+  );
+
+  const response =
+    await api.post<{
+      job_id: number;
+      photo_count: number;
+      signature_saved: boolean;
+    }>(
+      `/service/jobs/${jobId}/completion-evidence`,
+      formData,
+    );
+
+  return response.data;
+}

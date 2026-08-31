@@ -21,6 +21,7 @@ from app.models import (
     ServiceJobStatus,
     ServiceJobStatusHistory,
     ServiceJobLocationRecord,
+    ServiceCompletionEvidence,
     ServiceLabourItem,
     StockItem,
     TechnicianLocation,
@@ -1456,6 +1457,61 @@ async def complete_service_job(
                     "Current technician location "
                     "must be associated with this "
                     "service job before completion"
+                ),
+            )
+
+    if str(current_user.role) == "technician":
+        evidence_result = await session.execute(
+            select(
+                ServiceCompletionEvidence.evidence_type,
+                func.count(
+                    ServiceCompletionEvidence.id
+                ),
+            )
+            .where(
+                ServiceCompletionEvidence.job_card_id
+                == job.id,
+                ServiceCompletionEvidence.uploaded_by_id
+                == current_user.id,
+            )
+            .group_by(
+                ServiceCompletionEvidence.evidence_type
+            )
+        )
+
+        evidence_counts = {
+            evidence_type: int(count)
+            for evidence_type, count
+            in evidence_result.all()
+        }
+
+        work_photo_count = (
+            evidence_counts.get(
+                "work_photo",
+                0,
+            )
+        )
+
+        signature_count = (
+            evidence_counts.get(
+                "customer_signature",
+                0,
+            )
+        )
+
+        if (
+            work_photo_count < 1
+            or work_photo_count > 5
+            or signature_count != 1
+        ):
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_409_CONFLICT
+                ),
+                detail=(
+                    "Upload 1-5 work photos and "
+                    "capture the customer signature "
+                    "before completing this job"
                 ),
             )
 
