@@ -1466,3 +1466,226 @@
     flex-direction: column;
   }
 }
+
+
+/* ============================================================
+   SERVICE JOB COMPLETION EVIDENCE
+   ============================================================ */
+
+.completionEvidenceCard {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #dfe6ef;
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+.completionEvidenceHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.completionEvidenceHeader small {
+  display: block;
+  color: #7c899b;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.completionEvidenceHeader h3 {
+  margin: 3px 0 2px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.completionEvidenceHeader p {
+  margin: 0;
+  color: #7c899b;
+  font-size: 9px;
+}
+
+.evidenceRefreshButton {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #d6deea;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  font-size: 9px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.evidenceRefreshButton:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.evidenceSubheading {
+  margin: 13px 0 8px;
+  color: #475569;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.adminEvidenceGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.adminEvidencePhoto {
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #dfe6ef;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.adminEvidencePhoto img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: block;
+  object-fit: cover;
+  background: #edf1f5;
+}
+
+.adminEvidencePhoto span {
+  min-height: 100px;
+  display: grid;
+  place-items: center;
+  color: #94a3b8;
+  font-size: 8px;
+}
+
+.adminEvidencePhoto strong {
+  display: block;
+  padding: 8px 9px;
+  color: #475569;
+  font-size: 8px;
+}
+
+.signatureRecord {
+  margin-top: 15px;
+}
+
+.adminSignaturePreview {
+  width: min(100%, 520px);
+  min-height: 120px;
+  padding: 10px;
+  border: 1px solid #dfe6ef;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.adminSignaturePreview img {
+  width: 100%;
+  max-height: 190px;
+  display: block;
+  object-fit: contain;
+}
+
+.adminSignaturePreview span {
+  color: #94a3b8;
+  font-size: 8px;
+}
+
+.evidenceEmpty {
+  padding: 20px 14px;
+  border: 1px dashed #d6deea;
+  border-radius: 9px;
+  color: #8995a6;
+  font-size: 9px;
+  text-align: center;
+}
+
+.evidenceError {
+  padding: 10px 12px;
+  border: 1px solid rgba(220, 38, 38, .25);
+  border-radius: 9px;
+  background: rgba(220, 38, 38, .06);
+  color: #b42318;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.evidencePreviewBackdrop {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, .78);
+}
+
+.evidencePreviewModal {
+  width: min(920px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, .32);
+}
+
+.evidencePreviewTopbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.evidencePreviewTopbar strong {
+  color: #334155;
+  font-size: 11px;
+}
+
+.evidencePreviewTopbar button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid #d6deea;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.evidencePreviewModal > img {
+  width: 100%;
+  max-height: calc(100vh - 120px);
+  display: block;
+  object-fit: contain;
+  padding: 16px;
+}
+
+@media (max-width: 720px) {
+  .completionEvidenceHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .adminEvidenceGrid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .evidencePreviewBackdrop {
+    padding: 10px;
+  }
+}

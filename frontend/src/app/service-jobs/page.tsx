@@ -81,6 +81,9 @@ import {
   getServiceJob,
   getServiceJobs,
   getServiceTechnicians,
+  getServiceCompletionEvidence,
+  getServiceCompletionEvidenceContent,
+  type ServiceCompletionEvidenceItem,
   updateServiceApproval,
   updateServiceJob,
   updateServiceStatus,
@@ -2157,6 +2160,10 @@ export default function ServiceJobsPage() {
       detail,
     );
 
+    await loadCompletionEvidence(
+      detail.id,
+    );
+
     return detail;
   }
 
@@ -3634,6 +3641,116 @@ export default function ServiceJobsPage() {
   }
 
 
+  const [completionEvidence, setCompletionEvidence] =
+    useState<ServiceCompletionEvidenceItem[]>([]);
+
+  const [completionEvidenceUrls, setCompletionEvidenceUrls] =
+    useState<Record<number, string>>({});
+
+  const [completionEvidenceLoading, setCompletionEvidenceLoading] =
+    useState(false);
+
+  const [completionEvidenceError, setCompletionEvidenceError] =
+    useState("");
+
+  const [evidencePreview, setEvidencePreview] =
+    useState<{
+      url: string;
+      title: string;
+    } | null>(null);
+
+
+  function clearCompletionEvidenceUrls() {
+    setCompletionEvidenceUrls(
+      (current) => {
+        Object.values(
+          current,
+        ).forEach(
+          (url) => {
+            URL.revokeObjectURL(
+              url,
+            );
+          },
+        );
+
+        return {};
+      },
+    );
+  }
+
+
+  async function loadCompletionEvidence(
+    jobId: number,
+  ) {
+    setCompletionEvidenceLoading(
+      true,
+    );
+
+    setCompletionEvidenceError(
+      "",
+    );
+
+    setEvidencePreview(
+      null,
+    );
+
+    clearCompletionEvidenceUrls();
+
+    try {
+      const metadata =
+        await getServiceCompletionEvidence(
+          jobId,
+        );
+
+      const urls:
+        Record<number, string> = {};
+
+      await Promise.all(
+        metadata.items.map(
+          async (
+            item,
+          ) => {
+            const blob =
+              await getServiceCompletionEvidenceContent(
+                jobId,
+                item.id,
+              );
+
+            urls[item.id] =
+              URL.createObjectURL(
+                blob,
+              );
+          },
+        ),
+      );
+
+      setCompletionEvidence(
+        metadata.items,
+      );
+
+      setCompletionEvidenceUrls(
+        urls,
+      );
+    } catch (
+      requestError
+    ) {
+      setCompletionEvidence(
+        [],
+      );
+
+      setCompletionEvidenceError(
+        apiError(
+          requestError,
+        ),
+      );
+    } finally {
+      setCompletionEvidenceLoading(
+        false,
+      );
+    }
+  }
+
+
   const visibleJobs =
     jobs.filter(
       (job) =>
@@ -3657,7 +3774,7 @@ export default function ServiceJobsPage() {
         <div
           className="loading-spinner"
         />
-      </main>
+</main>
     );
   }
 
@@ -8441,6 +8558,240 @@ export default function ServiceJobsPage() {
               )}
 
 
+              {selected && (
+                <section
+                  className={
+                    styles.completionEvidenceCard
+                  }
+                >
+                  <div
+                    className={
+                      styles.completionEvidenceHeader
+                    }
+                  >
+                    <div>
+                      <small>
+                        COMPLETION RECORD
+                      </small>
+
+                      <h3>
+                        Completion Evidence
+                      </h3>
+
+                      <p>
+                        Technician work photos and customer signature.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={
+                        styles.evidenceRefreshButton
+                      }
+                      disabled={
+                        completionEvidenceLoading
+                      }
+                      onClick={() =>
+                        void loadCompletionEvidence(
+                          selected.id,
+                        )
+                      }
+                    >
+                      {completionEvidenceLoading
+                        ? "Loading..."
+                        : "Refresh"}
+                    </button>
+                  </div>
+
+                  {completionEvidenceError ? (
+                    <div
+                      className={
+                        styles.evidenceError
+                      }
+                    >
+                      {
+                        completionEvidenceError
+                      }
+                    </div>
+                  ) : null}
+
+                  {completionEvidenceLoading ? (
+                    <div
+                      className={
+                        styles.evidenceEmpty
+                      }
+                    >
+                      Loading completion evidence...
+                    </div>
+                  ) : completionEvidence.length
+                    === 0 ? (
+                    <div
+                      className={
+                        styles.evidenceEmpty
+                      }
+                    >
+                      No completion evidence recorded for this job.
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        className={
+                          styles.evidenceSubheading
+                        }
+                      >
+                        Work Photos
+                      </div>
+
+                      <div
+                        className={
+                          styles.adminEvidenceGrid
+                        }
+                      >
+                        {completionEvidence
+                          .filter(
+                            (
+                              item,
+                            ) =>
+                              item.evidence_type
+                              === "work_photo",
+                          )
+                          .map(
+                            (
+                              item,
+                              index,
+                            ) => (
+                              <button
+                                type="button"
+                                key={
+                                  item.id
+                                }
+                                className={
+                                  styles.adminEvidencePhoto
+                                }
+                                onClick={() => {
+                                  const url =
+                                    completionEvidenceUrls[
+                                      item.id
+                                    ];
+
+                                  if (url) {
+                                    setEvidencePreview({
+                                      url,
+                                      title:
+                                        `Work Photo ${index + 1}`,
+                                    });
+                                  }
+                                }}
+                              >
+                                {completionEvidenceUrls[
+                                  item.id
+                                ] ? (
+                                  <img
+                                    src={
+                                      completionEvidenceUrls[
+                                        item.id
+                                      ]
+                                    }
+                                    alt={
+                                      `Work Photo ${index + 1}`
+                                    }
+                                  />
+                                ) : (
+                                  <span>
+                                    Loading image...
+                                  </span>
+                                )}
+
+                                <strong>
+                                  Work Photo{" "}
+                                  {index + 1}
+                                </strong>
+                              </button>
+                            ),
+                          )}
+                      </div>
+
+                      {completionEvidence.some(
+                        (
+                          item,
+                        ) =>
+                          item.evidence_type
+                          === "customer_signature",
+                      ) ? (
+                        <div
+                          className={
+                            styles.signatureRecord
+                          }
+                        >
+                          <div
+                            className={
+                              styles.evidenceSubheading
+                            }
+                          >
+                            Customer Signature
+                          </div>
+
+                          {completionEvidence
+                            .filter(
+                              (
+                                item,
+                              ) =>
+                                item.evidence_type
+                                === "customer_signature",
+                            )
+                            .map(
+                              (
+                                item,
+                              ) => (
+                                <button
+                                  type="button"
+                                  key={
+                                    item.id
+                                  }
+                                  className={
+                                    styles.adminSignaturePreview
+                                  }
+                                  onClick={() => {
+                                    const url =
+                                      completionEvidenceUrls[
+                                        item.id
+                                      ];
+
+                                    if (url) {
+                                      setEvidencePreview({
+                                        url,
+                                        title:
+                                          "Customer Signature",
+                                      });
+                                    }
+                                  }}
+                                >
+                                  {completionEvidenceUrls[
+                                    item.id
+                                  ] ? (
+                                    <img
+                                      src={
+                                        completionEvidenceUrls[
+                                          item.id
+                                        ]
+                                      }
+                                      alt="Customer Signature"
+                                    />
+                                  ) : (
+                                    <span>
+                                      Loading signature...
+                                    </span>
+                                  )}
+                                </button>
+                              ),
+                            )}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </section>
+              )}
+
               {actionMode
                 === "complete" && (
                 <form
@@ -9398,6 +9749,68 @@ export default function ServiceJobsPage() {
           </form>
         </div>
       )}
+
+      {evidencePreview ? (
+        <div
+          className={
+            styles.evidencePreviewBackdrop
+          }
+          role="presentation"
+          onClick={() =>
+            setEvidencePreview(
+              null,
+            )
+          }
+        >
+          <div
+            className={
+              styles.evidencePreviewModal
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-label={
+              evidencePreview.title
+            }
+            onClick={(
+              event,
+            ) =>
+              event.stopPropagation()
+            }
+          >
+            <div
+              className={
+                styles.evidencePreviewTopbar
+              }
+            >
+              <strong>
+                {
+                  evidencePreview.title
+                }
+              </strong>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setEvidencePreview(
+                    null,
+                  )
+                }
+              >
+                Close
+              </button>
+            </div>
+
+            <img
+              src={
+                evidencePreview.url
+              }
+              alt={
+                evidencePreview.title
+              }
+            />
+          </div>
+        </div>
+      ) : null}
 
     </AppShell>
   );

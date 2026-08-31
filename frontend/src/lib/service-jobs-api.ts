@@ -380,3 +380,53 @@ export async function uploadServiceCompletionEvidence(
 
   return response.data;
 }
+
+
+export type ServiceCompletionEvidenceItem = {
+  id: number;
+  evidence_type:
+    | "work_photo"
+    | "customer_signature";
+  sequence_number: number;
+  content_type: string;
+  file_name: string;
+  created_at: string;
+};
+
+
+export type ServiceCompletionEvidenceResponse = {
+  job_id: number;
+  items: ServiceCompletionEvidenceItem[];
+};
+
+
+export async function getServiceCompletionEvidence(
+  jobId: number,
+): Promise<ServiceCompletionEvidenceResponse> {
+  const response =
+    await api.get<ServiceCompletionEvidenceResponse>(
+      `/service/jobs/${jobId}/completion-evidence`,
+    );
+
+  return response.data;
+}
+
+
+export async function getServiceCompletionEvidenceContent(
+  jobId: number,
+  evidenceId: number,
+): Promise<Blob> {
+  const response =
+    await api.get<Blob>(
+      `/service/jobs/${jobId}/completion-evidence/${evidenceId}/content`,
+      {
+        responseType: "blob",
+      },
+    );
+
+  return response.data instanceof Blob
+    ? response.data
+    : new Blob(
+        [response.data],
+      );
+}
