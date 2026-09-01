@@ -128,13 +128,28 @@ class InstallmentPlan(Base):
         index=True,
     )
 
-    invoice_id: Mapped[int] = mapped_column(
+    invoice_id: Mapped[int | None] = mapped_column(
         ForeignKey(
             "sales_invoices.id",
             ondelete="RESTRICT",
         ),
+        nullable=True,
+        index=True,
+    )
+
+    source_type: Mapped[str] = mapped_column(
+        String(30),
+        default="sales_invoice",
+        server_default="sales_invoice",
         nullable=False,
         index=True,
+    )
+
+    legacy_principal_amount: Mapped[
+        Decimal | None
+    ] = mapped_column(
+        Numeric(18, 2),
+        nullable=True,
     )
 
     agreement_number: Mapped[

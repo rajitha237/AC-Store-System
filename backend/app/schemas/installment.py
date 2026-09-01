@@ -10,9 +10,41 @@ from pydantic import (
 from app.models.sales import PaymentMethod
 
 
+class LegacyInstallmentPlanCreate(BaseModel):
+    customer_id: int
+    principal_amount: Decimal = Field(gt=0)
+    first_due_date: date
+    balance_mode: str = Field(
+        default="register_new_debt",
+        pattern=(
+            "^(register_new_debt|"
+            "use_existing_balance)$"
+        ),
+    )
+    notes: str | None = None
+
+
 class InstallmentPlanCreate(BaseModel):
-    invoice_id: int = Field(
+    invoice_id: int | None = Field(
+        default=None,
         ge=1,
+    )
+
+    customer_id: int | None = Field(
+        default=None,
+        ge=1,
+    )
+
+    legacy_principal_amount: Decimal | None = Field(
+        default=None,
+        gt=Decimal("0.00"),
+        max_digits=18,
+        decimal_places=2,
+    )
+
+    source_type: str = Field(
+        default="sales_invoice",
+        pattern="^(sales_invoice|legacy_debt)$",
     )
 
     first_due_date: date
@@ -130,8 +162,8 @@ class InstallmentPlanSummaryResponse(
     customer_id: int
     customer_name: str
 
-    invoice_id: int
-    invoice_number: str
+    invoice_id: int | None
+    invoice_number: str | None
 
     start_date: date
     first_due_date: date
@@ -197,8 +229,8 @@ class InstallmentPaymentResponse(
     plan_id: int
     agreement_number: str
 
-    invoice_id: int
-    invoice_number: str
+    invoice_id: int | None
+    invoice_number: str | None
 
     customer_id: int
 
@@ -211,8 +243,8 @@ class InstallmentPaymentResponse(
     plan_total_paid: Decimal
     plan_outstanding_amount: Decimal
 
-    invoice_paid_amount: Decimal
-    invoice_balance_amount: Decimal
+    invoice_paid_amount: Decimal | None
+    invoice_balance_amount: Decimal | None
 
     customer_balance: Decimal
 

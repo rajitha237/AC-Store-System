@@ -7,6 +7,7 @@ import type {
   InstallmentPaymentResponse,
   InstallmentPlan,
   InstallmentPlanCreate,
+  LegacyInstallmentPlanCreate,
 } from "@/types/installment";
 
 function apiBase(): string {
@@ -75,6 +76,18 @@ export async function createInstallmentPlan(
 ): Promise<InstallmentPlan> {
   return request<InstallmentPlan>(
     "/installments",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function createLegacyInstallmentPlan(
+  payload: LegacyInstallmentPlanCreate,
+): Promise<InstallmentPlan> {
+  return request<InstallmentPlan>(
+    "/installments/legacy",
     {
       method: "POST",
       body: JSON.stringify(payload),

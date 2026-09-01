@@ -21,12 +21,14 @@ from app.schemas.installment import (
     InstallmentPaymentReverse,
     InstallmentPlanCancel,
     InstallmentPlanCreate,
+    LegacyInstallmentPlanCreate,
     InstallmentPlanDetailResponse,
     InstallmentPlanListResponse,
 )
 from app.services.installment import (
     cancel_installment_plan,
     create_installment_plan,
+    create_legacy_installment_plan,
     customer_ledger,
     customer_statement,
     list_installment_plans,
@@ -164,6 +166,27 @@ async def read_installment_plans(
         customer_id=customer_id,
         invoice_id=invoice_id,
         status_filter=status_filter,
+    )
+
+
+@router.post(
+    "/legacy",
+    response_model=(
+        InstallmentPlanDetailResponse
+    ),
+    status_code=(
+        status.HTTP_201_CREATED
+    ),
+)
+async def create_legacy_installment_plan_record(
+    payload: LegacyInstallmentPlanCreate,
+    session: DatabaseSession,
+    current_user: CanManageInstallments,
+) -> InstallmentPlanDetailResponse:
+    return await create_legacy_installment_plan(
+        session=session,
+        payload=payload,
+        current_user=current_user,
     )
 
 

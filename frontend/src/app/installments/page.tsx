@@ -6,10 +6,12 @@ import {
   useMemo,
   useState,
 } from "react";
+import type { FormEvent } from "react";
 
 import { useRouter } from "next/navigation";
 
 import {
+  ArchiveRestore,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -42,10 +44,12 @@ import type {
 } from "@/types/auth";
 
 import {
+  createLegacyInstallmentPlan,
   getInstallmentPlan,
   getInstallmentPlans,
   receiveInstallmentPayment,
 } from "@/lib/installment-api";
+import { getCustomers } from "@/lib/customer-api";
 
 import {
   downloadPaymentReceipt,
@@ -56,6 +60,7 @@ import type {
   InstallmentPaymentResponse,
   InstallmentPlan,
 } from "@/types/installment";
+import type { Customer } from "@/types/customer";
 
 import styles from "./installments.module.css";
 
@@ -152,6 +157,29 @@ export default function InstallmentsPage() {
   const [statusFilter, setStatusFilter] =
     useState("all");
 
+  const [legacyOpen, setLegacyOpen] =
+    useState(false);
+  const [legacyCustomerQuery, setLegacyCustomerQuery] =
+    useState("");
+  const [legacyCustomers, setLegacyCustomers] =
+    useState<Customer[]>([]);
+  const [legacyCustomerLoading, setLegacyCustomerLoading] =
+    useState(false);
+  const [legacySelectedCustomer, setLegacySelectedCustomer] =
+    useState<Customer | null>(null);
+  const [legacyPrincipal, setLegacyPrincipal] =
+    useState("");
+  const [legacyFirstDueDate, setLegacyFirstDueDate] =
+    useState("");
+  const [legacyNotes, setLegacyNotes] =
+    useState("");
+  const [legacySubmitting, setLegacySubmitting] =
+    useState(false);
+  const [legacyError, setLegacyError] =
+    useState<string | null>(null);
+  const [legacyCreated, setLegacyCreated] =
+    useState<InstallmentPlan | null>(null);
+
   const [paymentOpen, setPaymentOpen] =
     useState(false);
 
@@ -227,6 +255,268 @@ export default function InstallmentsPage() {
     },
     [],
   );
+
+  function openLegacyForm() {
+    setLegacyOpen(true);
+    setLegacyCustomerQuery("");
+    setLegacyCustomers([]);
+    setLegacySelectedCustomer(null);
+    setLegacyPrincipal("");
+    setLegacyFirstDueDate("");
+    setLegacyNotes("");
+    setLegacyError(null);
+    setLegacyCreated(null);
+  }
+
+  function closeLegacyForm() {
+    if (legacySubmitting) {
+      return;
+    }
+
+    setLegacyOpen(false);
+    setLegacyError(null);
+    setLegacyCreated(null);
+  }
+
+  async function searchLegacyCustomers() {
+    const query =
+      legacyCustomerQuery.trim();
+
+    if (query.length < 2) {
+      setLegacyError(
+        "Enter at least 2 characters to search customers.",
+      );
+      return;
+    }
+
+    setLegacyCustomerLoading(true);
+    setLegacyError(null);
+
+    try {
+      const result = await getCustomers({
+        page: 1,
+        pageSize: 12,
+        search: query,
+        customerStatus: "active",
+      });
+
+      setLegacyCustomers(
+        result.items,
+      );
+
+      if (result.items.length === 0) {
+        setLegacyError(
+          "No active customers matched this search.",
+        );
+      }
+    } catch (error) {
+      setLegacyError(
+        error instanceof Error
+          ? error.message
+          : "Unable to search customers.",
+      );
+    } finally {
+      setLegacyCustomerLoading(false);
+    }
+  }
+
+  function addMonthsToDate(
+    isoDate: string,
+    months: number,
+  ): string {
+    const parts = isoDate
+      .split("-")
+      .map(Number);
+
+    if (
+      parts.length !== 3
+      || parts.some(
+        (part) => !Number.isFinite(part),
+      )
+    ) {
+      return isoDate;
+    }
+
+    const [year, month, day] = parts;
+
+    const target = new Date(
+      year,
+      month - 1 + months,
+      1,
+    );
+
+    const lastDay = new Date(
+      target.getFullYear(),
+      target.getMonth() + 1,
+      0,
+    ).getDate();
+
+    target.setDate(
+      Math.min(day, lastDay),
+    );
+
+    const y = target.getFullYear();
+    const m = String(
+      target.getMonth() + 1,
+    ).padStart(2, "0");
+    const d = String(
+      target.getDate(),
+    ).padStart(2, "0");
+
+    return `${y}-${m}-${d}`;
+  }
+
+  function legacySchedulePreview() {
+    const principal =
+      Number(legacyPrincipal);
+
+    if (
+      !Number.isFinite(principal)
+      || principal <= 0
+      || !legacyFirstDueDate
+    ) {
+      return [];
+    }
+
+    const base =
+      Math.round(
+        (principal / 6) * 100,
+      ) / 100;
+
+    let allocated = 0;
+
+    return Array.from(
+      { length: 6 },
+      (_, index) => {
+        const amount =
+          index === 5
+            ? Math.round(
+                (
+                  principal
+                  - allocated
+                ) * 100,
+              ) / 100
+            : base;
+
+        allocated =
+          Math.round(
+            (
+              allocated
+              + amount
+            ) * 100,
+          ) / 100;
+
+        return {
+          number: index + 1,
+          dueDate: addMonthsToDate(
+            legacyFirstDueDate,
+            index,
+          ),
+          amount,
+        };
+      },
+    );
+  }
+
+  const legacyExistingBalance =
+    legacySelectedCustomer
+      ? Number(
+          legacySelectedCustomer
+            .current_balance
+          ?? 0,
+        )
+      : 0;
+
+  const legacyUsesExistingBalance =
+    Number.isFinite(
+      legacyExistingBalance,
+    )
+    && legacyExistingBalance > 0;
+
+  const legacyBalanceMode =
+    legacyUsesExistingBalance
+      ? "use_existing_balance"
+      : "register_new_debt";
+
+  async function submitLegacyPlan(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!legacySelectedCustomer) {
+      setLegacyError(
+        "Select the customer first.",
+      );
+      return;
+    }
+
+    const principal =
+      Number(legacyPrincipal);
+
+    if (
+      !Number.isFinite(principal)
+      || principal <= 0
+    ) {
+      setLegacyError(
+        "Enter a valid old outstanding balance.",
+      );
+      return;
+    }
+
+    if (!legacyFirstDueDate) {
+      setLegacyError(
+        "Select the first due date.",
+      );
+      return;
+    }
+
+    if (
+      legacyUsesExistingBalance
+      && Math.abs(
+        principal
+        - legacyExistingBalance
+      ) > 0.001
+    ) {
+      setLegacyError(
+        "Old outstanding balance must "
+        + "match the customer's existing "
+        + "system balance.",
+      );
+      return;
+    }
+
+    setLegacySubmitting(true);
+    setLegacyError(null);
+
+    try {
+      const created =
+        await createLegacyInstallmentPlan({
+          customer_id:
+            legacySelectedCustomer.id,
+          principal_amount:
+            principal,
+          first_due_date:
+            legacyFirstDueDate,
+          balance_mode:
+            legacyBalanceMode,
+          notes:
+            legacyNotes.trim()
+              || null,
+        });
+
+      setLegacyCreated(created);
+
+      await refreshPlans();
+    } catch (error) {
+      setLegacyError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create legacy installment plan.",
+      );
+    } finally {
+      setLegacySubmitting(false);
+    }
+  }
 
   useEffect(() => {
     async function loadAuthenticatedUser() {
@@ -578,6 +868,17 @@ export default function InstallmentsPage() {
         </div>
 
         <button
+              type="button"
+              className={
+                styles.legacyCreateButton
+              }
+              onClick={openLegacyForm}
+            >
+              <ArchiveRestore size={17} />
+              Add Legacy Debtor
+            </button>
+
+            <button
           type="button"
           className={styles.refreshButton}
           disabled={loading}
@@ -1587,6 +1888,691 @@ export default function InstallmentsPage() {
               </div>
             ) : null}
           </aside>
+        </div>
+      ) : null}
+
+      {legacyOpen ? (
+        <div
+          className={
+            styles.legacyModalBackdrop
+          }
+          onMouseDown={(event) => {
+            if (
+              event.target
+              === event.currentTarget
+            ) {
+              closeLegacyForm();
+            }
+          }}
+        >
+          <div
+            className={
+              styles.legacyModal
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-label={
+              "Add legacy debtor"
+            }
+          >
+            <header
+              className={
+                styles.legacyModalHeader
+              }
+            >
+              <div>
+                <span
+                  className={
+                    styles.eyebrow
+                  }
+                >
+                  LEGACY DEBT ENTRY
+                </span>
+
+                <h3>
+                  Add Legacy Debtor
+                </h3>
+
+                <p>
+                  Convert an old customer
+                  balance into a controlled
+                  six-month installment plan.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={
+                  styles.closeButton
+                }
+                disabled={
+                  legacySubmitting
+                }
+                onClick={
+                  closeLegacyForm
+                }
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            {legacyCreated ? (
+              <div
+                className={
+                  styles.legacySuccess
+                }
+              >
+                <span
+                  className={
+                    styles.successIcon
+                  }
+                >
+                  <CheckCircle2
+                    size={30}
+                  />
+                </span>
+
+                <h4>
+                  Legacy plan created
+                </h4>
+
+                <strong>
+                  {
+                    legacyCreated
+                      .agreement_number
+                  }
+                </strong>
+
+                <p>
+                  {
+                    legacyCreated
+                      .customer_name
+                  }
+                  {" · "}
+                  {money(
+                    legacyCreated
+                      .financed_amount,
+                  )}
+                </p>
+
+                <div
+                  className={
+                    styles.legacySuccessGrid
+                  }
+                >
+                  <div>
+                    <small>
+                      Installments
+                    </small>
+                    <b>6 monthly</b>
+                  </div>
+
+                  <div>
+                    <small>
+                      Interest
+                    </small>
+                    <b>0%</b>
+                  </div>
+
+                  <div>
+                    <small>
+                      First due
+                    </small>
+                    <b>
+                      {
+                        legacyCreated
+                          .first_due_date
+                      }
+                    </b>
+                  </div>
+
+                  <div>
+                    <small>
+                      Outstanding
+                    </small>
+                    <b>
+                      {money(
+                        legacyCreated
+                          .outstanding_amount,
+                      )}
+                    </b>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className={
+                    styles.legacyDoneButton
+                  }
+                  onClick={() => {
+                    setLegacyOpen(false);
+                    setLegacyCreated(null);
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form
+                className={
+                  styles.legacyForm
+                }
+                onSubmit={
+                  submitLegacyPlan
+                }
+              >
+                <section
+                  className={
+                    styles.legacySection
+                  }
+                >
+                  <div
+                    className={
+                      styles.legacySectionTitle
+                    }
+                  >
+                    <Search size={17} />
+
+                    <div>
+                      <strong>
+                        Customer
+                      </strong>
+                      <small>
+                        Search by name,
+                        phone, NIC or
+                        customer number.
+                      </small>
+                    </div>
+                  </div>
+
+                  <div
+                    className={
+                      styles.legacySearchRow
+                    }
+                  >
+                    <input
+                      type="search"
+                      placeholder={
+                        "Search existing customer..."
+                      }
+                      value={
+                        legacyCustomerQuery
+                      }
+                      onChange={(event) =>
+                        setLegacyCustomerQuery(
+                          event.target.value,
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (
+                          event.key
+                          === "Enter"
+                        ) {
+                          event.preventDefault();
+                          void searchLegacyCustomers();
+                        }
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      disabled={
+                        legacyCustomerLoading
+                      }
+                      onClick={() => {
+                        void searchLegacyCustomers();
+                      }}
+                    >
+                      {legacyCustomerLoading ? (
+                        <LoaderCircle
+                          className={
+                            styles.spin
+                          }
+                          size={16}
+                        />
+                      ) : (
+                        <Search
+                          size={16}
+                        />
+                      )}
+                      Search
+                    </button>
+                  </div>
+
+                  {legacyCustomers.length
+                  > 0 ? (
+                    <div
+                      className={
+                        styles.legacyCustomerResults
+                      }
+                    >
+                      {legacyCustomers.map(
+                        (customer) => {
+                          const selectedCustomer =
+                            legacySelectedCustomer
+                              ?.id
+                            === customer.id;
+
+                          return (
+                            <button
+                              key={
+                                customer.id
+                              }
+                              type="button"
+                              className={
+                                selectedCustomer
+                                  ? styles
+                                      .legacyCustomerSelected
+                                  : styles
+                                      .legacyCustomerOption
+                              }
+                              onClick={() => {
+                                setLegacySelectedCustomer(
+                                  customer,
+                                );
+
+                                const existingBalance =
+                                  Number(
+                                    customer
+                                      .current_balance
+                                    ?? 0,
+                                  );
+
+                                if (
+                                  Number.isFinite(
+                                    existingBalance,
+                                  )
+                                  && existingBalance > 0
+                                ) {
+                                  setLegacyPrincipal(
+                                    existingBalance
+                                      .toFixed(2),
+                                  );
+                                } else {
+                                  setLegacyPrincipal(
+                                    "",
+                                  );
+                                }
+
+                                setLegacyError(
+                                  null,
+                                );
+                              }}
+                            >
+                              <span>
+                                <strong>
+                                  {
+                                    customer
+                                      .full_name
+                                  }
+                                </strong>
+
+                                <small>
+                                  {
+                                    customer
+                                      .customer_number
+                                  }
+                                  {" · "}
+                                  {
+                                    customer
+                                      .primary_phone
+                                  }
+                                </small>
+                              </span>
+
+                              <b>
+                                Balance{" "}
+                                {money(
+                                  customer
+                                    .current_balance,
+                                )}
+                              </b>
+                            </button>
+                          );
+                        },
+                      )}
+                    </div>
+                  ) : null}
+
+                  {legacySelectedCustomer ? (
+                    <div
+                      className={
+                        styles.legacySelectedCard
+                      }
+                    >
+                      <div>
+                        <small>
+                          SELECTED CUSTOMER
+                        </small>
+                        <strong>
+                          {
+                            legacySelectedCustomer
+                              .full_name
+                          }
+                        </strong>
+                        <span>
+                          {
+                            legacySelectedCustomer
+                              .customer_number
+                          }
+                          {" · "}
+                          {
+                            legacySelectedCustomer
+                              .primary_phone
+                          }
+                        </span>
+                      </div>
+
+                      <b>
+                        {money(
+                          legacySelectedCustomer
+                            .current_balance,
+                        )}
+                      </b>
+                    </div>
+                  ) : null}
+
+                  {legacySelectedCustomer
+                    && Number(
+                      legacySelectedCustomer
+                        .current_balance,
+                    ) > 0 ? (
+                    <div
+                      className={
+                        styles.legacyBalanceWarning
+                      }
+                    >
+                      <strong>
+                        Existing customer
+                        balance detected
+                      </strong>
+
+                      <span>
+                        This customer already
+                        has{" "}
+                        {money(
+                          legacySelectedCustomer
+                            .current_balance,
+                        )}
+                        {" "}
+                        in the system. This
+                        amount will be converted
+                        into the six-installment
+                        legacy plan without
+                        adding the debt to the
+                        customer balance again.
+                      </span>
+                    </div>
+                  ) : null}
+                </section>
+
+                <section
+                  className={
+                    styles.legacySection
+                  }
+                >
+                  <div
+                    className={
+                      styles.legacySectionTitle
+                    }
+                  >
+                    <CalendarDays
+                      size={17}
+                    />
+
+                    <div>
+                      <strong>
+                        Plan details
+                      </strong>
+                      <small>
+                        Fixed at 6 monthly
+                        installments with
+                        0% interest.
+                      </small>
+                    </div>
+                  </div>
+
+                  <div
+                    className={
+                      styles.legacyFieldGrid
+                    }
+                  >
+                    <label>
+                      <span>
+                        Old outstanding
+                        balance
+                      </span>
+
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        required
+                        placeholder="0.00"
+                        value={
+                          legacyPrincipal
+                        }
+                        onChange={(event) =>
+                          setLegacyPrincipal(
+                            event.target
+                              .value,
+                          )
+                        }
+                        readOnly={
+                          legacyUsesExistingBalance
+                        }
+                      />
+                    </label>
+
+                    <label>
+                      <span>
+                        First due date
+                      </span>
+
+                      <input
+                        type="date"
+                        required
+                        value={
+                          legacyFirstDueDate
+                        }
+                        onChange={(event) =>
+                          setLegacyFirstDueDate(
+                            event.target
+                              .value,
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  <div
+                    className={
+                      styles.legacyFixedRules
+                    }
+                  >
+                    <div>
+                      <small>
+                        INSTALLMENTS
+                      </small>
+                      <strong>6</strong>
+                    </div>
+
+                    <div>
+                      <small>
+                        FREQUENCY
+                      </small>
+                      <strong>
+                        Monthly
+                      </strong>
+                    </div>
+
+                    <div>
+                      <small>
+                        INTEREST
+                      </small>
+                      <strong>0%</strong>
+                    </div>
+                  </div>
+
+                  <label
+                    className={
+                      styles.legacyNotes
+                    }
+                  >
+                    <span>
+                      Notes
+                    </span>
+
+                    <textarea
+                      rows={3}
+                      maxLength={1000}
+                      placeholder={
+                        "Optional note about this old debt"
+                      }
+                      value={
+                        legacyNotes
+                      }
+                      onChange={(event) =>
+                        setLegacyNotes(
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </label>
+                </section>
+
+                {legacySchedulePreview()
+                  .length > 0 ? (
+                  <section
+                    className={
+                      styles.legacyPreview
+                    }
+                  >
+                    <div
+                      className={
+                        styles.legacyPreviewHeader
+                      }
+                    >
+                      <div>
+                        <strong>
+                          6-month preview
+                        </strong>
+                        <small>
+                          Final installment
+                          automatically absorbs
+                          rounding.
+                        </small>
+                      </div>
+
+                      <b>
+                        {money(
+                          Number(
+                            legacyPrincipal,
+                          ),
+                        )}
+                      </b>
+                    </div>
+
+                    <div
+                      className={
+                        styles.legacyPreviewRows
+                      }
+                    >
+                      {legacySchedulePreview().map(
+                        (item) => (
+                          <div
+                            key={
+                              item.number
+                            }
+                          >
+                            <span>
+                              <b>
+                                {
+                                  item.number
+                                }
+                              </b>
+                              <small>
+                                {
+                                  item.dueDate
+                                }
+                              </small>
+                            </span>
+
+                            <strong>
+                              {money(
+                                item.amount,
+                              )}
+                            </strong>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </section>
+                ) : null}
+
+                {legacyError ? (
+                  <div
+                    className={
+                      styles.paymentError
+                    }
+                  >
+                    {legacyError}
+                  </div>
+                ) : null}
+
+                <div
+                  className={
+                    styles.legacyActions
+                  }
+                >
+                  <button
+                    type="button"
+                    className={
+                      styles.cancelButton
+                    }
+                    disabled={
+                      legacySubmitting
+                    }
+                    onClick={
+                      closeLegacyForm
+                    }
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    className={
+                      styles.legacySubmitButton
+                    }
+                    disabled={
+                      legacySubmitting
+                      || !legacySelectedCustomer
+                      || !legacyPrincipal
+                      || !legacyFirstDueDate
+                    }
+                  >
+                    {legacySubmitting ? (
+                      <LoaderCircle
+                        className={
+                          styles.spin
+                        }
+                        size={17}
+                      />
+                    ) : (
+                      <ArchiveRestore
+                        size={17}
+                      />
+                    )}
+
+                    {legacySubmitting
+                      ? "Creating..."
+                      : "Create 6 Installments"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       ) : null}
     </main>

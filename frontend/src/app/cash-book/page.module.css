@@ -758,3 +758,255 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   Cash Book — Professional Manual Entry Actions
+   ========================================================= */
+
+.manualActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cashInButton,
+.cashOutButton {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.cashInButton {
+  background: #166534;
+  border-color: #166534;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(22, 101, 52, 0.18);
+}
+
+.cashInButton:hover {
+  background: #14532d;
+  border-color: #14532d;
+  box-shadow: 0 4px 12px rgba(22, 101, 52, 0.18);
+}
+
+.cashOutButton {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.cashOutButton:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.cashInButton:active,
+.cashOutButton:active {
+  transform: translateY(1px);
+}
+
+.cashInButton:focus-visible,
+.cashOutButton:focus-visible,
+.cancelButton:focus-visible,
+.saveButton:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 2px;
+}
+
+
+/* ---------- Manual entry dialog ---------- */
+
+.manualEntryDialog {
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow:
+    0 24px 70px rgba(15, 23, 42, 0.18),
+    0 4px 16px rgba(15, 23, 42, 0.08);
+}
+
+.manualEntryForm {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.entryTypeSwitch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 20px 22px 4px;
+  padding: 5px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.entryTypeButton,
+.entryTypeActive {
+  min-height: 42px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.entryTypeButton {
+  background: transparent;
+  color: #64748b;
+}
+
+.entryTypeButton:hover {
+  background: rgba(255, 255, 255, 0.7);
+  color: #0f172a;
+}
+
+.entryTypeActive {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+
+/* ---------- Professional footer ---------- */
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 22px;
+  padding: 16px 22px 20px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.cancelButton,
+.saveButton {
+  min-height: 44px;
+  min-width: 118px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+
+.cancelButton {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.cancelButton:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.saveButton {
+  background: #0f172a;
+  border: 1px solid #0f172a;
+  color: #ffffff;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.18);
+}
+
+.saveButton:hover:not(:disabled) {
+  background: #1e293b;
+  border-color: #1e293b;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.18);
+}
+
+.cancelButton:disabled,
+.saveButton:disabled,
+.cashInButton:disabled,
+.cashOutButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 640px) {
+  .manualActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .cashInButton,
+  .cashOutButton {
+    width: 100%;
+  }
+
+  .manualEntryDialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+    border-radius: 16px;
+  }
+
+  .entryTypeSwitch {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
+  .modalFooter {
+    padding: 14px 16px 16px;
+  }
+
+  .cancelButton,
+  .saveButton {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .manualActions {
+    grid-template-columns: 1fr;
+  }
+
+  .modalFooter {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cancelButton,
+  .saveButton {
+    width: 100%;
+  }
+}

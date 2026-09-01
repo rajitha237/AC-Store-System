@@ -1,5 +1,19 @@
 from __future__ import annotations
 
+# LEGACY_DEBT_SUPPORT_HELPERS
+LEGACY_DEBT_SOURCE = "legacy_debt"
+SALES_INVOICE_SOURCE = "sales_invoice"
+LEGACY_DEBT_INSTALLMENT_COUNT = 6
+LEGACY_DEBT_FREQUENCY = "monthly"
+
+
+def is_legacy_debt_plan(plan) -> bool:
+    return (
+        getattr(plan, "source_type", None)
+        == LEGACY_DEBT_SOURCE
+    )
+
+
 import calendar
 from datetime import (
     date,
@@ -28,6 +42,7 @@ from sqlalchemy.orm import (
     selectinload,
 )
 
+from app.models.company import Branch, Company
 from app.models import (
     CreditNote,
     CreditNoteStatus,
@@ -55,6 +70,7 @@ from app.schemas.installment import (
     InstallmentPaymentReverse,
     InstallmentPlanCancel,
     InstallmentPlanCreate,
+    LegacyInstallmentPlanCreate,
     InstallmentPlanDetailResponse,
     InstallmentPlanListResponse,
     InstallmentPlanSummaryResponse,
@@ -419,11 +435,9 @@ async def build_plan_summary(
         )
     )
 
-    invoice = (
-        await get_invoice_or_404(
-            session,
-            plan.invoice_id,
-        )
+    invoice = await get_optional_plan_invoice(
+        session,
+        plan,
     )
 
     overdue_count = 0
@@ -468,7 +482,10 @@ async def build_plan_summary(
             "Agreement number missing"
         )
 
-    if invoice.invoice_number is None:
+    if (
+        invoice is not None
+        and invoice.invoice_number is None
+    ):
         raise RuntimeError(
             "Invoice number missing"
         )
@@ -488,6 +505,8 @@ async def build_plan_summary(
             invoice_id=plan.invoice_id,
             invoice_number=(
                 invoice.invoice_number
+                if invoice is not None
+                else None
             ),
             start_date=(
                 plan.start_date
@@ -600,6 +619,297 @@ async def build_plan_detail(
         **summary.model_dump(),
         notes=plan.notes,
         schedules=schedules,
+    )
+
+
+async def _resolve_legacy_installment_ownership(
+    session: AsyncSession,
+    customer: Customer,
+) -> tuple[Company, Branch]:
+    company_result = await session.execute(
+        select(Company)
+        .where(
+            Company.id == customer.company_id,
+            Company.is_active.is_(True),
+        )
+    )
+
+    company = company_result.scalar_one_or_none()
+
+    if company is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Customer company is not active "
+                "or was not found"
+            ),
+        )
+
+    branch_result = await session.execute(
+        select(Branch)
+        .where(
+            Branch.company_id == company.id,
+            Branch.is_active.is_(True),
+        )
+        .order_by(
+            Branch.is_main_branch.desc(),
+            Branch.id,
+        )
+    )
+
+    branch = branch_result.scalars().first()
+
+    if branch is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Active branch is not configured "
+                "for this customer company"
+            ),
+        )
+
+    return company, branch
+
+
+async def create_legacy_installment_plan(
+    session: AsyncSession,
+    payload: LegacyInstallmentPlanCreate,
+    current_user: User,
+) -> InstallmentPlanDetailResponse:
+    customer = await get_customer_or_404(
+        session,
+        payload.customer_id,
+    )
+
+    principal_amount = money(
+        payload.principal_amount
+    )
+
+    if principal_amount <= ZERO:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Legacy outstanding amount "
+                "must be greater than zero"
+            ),
+        )
+
+    existing_balance = money(
+        Decimal(customer.current_balance)
+    )
+
+    existing_plan_result = await session.execute(
+        select(InstallmentPlan.id).where(
+            InstallmentPlan.customer_id == customer.id,
+            InstallmentPlan.status
+            != InstallmentPlanStatus.CANCELLED.value,
+        )
+    )
+
+    existing_plan_id = (
+        existing_plan_result.scalars().first()
+    )
+
+    if existing_plan_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This customer already has an active "
+                "installment agreement"
+            ),
+        )
+
+    if payload.balance_mode == "use_existing_balance":
+        if existing_balance <= ZERO:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "This customer has no existing "
+                    "balance to convert"
+                ),
+            )
+
+        if principal_amount != existing_balance:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Legacy principal must exactly match "
+                    "the customer's existing balance"
+                ),
+            )
+
+    elif payload.balance_mode == "register_new_debt":
+        if existing_balance != ZERO:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "This customer already has an "
+                    "outstanding balance. Use existing "
+                    "balance conversion instead."
+                ),
+            )
+
+    else:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail="Invalid legacy balance mode",
+        )
+
+    company, branch = (
+        await _resolve_legacy_installment_ownership(
+            session,
+            customer,
+        )
+    )
+
+    installment_count = 6
+    interest_rate = Decimal("0.0000")
+    interest_amount = ZERO
+    financed_amount = principal_amount
+
+    base_amount = money(
+        financed_amount
+        / Decimal(installment_count)
+    )
+
+    plan = InstallmentPlan(
+        company_id=company.id,
+        branch_id=branch.id,
+        customer_id=customer.id,
+        invoice_id=None,
+        source_type="legacy_debt",
+        legacy_principal_amount=principal_amount,
+        agreement_number=None,
+        start_date=date.today(),
+        first_due_date=payload.first_due_date,
+        frequency=InstallmentFrequency.MONTHLY.value,
+        installment_count=installment_count,
+        principal_amount=principal_amount,
+        interest_rate=interest_rate,
+        interest_amount=interest_amount,
+        financed_amount=financed_amount,
+        scheduled_installment_amount=base_amount,
+        total_paid=ZERO,
+        outstanding_amount=financed_amount,
+        grace_days=0,
+        status=(
+            InstallmentPlanStatus.ACTIVE.value
+        ),
+        notes=payload.notes,
+        created_by_id=current_user.id,
+    )
+
+    session.add(plan)
+
+    # Register only genuinely new opening debt.
+    # Existing balances are converted without adding twice.
+    if payload.balance_mode == "register_new_debt":
+        customer.current_balance = money(
+            Decimal(customer.current_balance)
+            + principal_amount
+        )
+
+    try:
+        await session.flush()
+
+        plan.agreement_number = (
+            f"INS-{plan.id:06d}"
+        )
+
+        allocated = ZERO
+
+        for index in range(
+            installment_count
+        ):
+            if index == installment_count - 1:
+                amount_due = money(
+                    financed_amount - allocated
+                )
+            else:
+                amount_due = base_amount
+
+            allocated = money(
+                allocated + amount_due
+            )
+
+            session.add(
+                InstallmentSchedule(
+                    plan_id=plan.id,
+                    installment_number=index + 1,
+                    due_date=schedule_due_date(
+                        payload.first_due_date,
+                        InstallmentFrequency.MONTHLY.value,
+                        index,
+                    ),
+                    amount_due=amount_due,
+                    amount_paid=ZERO,
+                    status=(
+                        InstallmentScheduleStatus
+                        .PENDING
+                        .value
+                    ),
+                )
+            )
+
+        await session.flush()
+
+        await create_audit_log(
+            session=session,
+            user_id=current_user.id,
+            action=(
+                "installment.legacy_plan_created"
+            ),
+            module="installments",
+            entity_type="installment_plan",
+            entity_id=plan.id,
+            entity_reference=(
+                plan.agreement_number
+            ),
+            description=(
+                f"Legacy debt installment plan "
+                f"{plan.agreement_number} created"
+            ),
+            before_data=None,
+            after_data=(
+                installment_audit_snapshot(plan)
+            ),
+            metadata={
+                "source_type": "legacy_debt",
+                "customer_id": customer.id,
+                "legacy_principal_amount": str(
+                    principal_amount
+                ),
+                "balance_mode": payload.balance_mode,
+                "customer_balance_before": str(
+                    existing_balance
+                ),
+                "installment_count": 6,
+                "frequency": (
+                    InstallmentFrequency
+                    .MONTHLY
+                    .value
+                ),
+            },
+        )
+
+        await session.commit()
+
+    except Exception:
+        await session.rollback()
+        raise
+
+    plan = await get_plan_or_404(
+        session,
+        plan.id,
+    )
+
+    return await build_plan_detail(
+        session,
+        plan,
     )
 
 
@@ -836,8 +1146,11 @@ async def create_installment_plan(
                 )
             ),
             metadata={
-                "invoice_id":
-                    invoice.id,
+                "invoice_id": (
+                    invoice.id
+                    if invoice is not None
+                    else None
+                ),
                 "customer_id":
                     customer.id,
                 "installment_count":
@@ -959,6 +1272,19 @@ async def read_installment_plan(
     )
 
 
+async def get_optional_plan_invoice(
+    session: AsyncSession,
+    plan: InstallmentPlan,
+) -> SalesInvoice | None:
+    if plan.invoice_id is None:
+        return None
+
+    return await get_invoice_or_404(
+        session,
+        plan.invoice_id,
+    )
+
+
 async def receive_installment_payment(
     session: AsyncSession,
     *,
@@ -1009,9 +1335,9 @@ async def receive_installment_payment(
             ),
         )
 
-    invoice = await get_invoice_or_404(
+    invoice = await get_optional_plan_invoice(
         session,
-        plan.invoice_id,
+        plan,
     )
 
     customer = (
@@ -1073,9 +1399,12 @@ async def receive_installment_payment(
         )
     )
 
-    if money(
-        invoice.balance_amount
-    ) != principal_remaining:
+    if (
+        invoice is not None
+        and money(
+            invoice.balance_amount
+        ) != principal_remaining
+    ):
         raise HTTPException(
             status_code=(
                 status.HTTP_409_CONFLICT
@@ -1171,11 +1500,15 @@ async def receive_installment_payment(
         )
 
     payment = CustomerPayment(
-        company_id=invoice.company_id,
-        branch_id=invoice.branch_id,
+        company_id=plan.company_id,
+        branch_id=plan.branch_id,
         receipt_number=None,
         customer_id=customer.id,
-        invoice_id=invoice.id,
+        invoice_id=(
+            invoice.id
+            if invoice is not None
+            else None
+        ),
         amount=amount,
         payment_method=(
             payload.payment_method.value
@@ -1414,40 +1747,41 @@ async def receive_installment_payment(
             )
         )
 
-        invoice.paid_amount = money(
-            Decimal(
-                invoice.paid_amount
-            )
-            + principal_component
-        )
-
-        invoice.balance_amount = money(
-            max(
-                ZERO,
+        if invoice is not None:
+            invoice.paid_amount = money(
                 Decimal(
-                    invoice.grand_total
-                )
-                - Decimal(
-                    invoice.credited_amount
-                )
-                - Decimal(
                     invoice.paid_amount
-                ),
-            )
-        )
-
-        if invoice.balance_amount == ZERO:
-            invoice.payment_status = (
-                PaymentStatus.PAID.value
-            )
-        else:
-            invoice.payment_status = (
-                PaymentStatus.PARTIAL.value
+                )
+                + principal_component
             )
 
-        invoice.updated_by_id = (
-            current_user.id
-        )
+            invoice.balance_amount = money(
+                max(
+                    ZERO,
+                    Decimal(
+                        invoice.grand_total
+                    )
+                    - Decimal(
+                        invoice.credited_amount
+                    )
+                    - Decimal(
+                        invoice.paid_amount
+                    ),
+                )
+            )
+
+            if invoice.balance_amount == ZERO:
+                invoice.payment_status = (
+                    PaymentStatus.PAID.value
+                )
+            else:
+                invoice.payment_status = (
+                    PaymentStatus.PARTIAL.value
+                )
+
+            invoice.updated_by_id = (
+                current_user.id
+            )
 
         customer.current_balance = money(
             max(
@@ -1531,9 +1865,10 @@ async def receive_installment_payment(
         await session.refresh(
             payment
         )
-        await session.refresh(
-            invoice
-        )
+        if invoice is not None:
+            await session.refresh(
+                invoice
+            )
         await session.refresh(
             customer
         )
@@ -1547,8 +1882,11 @@ async def receive_installment_payment(
         is None
         or plan.agreement_number
         is None
-        or invoice.invoice_number
-        is None
+        or (
+            invoice is not None
+            and invoice.invoice_number
+            is None
+        )
     ):
         raise RuntimeError(
             "Generated reference missing"
@@ -1567,9 +1905,15 @@ async def receive_installment_payment(
         agreement_number=(
             plan.agreement_number
         ),
-        invoice_id=invoice.id,
+        invoice_id=(
+            invoice.id
+            if invoice is not None
+            else None
+        ),
         invoice_number=(
             invoice.invoice_number
+            if invoice is not None
+            else None
         ),
         customer_id=customer.id,
         amount=amount,
@@ -1588,11 +1932,19 @@ async def receive_installment_payment(
         plan_outstanding_amount=money(
             plan.outstanding_amount
         ),
-        invoice_paid_amount=money(
-            invoice.paid_amount
+        invoice_paid_amount=(
+            money(
+                invoice.paid_amount
+            )
+            if invoice is not None
+            else None
         ),
-        invoice_balance_amount=money(
-            invoice.balance_amount
+        invoice_balance_amount=(
+            money(
+                invoice.balance_amount
+            )
+            if invoice is not None
+            else None
         ),
         customer_balance=money(
             customer.current_balance
@@ -1621,8 +1973,6 @@ async def reverse_installment_payment(
             .where(
                 CustomerPayment.id
                 == payment_id,
-                CustomerPayment.invoice_id
-                == plan.invoice_id,
                 CustomerPayment.customer_id
                 == plan.customer_id,
             )
@@ -1639,6 +1989,15 @@ async def reverse_installment_payment(
             status_code=(
                 status.HTTP_404_NOT_FOUND
             ),
+            detail=(
+                "Installment payment "
+                "was not found"
+            ),
+        )
+
+    if payment.invoice_id != plan.invoice_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=(
                 "Installment payment "
                 "was not found"
@@ -1690,9 +2049,9 @@ async def reverse_installment_payment(
             ),
         )
 
-    invoice = await get_invoice_or_404(
+    invoice = await get_optional_plan_invoice(
         session,
-        plan.invoice_id,
+        plan,
     )
 
     customer = (
@@ -1744,8 +2103,11 @@ async def reverse_installment_payment(
             ),
         )
 
-    if principal_component > money(
-        invoice.paid_amount
+    if (
+        invoice is not None
+        and principal_component > money(
+            invoice.paid_amount
+        )
     ):
         raise HTTPException(
             status_code=(
@@ -1888,44 +2250,45 @@ async def reverse_installment_payment(
                 .value
             )
 
-        invoice.paid_amount = money(
-            Decimal(
-                invoice.paid_amount
-            )
-            - principal_component
-        )
-
-        invoice.balance_amount = money(
-            max(
-                ZERO,
+        if invoice is not None:
+            invoice.paid_amount = money(
                 Decimal(
-                    invoice.grand_total
-                )
-                - Decimal(
-                    invoice.credited_amount
-                )
-                - Decimal(
                     invoice.paid_amount
-                ),
-            )
-        )
-
-        if invoice.paid_amount == ZERO:
-            invoice.payment_status = (
-                PaymentStatus.UNPAID.value
-            )
-        elif invoice.balance_amount == ZERO:
-            invoice.payment_status = (
-                PaymentStatus.PAID.value
-            )
-        else:
-            invoice.payment_status = (
-                PaymentStatus.PARTIAL.value
+                )
+                - principal_component
             )
 
-        invoice.updated_by_id = (
-            current_user.id
-        )
+            invoice.balance_amount = money(
+                max(
+                    ZERO,
+                    Decimal(
+                        invoice.grand_total
+                    )
+                    - Decimal(
+                        invoice.credited_amount
+                    )
+                    - Decimal(
+                        invoice.paid_amount
+                    ),
+                )
+            )
+
+            if invoice.paid_amount == ZERO:
+                invoice.payment_status = (
+                    PaymentStatus.UNPAID.value
+                )
+            elif invoice.balance_amount == ZERO:
+                invoice.payment_status = (
+                    PaymentStatus.PAID.value
+                )
+            else:
+                invoice.payment_status = (
+                    PaymentStatus.PARTIAL.value
+                )
+
+            invoice.updated_by_id = (
+                current_user.id
+            )
 
         customer.current_balance = money(
             Decimal(
@@ -1989,9 +2352,10 @@ async def reverse_installment_payment(
         await session.refresh(
             payment
         )
-        await session.refresh(
-            invoice
-        )
+        if invoice is not None:
+            await session.refresh(
+                invoice
+            )
         await session.refresh(
             customer
         )
@@ -2005,8 +2369,11 @@ async def reverse_installment_payment(
         is None
         or plan.agreement_number
         is None
-        or invoice.invoice_number
-        is None
+        or (
+            invoice is not None
+            and invoice.invoice_number
+            is None
+        )
     ):
         raise RuntimeError(
             "Reference missing"
@@ -2025,9 +2392,15 @@ async def reverse_installment_payment(
         agreement_number=(
             plan.agreement_number
         ),
-        invoice_id=invoice.id,
+        invoice_id=(
+            invoice.id
+            if invoice is not None
+            else None
+        ),
         invoice_number=(
             invoice.invoice_number
+            if invoice is not None
+            else None
         ),
         customer_id=customer.id,
         amount=payment_amount,
@@ -2046,11 +2419,19 @@ async def reverse_installment_payment(
         plan_outstanding_amount=money(
             plan.outstanding_amount
         ),
-        invoice_paid_amount=money(
-            invoice.paid_amount
+        invoice_paid_amount=(
+            money(
+                invoice.paid_amount
+            )
+            if invoice is not None
+            else None
         ),
-        invoice_balance_amount=money(
-            invoice.balance_amount
+        invoice_balance_amount=(
+            money(
+                invoice.balance_amount
+            )
+            if invoice is not None
+            else None
         ),
         customer_balance=money(
             customer.current_balance

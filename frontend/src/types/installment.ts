@@ -20,6 +20,18 @@ export interface InstallmentScheduleItem {
   status?: string;
 }
 
+export type LegacyBalanceMode =
+  | "register_new_debt"
+  | "use_existing_balance";
+
+export interface LegacyInstallmentPlanCreate {
+  customer_id: number;
+  principal_amount: number;
+  first_due_date: string;
+  balance_mode: LegacyBalanceMode;
+  notes?: string | null;
+}
+
 export interface InstallmentPlanCreate {
   invoice_id: number;
   frequency: InstallmentFrequency;
@@ -33,8 +45,8 @@ export interface InstallmentPlanCreate {
 export interface InstallmentPlan {
   id: number;
   agreement_number: string;
-  invoice_id: number;
-  invoice_number: string;
+  invoice_id: number | null;
+  invoice_number: string | null;
   customer_id: number;
   customer_name: string;
   principal_amount: number | string;
@@ -77,10 +89,10 @@ export interface InstallmentPaymentResponse {
   agreement_number: string;
   customer_id: number;
   customer_balance: number | string;
-  invoice_id: number;
-  invoice_number: string;
-  invoice_paid_amount: number | string;
-  invoice_balance_amount: number | string;
+  invoice_id: number | null;
+  invoice_number: string | null;
+  invoice_paid_amount: number | string | null;
+  invoice_balance_amount: number | string | null;
   plan_total_paid: number | string;
   plan_outstanding_amount: number | string;
   message: string;

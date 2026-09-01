@@ -730,3 +730,533 @@
     width: 100%;
   }
 }
+
+/* =========================================================
+   Legacy Debt — Professional Installment Entry
+   ========================================================= */
+
+.legacyCreateButton,
+.legacySubmitButton,
+.legacyDoneButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #6d3fd3;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 7px 18px rgb(109 63 211 / 18%);
+}
+
+.legacyCreateButton:hover,
+.legacySubmitButton:hover,
+.legacyDoneButton:hover {
+  background: #5d32c0;
+}
+
+.legacyModalBackdrop {
+  position: fixed;
+  z-index: 140;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(10 20 35 / 58%);
+  backdrop-filter: blur(4px);
+}
+
+.legacyModal {
+  width: min(760px, 96vw);
+  max-height: 94vh;
+  overflow-y: auto;
+  border-radius: 18px;
+  background: #f7f9fc;
+  box-shadow:
+    0 28px 90px rgb(0 0 0 / 25%);
+}
+
+.legacyModalHeader {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 21px 22px 18px;
+  border-bottom: 1px solid #e4e9f1;
+  background: rgb(255 255 255 / 96%);
+  backdrop-filter: blur(10px);
+}
+
+.legacyModalHeader h3 {
+  margin: 5px 0 4px;
+  color: #172235;
+  font-size: 22px;
+}
+
+.legacyModalHeader p {
+  max-width: 520px;
+  margin: 0;
+  color: #758197;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.legacyForm {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.legacySection {
+  display: grid;
+  gap: 14px;
+  padding: 17px;
+  border: 1px solid #e0e6ef;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.legacySectionTitle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #6d3fd3;
+}
+
+.legacySectionTitle > div {
+  display: grid;
+  gap: 3px;
+}
+
+.legacySectionTitle strong {
+  color: #253247;
+  font-size: 13px;
+}
+
+.legacySectionTitle small {
+  color: #8490a2;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.legacySearchRow {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+  gap: 9px;
+}
+
+.legacySearchRow input,
+.legacyFieldGrid input,
+.legacyNotes textarea {
+  width: 100%;
+  border: 1px solid #d7dfeb;
+  border-radius: 10px;
+  background: #fff;
+  color: #172235;
+  font: inherit;
+  outline: none;
+}
+
+.legacySearchRow input,
+.legacyFieldGrid input {
+  min-height: 43px;
+  padding: 0 12px;
+}
+
+.legacyNotes textarea {
+  resize: vertical;
+  padding: 11px 12px;
+}
+
+.legacySearchRow input:focus,
+.legacyFieldGrid input:focus,
+.legacyNotes textarea:focus {
+  border-color: #6d3fd3;
+  box-shadow:
+    0 0 0 3px rgb(109 63 211 / 9%);
+}
+
+.legacySearchRow > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 104px;
+  min-height: 43px;
+  padding: 0 14px;
+  border: 1px solid #d6deea;
+  border-radius: 10px;
+  background: #f6f8fb;
+  color: #35445b;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.legacyCustomerResults {
+  display: grid;
+  gap: 7px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.legacyCustomerOption,
+.legacyCustomerSelected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #e0e6ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #34435a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.legacyCustomerSelected {
+  border-color: #8a67dd;
+  background: #f5f1ff;
+  box-shadow:
+    0 0 0 2px rgb(109 63 211 / 7%);
+}
+
+.legacyCustomerOption > span,
+.legacyCustomerSelected > span {
+  display: grid;
+  gap: 3px;
+}
+
+.legacyCustomerOption strong,
+.legacyCustomerSelected strong {
+  color: #253247;
+  font-size: 12px;
+}
+
+.legacyCustomerOption small,
+.legacyCustomerSelected small {
+  color: #8390a3;
+  font-size: 10px;
+}
+
+.legacyCustomerOption > b,
+.legacyCustomerSelected > b {
+  color: #5b687d;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.legacySelectedCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 14px;
+  border: 1px solid #d7c9fa;
+  border-radius: 11px;
+  background: #f7f3ff;
+}
+
+.legacySelectedCard > div {
+  display: grid;
+  gap: 3px;
+}
+
+.legacySelectedCard small {
+  color: #8061c7;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.legacySelectedCard strong {
+  color: #2b2540;
+  font-size: 13px;
+}
+
+.legacySelectedCard span {
+  color: #7d7490;
+  font-size: 10px;
+}
+
+.legacySelectedCard > b {
+  color: #6d3fd3;
+  font-size: 13px;
+}
+
+.legacyBalanceWarning {
+  display: grid;
+  gap: 5px;
+  padding: 11px 13px;
+  border: 1px solid #f0ce88;
+  border-radius: 10px;
+  background: #fff9e9;
+}
+
+.legacyBalanceWarning strong {
+  color: #9b6500;
+  font-size: 11px;
+}
+
+.legacyBalanceWarning span {
+  color: #806a3e;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.legacyFieldGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.legacyFieldGrid label,
+.legacyNotes {
+  display: grid;
+  gap: 7px;
+}
+
+.legacyFieldGrid label > span,
+.legacyNotes > span {
+  color: #46536a;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.legacyFixedRules {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.legacyFixedRules > div {
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.legacyFixedRules small {
+  color: #8995a7;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.legacyFixedRules strong {
+  color: #263349;
+  font-size: 12px;
+}
+
+.legacyPreview {
+  display: grid;
+  gap: 11px;
+  padding: 17px;
+  border: 1px solid #dcd2f5;
+  border-radius: 14px;
+  background: #fbf9ff;
+}
+
+.legacyPreviewHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.legacyPreviewHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.legacyPreviewHeader strong {
+  color: #342b4c;
+  font-size: 12px;
+}
+
+.legacyPreviewHeader small {
+  color: #8b819f;
+  font-size: 9px;
+}
+
+.legacyPreviewHeader > b {
+  color: #6d3fd3;
+  font-size: 13px;
+}
+
+.legacyPreviewRows {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.legacyPreviewRows > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid #e6e0f3;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.legacyPreviewRows span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legacyPreviewRows span > b {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  background: #eee7ff;
+  color: #6d3fd3;
+  font-size: 9px;
+}
+
+.legacyPreviewRows small {
+  color: #7e899b;
+  font-size: 9px;
+}
+
+.legacyPreviewRows > div > strong {
+  color: #354258;
+  font-size: 10px;
+}
+
+.legacyActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.legacyActions button {
+  min-width: 132px;
+}
+
+.legacyActions button:disabled,
+.legacySearchRow button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.legacySuccess {
+  display: grid;
+  justify-items: center;
+  padding: 32px 22px 25px;
+  text-align: center;
+}
+
+.legacySuccess h4 {
+  margin: 0 0 5px;
+  color: #253247;
+  font-size: 20px;
+}
+
+.legacySuccess > strong {
+  color: #6d3fd3;
+  font-size: 13px;
+}
+
+.legacySuccess > p {
+  margin: 7px 0 0;
+  color: #7c8799;
+  font-size: 11px;
+}
+
+.legacySuccessGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: min(460px, 100%);
+  margin: 20px 0;
+}
+
+.legacySuccessGrid > div {
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid #e1e6ee;
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+}
+
+.legacySuccessGrid small {
+  color: #8a95a5;
+  font-size: 9px;
+}
+
+.legacySuccessGrid b {
+  color: #344157;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .legacyModalBackdrop {
+    padding: 8px;
+  }
+
+  .legacyModal {
+    width: 100%;
+    max-height: 97vh;
+    border-radius: 14px;
+  }
+
+  .legacyModalHeader {
+    padding: 17px;
+  }
+
+  .legacyForm {
+    padding: 11px;
+  }
+
+  .legacySection {
+    padding: 13px;
+  }
+
+  .legacySearchRow,
+  .legacyFieldGrid,
+  .legacyFixedRules,
+  .legacyPreviewRows,
+  .legacySuccessGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .legacyCustomerOption,
+  .legacyCustomerSelected,
+  .legacySelectedCard {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .legacyActions {
+    flex-direction: column-reverse;
+  }
+
+  .legacyActions button,
+  .legacyCreateButton {
+    width: 100%;
+  }
+}
