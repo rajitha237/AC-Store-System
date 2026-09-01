@@ -37,6 +37,8 @@ from app.schemas.inventory import (
     StockBalanceResponse,
     StockMovementListResponse,
     StockMovementResponse,
+    SupplierReturnRequest,
+    SupplierReturnResponse,
 )
 
 
@@ -2710,3 +2712,287 @@ async def transfer_serialized_stock(
         "transfer_in_movements":
             in_movements,
     }
+
+async def return_stock_to_supplier(
+    session: AsyncSession,
+    payload: SupplierReturnRequest,
+    current_user: User,
+) -> SupplierReturnResponse:
+    company = await get_active_company(session)
+
+    supplier_result = await session.execute(
+        select(Supplier).where(
+            Supplier.id == payload.supplier_id,
+            Supplier.company_id == company.id,
+            Supplier.is_active.is_(True),
+        )
+    )
+    supplier = supplier_result.scalar_one_or_none()
+
+    if supplier is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier was not found",
+        )
+
+    product = await get_product_or_404(
+        session,
+        payload.product_id,
+    )
+
+    warehouse = await get_warehouse_or_404(
+        session,
+        payload.warehouse_id,
+    )
+
+    stock_item = await get_stock_item_or_404(
+        session=session,
+        warehouse_id=warehouse.id,
+        product_id=product.id,
+    )
+
+    quantity = Decimal(payload.quantity)
+
+    available_before = (
+        Decimal(stock_item.quantity_on_hand)
+        - Decimal(stock_item.quantity_reserved)
+    )
+
+    if available_before < quantity:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Insufficient available stock "
+                "for supplier return"
+            ),
+        )
+
+    serial_record = None
+
+    if product.track_serial_numbers:
+        if payload.serial_number_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "Serial number is required "
+                    "for this product"
+                ),
+            )
+
+        if quantity != Decimal("1"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "Serialized supplier return "
+                    "quantity must be 1"
+                ),
+            )
+
+        serial_record = await get_serial_or_404(
+            session,
+            payload.serial_number_id,
+        )
+
+        if serial_record.product_id != product.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Serial number does not belong "
+                    "to the selected product"
+                ),
+            )
+
+        if serial_record.warehouse_id != warehouse.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Serial number is not in "
+                    "the selected warehouse"
+                ),
+            )
+
+        if (
+            serial_record.status
+            != SerialNumberStatus.AVAILABLE.value
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Only an available serial number "
+                    "can be returned to supplier"
+                ),
+            )
+
+        if (
+            serial_record.supplier_id is not None
+            and serial_record.supplier_id
+            != supplier.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Serial number belongs to "
+                    "a different supplier"
+                ),
+            )
+
+    elif payload.serial_number_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Serial number is not allowed "
+                "for this product"
+            ),
+        )
+
+    stock_before = stock_item_audit_snapshot(
+        stock_item
+    )
+
+    serial_before = (
+        serial_number_audit_snapshot(
+            serial_record
+        )
+        if serial_record is not None
+        else None
+    )
+
+    stock_item.quantity_on_hand = (
+        Decimal(stock_item.quantity_on_hand)
+        - quantity
+    )
+
+    if serial_record is not None:
+        serial_record.status = (
+            SerialNumberStatus.SUPPLIER_CLAIM.value
+        )
+        serial_record.current_customer_id = None
+
+    movement = StockMovement(
+        company_id=company.id,
+        branch_id=warehouse.branch_id,
+        warehouse_id=warehouse.id,
+        product_id=product.id,
+        serial_number_id=(
+            serial_record.id
+            if serial_record is not None
+            else None
+        ),
+        movement_type=(
+            StockMovementType.SUPPLIER_RETURN.value
+        ),
+        quantity=-quantity,
+        unit_cost=Decimal(stock_item.average_cost),
+        reference_type="supplier_return",
+        reference_id=payload.reference_id,
+        notes=payload.notes,
+        created_by_id=current_user.id,
+    )
+
+    session.add(movement)
+
+    try:
+        await session.flush()
+
+        await create_audit_log(
+            session=session,
+            user_id=current_user.id,
+            action="inventory.supplier_return",
+            module="inventory",
+            entity_type="stock_movement",
+            entity_id=movement.id,
+            entity_reference=payload.reference_id,
+            description=(
+                "Stock returned to supplier"
+            ),
+            before_data={
+                "stock":
+                    stock_before,
+                "serial":
+                    serial_before,
+            },
+            after_data={
+                "stock":
+                    stock_item_audit_snapshot(
+                        stock_item
+                    ),
+                "serial":
+                    (
+                        serial_number_audit_snapshot(
+                            serial_record
+                        )
+                        if serial_record is not None
+                        else None
+                    ),
+                "movement":
+                    stock_movement_audit_snapshot(
+                        movement
+                    ),
+            },
+            metadata={
+                "supplier_id":
+                    supplier.id,
+                "supplier_name":
+                    supplier.company_name,
+                "product_id":
+                    product.id,
+                "warehouse_id":
+                    warehouse.id,
+                "serial_number_id":
+                    (
+                        serial_record.id
+                        if serial_record is not None
+                        else None
+                    ),
+                "quantity_returned":
+                    str(quantity),
+            },
+        )
+
+        await session.commit()
+
+        await session.refresh(stock_item)
+        await session.refresh(movement)
+
+        if serial_record is not None:
+            await session.refresh(
+                serial_record
+            )
+
+    except IntegrityError as exc:
+        await session.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Supplier return could not "
+                "be completed"
+            ),
+        ) from exc
+
+    quantity_available = (
+        Decimal(stock_item.quantity_on_hand)
+        - Decimal(stock_item.quantity_reserved)
+    )
+
+    return SupplierReturnResponse(
+        message=(
+            "Stock returned to supplier successfully"
+        ),
+        supplier_id=supplier.id,
+        product_id=product.id,
+        warehouse_id=warehouse.id,
+        quantity_returned=quantity,
+        quantity_on_hand=(
+            stock_item.quantity_on_hand
+        ),
+        quantity_available=quantity_available,
+        serial_number_id=(
+            serial_record.id
+            if serial_record is not None
+            else None
+        ),
+        movement=StockMovementResponse.model_validate(
+            movement
+        ),
+    )

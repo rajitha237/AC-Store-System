@@ -347,3 +347,24 @@ export async function transferSerializedStock(
 
   return response.data;
 }
+
+
+export async function returnStockToSupplier(
+  payload:
+    import("@/types/inventory")
+      .SupplierReturnPayload,
+): Promise<
+  import("@/types/inventory")
+    .SupplierReturnResult
+> {
+  const response =
+    await api.post<
+      import("@/types/inventory")
+        .SupplierReturnResult
+    >(
+      "/inventory/supplier-return",
+      payload,
+    );
+
+  return response.data;
+}

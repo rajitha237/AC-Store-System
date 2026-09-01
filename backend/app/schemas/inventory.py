@@ -231,6 +231,42 @@ class NonSerializedStockReceiveRequest(BaseModel):
         return normalize_optional_text(value)
 
 
+
+class SupplierReturnRequest(BaseModel):
+    supplier_id: int = Field(ge=1)
+    product_id: int = Field(ge=1)
+    warehouse_id: int = Field(ge=1)
+
+    quantity: Decimal = Field(
+        gt=Decimal("0.000"),
+        max_digits=18,
+        decimal_places=3,
+    )
+
+    serial_number_id: int | None = Field(
+        default=None,
+        ge=1,
+    )
+
+    reference_id: str | None = Field(
+        default=None,
+        max_length=100,
+    )
+
+    notes: str | None = None
+
+    @field_validator(
+        "reference_id",
+        "notes",
+    )
+    @classmethod
+    def validate_text(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        return normalize_optional_text(value)
+
+
 class SerializedStockIssueRequest(BaseModel):
     serial_number_id: int = Field(ge=1)
     customer_id: int = Field(ge=1)
@@ -381,6 +417,22 @@ class StockMovementResponse(BaseModel):
     notes: str | None
     created_by_id: int
     created_at: datetime
+
+
+class SupplierReturnResponse(BaseModel):
+    message: str
+
+    supplier_id: int
+    product_id: int
+    warehouse_id: int
+
+    quantity_returned: Decimal
+    quantity_on_hand: Decimal
+    quantity_available: Decimal
+
+    serial_number_id: int | None
+
+    movement: StockMovementResponse
 
 
 class SerializedStockReceiveResponse(BaseModel):

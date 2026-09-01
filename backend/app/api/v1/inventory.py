@@ -25,6 +25,8 @@ from app.schemas.inventory import (
     SerializedStockReceiveResponse,
     StockBalanceResponse,
     StockMovementListResponse,
+    SupplierReturnRequest,
+    SupplierReturnResponse,
     WarehouseResponse,
 )
 from app.services.inventory import (
@@ -37,6 +39,7 @@ from app.services.inventory import (
     list_stock_movements,
     receive_non_serialized_stock,
     receive_serialized_stock,
+    return_stock_to_supplier,
 )
 
 
@@ -57,6 +60,16 @@ CanReceiveInventory = Annotated[
     User,
     Depends(require_permission("inventory.receive")),
 ]
+
+CanReturnSupplierInventory = Annotated[
+    User,
+    Depends(
+        require_permission(
+            "inventory.receive"
+        )
+    ),
+]
+
 
 CanAdjustInventory = Annotated[
     User,
@@ -371,4 +384,20 @@ async def transfer_serialized_inventory(
         SerializedStockTransferResponse(
             **result
         )
+    )
+
+@router.post(
+    "/supplier-return",
+    response_model=SupplierReturnResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def return_inventory_to_supplier(
+    payload: SupplierReturnRequest,
+    session: DatabaseSession,
+    current_user: CanReturnSupplierInventory,
+) -> SupplierReturnResponse:
+    return await return_stock_to_supplier(
+        session=session,
+        payload=payload,
+        current_user=current_user,
     )

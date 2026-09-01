@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import axios from "axios";
 
 import {
@@ -1188,6 +1190,29 @@ export default function PurchasesPage() {
         <section style={cardStyle}>
           <h2>
             <Plus size={18} />{" "}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginBottom: 14,
+              }}
+            >
+              <Link
+                href="/purchases/supplier-return"
+                style={{
+                  ...buttonStyle,
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "#7c2d12",
+                  color: "#ffffff",
+                }}
+              >
+                Return to Supplier
+              </Link>
+            </div>
+
             New Purchase Order
           </h2>
 

@@ -359,3 +359,34 @@ export type SerializedTransferResult = {
   serials:
     SerialNumberDetail[];
 };
+
+
+export type SupplierReturnPayload = {
+  supplier_id: number;
+  product_id: number;
+  warehouse_id: number;
+
+  quantity: string;
+
+  serial_number_id?: number | null;
+
+  reference_id?: string | null;
+  notes?: string | null;
+};
+
+
+export type SupplierReturnResult = {
+  message: string;
+
+  supplier_id: number;
+  product_id: number;
+  warehouse_id: number;
+
+  quantity_returned: string;
+  quantity_on_hand: string;
+  quantity_available: string;
+
+  serial_number_id: number | null;
+
+  movement: StockMovement;
+};
