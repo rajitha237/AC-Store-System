@@ -444,9 +444,9 @@ export default function TechnicianPage() {
           }
         },
         {
-          enableHighAccuracy: true,
-          maximumAge: 30000,
-          timeout: 20000,
+          enableHighAccuracy: false,
+          maximumAge: 60000,
+          timeout: 60000,
         },
       );
 

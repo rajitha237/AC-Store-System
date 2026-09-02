@@ -101,21 +101,6 @@ function statusLabel(
 }
 
 
-function markerColor(
-  status: string,
-): string {
-  if (status === "live") {
-    return "#16a34a";
-  }
-
-  if (status === "stale") {
-    return "#d97706";
-  }
-
-  return "#64748b";
-}
-
-
 function googleMapsUrl(
   latitude: number,
   longitude: number,
@@ -468,11 +453,30 @@ export default function TechnicianLiveMapClient({
                 )
                 && accuracy > 0;
 
+              const technicianColors = [
+                "#2563eb",
+                "#dc2626",
+                "#16a34a",
+                "#d97706",
+                "#7c3aed",
+                "#0891b2",
+                "#db2777",
+                "#4f46e5",
+              ];
+
+              const technicianColor =
+                technicianColors[
+                  Math.abs(
+                    Number(
+                      location
+                        .technician_id,
+                    ),
+                  )
+                  % technicianColors.length
+                ];
+
               const color =
-                markerColor(
-                  location
-                    .presence_status,
-                );
+                technicianColor;
 
               return (
                 <Fragment

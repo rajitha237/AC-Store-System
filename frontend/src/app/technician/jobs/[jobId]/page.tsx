@@ -1057,9 +1057,9 @@ export default function TechnicianJobPage() {
         // browser/device location failures.
       },
       {
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 15000,
+        enableHighAccuracy: false,
+        timeout: 60000,
+        maximumAge: 60000,
       },
     );
 
@@ -1796,9 +1796,9 @@ export default function TechnicianJobPage() {
               resolve,
               reject,
               {
-                enableHighAccuracy: true,
-                timeout: 20000,
-                maximumAge: 0,
+                enableHighAccuracy: false,
+                timeout: 60000,
+                maximumAge: 60000,
               },
             );
           },
