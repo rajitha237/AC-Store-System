@@ -797,11 +797,21 @@ export default function InstallmentsPage() {
         requestError,
       );
 
-      setPaymentError(
+      const message =
         requestError instanceof Error
           ? requestError.message
-          : "Installment payment could not be recorded.",
-      );
+          : "Installment payment could not be recorded.";
+
+      if (
+        message.startsWith(
+          "Your login session has expired.",
+        )
+      ) {
+        router.replace("/login");
+        return;
+      }
+
+      setPaymentError(message);
     } finally {
       setPaymentSubmitting(false);
     }

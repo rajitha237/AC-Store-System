@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from io import BytesIO
 
 from reportlab.lib import colors
+from sqlalchemy import select
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.platypus import (
@@ -18,6 +20,8 @@ from app.models import (
     Company,
     Customer,
     CustomerPayment,
+    InstallmentPaymentAllocation,
+    InstallmentPlan,
     SalesInvoice,
     User,
 )
@@ -54,6 +58,28 @@ async def build_payment_receipt_pdf(
         User,
         payment.created_by_id,
     )
+
+    installment_plan = None
+
+    if invoice is None:
+        allocation_plan_id = await session.scalar(
+            select(
+                InstallmentPaymentAllocation.plan_id
+            )
+            .where(
+                InstallmentPaymentAllocation.payment_id
+                == payment.id,
+                InstallmentPaymentAllocation.is_reversed
+                .is_(False),
+            )
+            .limit(1)
+        )
+
+        if allocation_plan_id is not None:
+            installment_plan = await session.get(
+                InstallmentPlan,
+                allocation_plan_id,
+            )
 
     buffer = BytesIO()
 
@@ -117,7 +143,7 @@ async def build_payment_receipt_pdf(
         or "0"
     )
 
-    invoice_date = (
+    payment_or_invoice_date = (
         invoice.invoice_date.strftime(
             "%Y-%m-%d"
         )
@@ -125,6 +151,12 @@ async def build_payment_receipt_pdf(
         else payment.payment_date.strftime(
             "%Y-%m-%d"
         )
+    )
+
+    date_label = (
+        "Invoice Date"
+        if invoice is not None
+        else "Payment Date"
     )
 
     customer_name = (
@@ -150,9 +182,9 @@ async def build_payment_receipt_pdf(
                 receipt_number,
             ],
             [
-                "Invoice Date",
+                date_label,
                 ":",
-                invoice_date,
+                payment_or_invoice_date,
             ],
         ],
         colWidths=[
@@ -333,27 +365,63 @@ async def build_payment_receipt_pdf(
     current_balance = (
         invoice.balance_amount
         if invoice is not None
-        else 0
+        else Decimal("0.00")
     )
 
-    invoice_rows = [
-        [
-            "No",
-            "Inv No",
-            "Inv Amount",
-            "Paid Amount",
-            "Balance",
-            "Total",
-        ],
-        [
-            "1",
-            invoice_number,
-            money(invoice_amount),
-            money(payment.amount),
-            money(current_balance),
-            money(payment.amount),
-        ],
-    ]
+    if installment_plan is not None:
+        remaining_outstanding = Decimal(
+            installment_plan.outstanding_amount
+        )
+
+        previous_outstanding = (
+            remaining_outstanding
+            + Decimal(payment.amount)
+        )
+
+        agreement_number = (
+            installment_plan.agreement_number
+            or f"#{installment_plan.id}"
+        )
+
+        invoice_rows = [
+            [
+                "No",
+                "Agreement No",
+                "Previous Outstanding",
+                "Payment Amount",
+                "Remaining Outstanding",
+                "Total",
+            ],
+            [
+                "1",
+                agreement_number,
+                money(previous_outstanding),
+                money(payment.amount),
+                money(remaining_outstanding),
+                money(payment.amount),
+            ],
+        ]
+
+        current_balance = remaining_outstanding
+    else:
+        invoice_rows = [
+            [
+                "No",
+                "Inv No",
+                "Inv Amount",
+                "Paid Amount",
+                "Balance",
+                "Total",
+            ],
+            [
+                "1",
+                invoice_number,
+                money(invoice_amount),
+                money(payment.amount),
+                money(current_balance),
+                money(payment.amount),
+            ],
+        ]
 
     invoice_table = Table(
         invoice_rows,

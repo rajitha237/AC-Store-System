@@ -1,4 +1,7 @@
-import { getAccessToken } from "@/lib/auth";
+import {
+  clearAuthSession,
+  getAccessToken,
+} from "@/lib/auth";
 
 import type {
   CustomerLedger,
@@ -39,14 +42,33 @@ async function request<T>(
     );
   }
 
-  const response = await fetch(
-    `${apiBase()}${path}`,
-    {
-      ...init,
-      headers,
-      cache: "no-store",
-    },
-  );
+  let response: Response;
+
+  try {
+    response = await fetch(
+      `${apiBase()}${path}`,
+      {
+        ...init,
+        headers,
+        cache: "no-store",
+      },
+    );
+  } catch {
+    throw new Error(
+      "Unable to connect to the server. "
+      + "Please check that the backend is running "
+      + "and try again.",
+    );
+  }
+
+  if (response.status === 401) {
+    clearAuthSession();
+
+    throw new Error(
+      "Your login session has expired. "
+      + "Please sign in again.",
+    );
+  }
 
   if (!response.ok) {
     let message =

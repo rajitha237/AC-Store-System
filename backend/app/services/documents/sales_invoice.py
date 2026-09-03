@@ -31,7 +31,7 @@ from app.services.documents.base import (
 
 
 DEFAULT_TERMS = (
-    "For Inverter - 1 year Body warranty, 10 years Compressor Warranty. "
+    "For Inverter - 1 year Body warranty, 5 years Compressor Warranty. "
     "For Non Inverter - 1 year Body warranty, 05 years Compressor Warranty. "
     "Installation and after sale service Information Free Installation, "
     "Free 3m copper, Free Brackets."
@@ -269,12 +269,38 @@ async def build_sales_invoice_pdf(
                         )
                     )
             else:
-                description += (
-                    "<br/>"
-                    + escape(
-                        item_note
-                    )
+                normalized_item_note = (
+                    " ".join(
+                        item_note.split()
+                    ).casefold()
                 )
+
+                normalized_product_name = (
+                    " ".join(
+                        product_name.split()
+                    ).casefold()
+                    if product is not None
+                    else ""
+                )
+
+                # When there is no linked product, the base
+                # description already comes from item.description.
+                # Appending item_note again would duplicate labour
+                # and other description-only invoice lines.
+                should_append_item_note = (
+                    product is not None
+                    and normalized_item_note
+                    and normalized_item_note
+                    != normalized_product_name
+                )
+
+                if should_append_item_note:
+                    description += (
+                        "<br/>"
+                        + escape(
+                            item_note
+                        )
+                    )
 
         if item.serial_number_id is not None:
             serial = await session.get(
@@ -587,7 +613,7 @@ async def build_sales_invoice_pdf(
             "",
             Paragraph(
                 "<b>Net Amount</b>",
-                STYLES["normal"],
+                STYLES["right"],
             ),
             Paragraph(
                 f"<b>{money(invoice.grand_total)}</b>",
@@ -598,7 +624,7 @@ async def build_sales_invoice_pdf(
             "",
             Paragraph(
                 "<b>Customer Payable</b>",
-                STYLES["normal"],
+                STYLES["right"],
             ),
             Paragraph(
                 (

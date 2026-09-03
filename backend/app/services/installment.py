@@ -1852,7 +1852,11 @@ async def receive_installment_payment(
                 "plan_id":
                     plan.id,
                 "invoice_id":
-                    invoice.id,
+                    (
+                        invoice.id
+                        if invoice is not None
+                        else None
+                    ),
                 "customer_id":
                     customer.id,
                 "allocations":
