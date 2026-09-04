@@ -25,6 +25,7 @@ export interface QuickSaleProduct {
   name?: string;
   product_name?: string;
   selling_price?: number | string;
+  wholesale_price?: number | string;
   sale_price?: number | string;
   retail_price?: number | string;
   unit_price?: number | string;
@@ -56,6 +57,9 @@ interface QuickSaleCartItem {
   sku: string;
   quantity: number;
   unitPrice: number;
+  retailPrice: number;
+  wholesalePrice: number;
+  priceType: "retail" | "wholesale";
   discountAmount: number;
 
   // AC_QUICK_SALE_FREE_ITEM

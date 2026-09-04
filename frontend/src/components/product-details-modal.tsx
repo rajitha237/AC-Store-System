@@ -76,6 +76,7 @@ type EditForm = {
 
   purchase_cost: string;
   selling_price: string;
+  wholesale_price: string;
   minimum_selling_price:
     string;
 
@@ -146,6 +147,9 @@ function emptyForm():
       "0.00",
 
     selling_price:
+      "0.00",
+
+    wholesale_price:
       "0.00",
 
     minimum_selling_price:
@@ -223,6 +227,13 @@ function productToForm(
     selling_price:
       String(
         product.selling_price
+        ?? "0.00",
+      ),
+
+    wholesale_price:
+      String(
+        product.wholesale_price
+        ?? product.selling_price
         ?? "0.00",
       ),
 
@@ -617,6 +628,11 @@ export function ProductDetailsModal({
         form.selling_price,
       );
 
+    const wholesalePrice =
+      Number(
+        form.wholesale_price,
+      );
+
     const minimumPrice =
       Number(
         form.minimum_selling_price,
@@ -630,6 +646,19 @@ export function ProductDetailsModal({
         "Minimum selling price "
         + "cannot be higher than "
         + "selling price.",
+      );
+
+      return;
+    }
+
+    if (
+      minimumPrice
+      > wholesalePrice
+    ) {
+      setError(
+        "Minimum selling price "
+        + "cannot be higher than "
+        + "wholesale price.",
       );
 
       return;
@@ -691,6 +720,10 @@ export function ProductDetailsModal({
 
         selling_price:
           form.selling_price
+          || "0.00",
+
+        wholesale_price:
+          form.wholesale_price
           || "0.00",
 
         minimum_selling_price:
@@ -999,6 +1032,18 @@ export function ProductDetailsModal({
                 <strong>
                   {money(
                     product.selling_price,
+                  )}
+                </strong>
+              </article>
+
+              <article>
+                <span>
+                  Wholesale price
+                </span>
+
+                <strong>
+                  {money(
+                    product.wholesale_price,
                   )}
                 </strong>
               </article>
@@ -1385,6 +1430,27 @@ export function ProductDetailsModal({
                             setForm({
                               ...form,
                               selling_price:
+                                event.target.value,
+                            })
+                        }
+                      />
+                    </label>
+
+                    <label>
+                      Wholesale price
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={
+                          form.wholesale_price
+                        }
+                        onChange={
+                          (event) =>
+                            setForm({
+                              ...form,
+                              wholesale_price:
                                 event.target.value,
                             })
                         }

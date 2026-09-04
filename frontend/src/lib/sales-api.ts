@@ -338,6 +338,21 @@ export async function getSalesProducts(
               ? item.selling_price
               : 0,
 
+        wholesale_price:
+          typeof item.wholesale_price
+            === "number"
+            || typeof item.wholesale_price
+              === "string"
+              ? item.wholesale_price
+              : (
+                  typeof item.selling_price
+                    === "number"
+                    || typeof item.selling_price
+                      === "string"
+                    ? item.selling_price
+                    : 0
+                ),
+
         minimum_selling_price:
           typeof item.minimum_selling_price
             === "number"

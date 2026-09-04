@@ -159,6 +159,10 @@ export type NonSerializedReceivePayload = {
   quantity: string;
   unit_cost: string;
 
+  update_product_prices?: boolean;
+  selling_price?: string | null;
+  wholesale_price?: string | null;
+
   reference_type: string;
   reference_id?: string | null;
 
@@ -177,6 +181,10 @@ export type SerializedReceivePayload = {
   supplier_id?: number | null;
 
   unit_cost: string;
+
+  update_product_prices?: boolean;
+  selling_price?: string | null;
+  wholesale_price?: string | null;
 
   reference_type: string;
   reference_id?: string | null;

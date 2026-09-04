@@ -117,6 +117,7 @@ type ProductForm = {
 
   purchase_cost: string;
   selling_price: string;
+  wholesale_price: string;
   minimum_selling_price: string;
 
   warranty_months: string;
@@ -159,6 +160,9 @@ const emptyProductForm:
       "0.00",
 
     selling_price:
+      "0.00",
+
+    wholesale_price:
       "0.00",
 
     minimum_selling_price:
@@ -817,6 +821,11 @@ export default function CatalogPage() {
         productForm.selling_price,
       );
 
+    const wholesalePrice =
+      Number(
+        productForm.wholesale_price,
+      );
+
     const minimumPrice =
       Number(
         productForm.minimum_selling_price,
@@ -829,6 +838,18 @@ export default function CatalogPage() {
       setProductError(
         "Minimum selling price cannot "
         + "be higher than selling price.",
+      );
+
+      return;
+    }
+
+    if (
+      minimumPrice
+      > wholesalePrice
+    ) {
+      setProductError(
+        "Minimum selling price cannot "
+        + "be higher than wholesale price.",
       );
 
       return;
@@ -890,6 +911,10 @@ export default function CatalogPage() {
 
         selling_price:
           productForm.selling_price
+          || "0.00",
+
+        wholesale_price:
+          productForm.wholesale_price
           || "0.00",
 
         minimum_selling_price:
@@ -2176,6 +2201,29 @@ export default function CatalogPage() {
                           setProductForm({
                             ...productForm,
                             selling_price:
+                              event.target.value,
+                          })
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    Wholesale price *
+
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="0.01"
+                      value={
+                        productForm
+                          .wholesale_price
+                      }
+                      onChange={
+                        (event) =>
+                          setProductForm({
+                            ...productForm,
+                            wholesale_price:
                               event.target.value,
                           })
                       }

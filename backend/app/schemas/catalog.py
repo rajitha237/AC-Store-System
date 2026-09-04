@@ -312,6 +312,13 @@ class ProductCreate(BaseModel):
         decimal_places=2,
     )
 
+    wholesale_price: Decimal | None = Field(
+        default=None,
+        ge=Decimal("0.00"),
+        max_digits=18,
+        decimal_places=2,
+    )
+
     minimum_selling_price: Decimal = Field(
         default=Decimal("0.00"),
         ge=Decimal("0.00"),
@@ -373,6 +380,21 @@ class ProductCreate(BaseModel):
                 "than selling price"
             )
 
+        effective_wholesale_price = (
+            self.wholesale_price
+            if self.wholesale_price is not None
+            else self.selling_price
+        )
+
+        if (
+            self.minimum_selling_price
+            > effective_wholesale_price
+        ):
+            raise ValueError(
+                "Minimum selling price cannot be greater "
+                "than wholesale price"
+            )
+
         return self
 
 
@@ -427,6 +449,13 @@ class ProductUpdate(BaseModel):
     )
 
     selling_price: Decimal | None = Field(
+        default=None,
+        ge=Decimal("0.00"),
+        max_digits=18,
+        decimal_places=2,
+    )
+
+    wholesale_price: Decimal | None = Field(
         default=None,
         ge=Decimal("0.00"),
         max_digits=18,
@@ -512,6 +541,7 @@ class ProductResponse(BaseModel):
     track_serial_numbers: bool
     purchase_cost: Decimal
     selling_price: Decimal
+    wholesale_price: Decimal
     minimum_selling_price: Decimal
     warranty_months: int
     reorder_level: Decimal

@@ -120,6 +120,9 @@ SalesDraftLine {
     unitPrice:
       "0.00",
 
+    priceType:
+      "retail",
+
     discountAmount:
       "0.00",
 
@@ -1397,6 +1400,51 @@ export default function SalesPage() {
   }
 
 
+  function changeSalesPriceType(
+    line: SalesDraftLine,
+    priceType:
+      "retail" | "wholesale",
+  ) {
+    const product =
+      products.find(
+        (item) =>
+          String(item.id)
+          === line.productId,
+      );
+
+    if (!product) {
+      return;
+    }
+
+    const unitPrice =
+      priceType === "wholesale"
+        ? String(
+            product.wholesale_price,
+          )
+        : String(
+            product.selling_price,
+          );
+
+    const quantity =
+      numeric(line.quantity);
+
+    updateLine(
+      line.key,
+      {
+        priceType,
+        unitPrice,
+        discountAmount:
+          line.isFree
+            ? (
+                numeric(unitPrice)
+                * quantity
+              ).toFixed(2)
+            : "0.00",
+      },
+    );
+  }
+
+
   async function changeProduct(
     line:
       SalesDraftLine,
@@ -1432,6 +1480,9 @@ export default function SalesPage() {
                 product.selling_price,
               )
             : "0.00",
+
+        priceType:
+          "retail",
 
         discountAmount:
           line.isFree
@@ -3940,6 +3991,40 @@ export default function SalesPage() {
                                   </label>
                                 )}
 
+
+                                <label>
+                                  Price type
+
+                                  <select
+                                    value={
+                                      line
+                                        .priceType
+                                    }
+                                    disabled={
+                                      line.isFree
+                                    }
+                                    onChange={
+                                      (event) =>
+                                        changeSalesPriceType(
+                                          line,
+                                          event
+                                            .target
+                                            .value
+                                            === "wholesale"
+                                            ? "wholesale"
+                                            : "retail",
+                                        )
+                                    }
+                                  >
+                                    <option value="retail">
+                                      Retail
+                                    </option>
+
+                                    <option value="wholesale">
+                                      Wholesale
+                                    </option>
+                                  </select>
+                                </label>
 
                                 <label>
                                   Unit price *

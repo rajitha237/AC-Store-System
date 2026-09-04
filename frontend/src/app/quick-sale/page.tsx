@@ -141,6 +141,25 @@ function productPrice(
     : 0;
 }
 
+
+function productWholesalePrice(
+  product: QuickSaleProduct,
+): number {
+  const value =
+    product.wholesale_price ??
+    product.selling_price ??
+    product.sale_price ??
+    product.retail_price ??
+    product.unit_price ??
+    0;
+
+  const number = Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : 0;
+}
+
 function customerName(
   customer: QuickSaleCustomer,
 ): string {
@@ -830,6 +849,16 @@ export default function QuickSalePage() {
               productPrice(
                 product,
               ),
+            retailPrice:
+              productPrice(
+                product,
+              ),
+            wholesalePrice:
+              productWholesalePrice(
+                product,
+              ),
+            priceType:
+              "retail",
             discountAmount: 0,
 
             // AC_QUICK_SALE_FREE_ITEM
@@ -905,6 +934,44 @@ export default function QuickSalePage() {
           ),
     );
   }
+
+  function changePriceType(
+    key: string,
+    priceType:
+      "retail" | "wholesale",
+  ) {
+    setCart(
+      (current) =>
+        current.map(
+          (item) => {
+            if (item.key !== key) {
+              return item;
+            }
+
+            const unitPrice =
+              priceType === "wholesale"
+                ? item.wholesalePrice
+                : item.retailPrice;
+
+            return {
+              ...item,
+              priceType,
+              unitPrice,
+              discountAmount:
+                item.isFree
+                  ? Number(
+                      (
+                        unitPrice
+                        * item.quantity
+                      ).toFixed(2),
+                    )
+                  : 0,
+            };
+          },
+        ),
+    );
+  }
+
 
   function changeSellingPrice(
     key: string,
@@ -2126,6 +2193,39 @@ export default function QuickSalePage() {
                           styles.salePriceControl
                         }
                       >
+                        <small>
+                          Price type
+                        </small>
+
+                        <select
+                          value={
+                            item.priceType
+                          }
+                          disabled={
+                            item.isFree
+                          }
+                          onChange={
+                            (event) =>
+                              changePriceType(
+                                item.key,
+                                event.target.value
+                                  === "wholesale"
+                                  ? "wholesale"
+                                  : "retail",
+                              )
+                          }
+                          aria-label={
+                            `Price type for ${item.productName}`
+                          }
+                        >
+                          <option value="retail">
+                            Retail
+                          </option>
+                          <option value="wholesale">
+                            Wholesale
+                          </option>
+                        </select>
+
                         <small>
                           Selling price
                         </small>

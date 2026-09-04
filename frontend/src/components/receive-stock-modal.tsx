@@ -16,6 +16,7 @@ import {
   FormEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -65,6 +66,10 @@ type FormState = {
   quantity: string;
   unitCost: string;
 
+  updateProductPrices: boolean;
+  sellingPrice: string;
+  wholesalePrice: string;
+
   referenceType: string;
   referenceId: string;
 
@@ -79,6 +84,10 @@ const emptyForm: FormState = {
 
   quantity: "1.000",
   unitCost: "0.00",
+
+  updateProductPrices: false,
+  sellingPrice: "0.00",
+  wholesalePrice: "0.00",
 
   referenceType:
     "opening_balance",
@@ -298,6 +307,26 @@ export function ReceiveStockModal({
   ] =
     useState("");
 
+  const productsRef =
+    useRef<Product[]>(
+      products,
+    );
+
+  const selectedProductIdRef =
+    useRef(
+      form.productId,
+    );
+
+  useEffect(() => {
+    productsRef.current =
+      products;
+  }, [products]);
+
+  useEffect(() => {
+    selectedProductIdRef.current =
+      form.productId;
+  }, [form.productId]);
+
 
   useEffect(() => {
     let cancelled =
@@ -395,12 +424,15 @@ export function ReceiveStockModal({
                 productSearch.trim();
 
               const selected =
-                products.find(
+                productsRef.current.find(
                   (product) =>
                     String(
                       product.id,
                     )
-                    === form.productId,
+                    === (
+                      selectedProductIdRef
+                        .current
+                    ),
                 );
 
               const selectedLabel =
@@ -544,6 +576,26 @@ export function ReceiveStockModal({
                 ?? "0.00",
               )
             : current.unitCost,
+
+        updateProductPrices:
+          false,
+
+        sellingPrice:
+          product
+            ? String(
+                product.selling_price
+                ?? "0.00",
+              )
+            : current.sellingPrice,
+
+        wholesalePrice:
+          product
+            ? String(
+                product.wholesale_price
+                ?? product.selling_price
+                ?? "0.00",
+              )
+            : current.wholesalePrice,
       }),
     );
 
@@ -703,6 +755,77 @@ export function ReceiveStockModal({
     }
 
 
+    if (
+      form.updateProductPrices
+    ) {
+      const sellingPrice =
+        Number(
+          form.sellingPrice,
+        );
+
+      const wholesalePrice =
+        Number(
+          form.wholesalePrice,
+        );
+
+      const minimumPrice =
+        Number(
+          selectedProduct
+            ?.minimum_selling_price
+          ?? 0,
+        );
+
+      if (
+        !Number.isFinite(
+          sellingPrice,
+        )
+        || sellingPrice < 0
+      ) {
+        setError(
+          "Enter a valid selling price.",
+        );
+
+        return;
+      }
+
+      if (
+        !Number.isFinite(
+          wholesalePrice,
+        )
+        || wholesalePrice < 0
+      ) {
+        setError(
+          "Enter a valid wholesale price.",
+        );
+
+        return;
+      }
+
+      if (
+        minimumPrice
+        > sellingPrice
+      ) {
+        setError(
+          "Selling price cannot be below "
+          + "the minimum selling price.",
+        );
+
+        return;
+      }
+
+      if (
+        minimumPrice
+        > wholesalePrice
+      ) {
+        setError(
+          "Wholesale price cannot be below "
+          + "the minimum selling price.",
+        );
+
+        return;
+      }
+    }
+
     setSaving(
       true,
     );
@@ -727,6 +850,19 @@ export function ReceiveStockModal({
 
           unit_cost:
             form.unitCost,
+
+          update_product_prices:
+            form.updateProductPrices,
+
+          selling_price:
+            form.updateProductPrices
+              ? form.sellingPrice
+              : null,
+
+          wholesale_price:
+            form.updateProductPrices
+              ? form.wholesalePrice
+              : null,
 
           reference_type:
             form.referenceType
@@ -774,6 +910,19 @@ export function ReceiveStockModal({
 
           unit_cost:
             form.unitCost,
+
+          update_product_prices:
+            form.updateProductPrices,
+
+          selling_price:
+            form.updateProductPrices
+              ? form.sellingPrice
+              : null,
+
+          wholesale_price:
+            form.updateProductPrices
+              ? form.wholesalePrice
+              : null,
 
           reference_type:
             form.referenceType
@@ -1151,6 +1300,137 @@ export function ReceiveStockModal({
                 />
               </label>
             </div>
+
+
+            {selectedProduct && (
+              <div
+                style={{
+                  marginTop: "14px",
+                  padding: "14px",
+                  border:
+                    "1px solid #dbe3ef",
+                  borderRadius: "12px",
+                  background: "#f8fafc",
+                }}
+              >
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={
+                      form.updateProductPrices
+                    }
+                    disabled={saving}
+                    onChange={
+                      (event) =>
+                        setForm({
+                          ...form,
+
+                          updateProductPrices:
+                            event.target.checked,
+                        })
+                    }
+                  />
+
+                  Update selling prices with this stock receipt
+                </label>
+
+                <p
+                  style={{
+                    marginTop: "8px",
+                    marginBottom: 0,
+                    fontSize: "12px",
+                    opacity: 0.72,
+                  }}
+                >
+                  Leave this off to receive stock
+                  without changing the current retail
+                  or wholesale prices.
+                </p>
+
+                {form.updateProductPrices && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(2, minmax(0, 1fr))",
+                      gap: "12px",
+                      marginTop: "14px",
+                    }}
+                  >
+                    <label>
+                      Selling price *
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        required
+                        disabled={saving}
+                        value={
+                          form.sellingPrice
+                        }
+                        onChange={
+                          (event) =>
+                            setForm({
+                              ...form,
+
+                              sellingPrice:
+                                event.target.value,
+                            })
+                        }
+                      />
+                    </label>
+
+                    <label>
+                      Wholesale price *
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        required
+                        disabled={saving}
+                        value={
+                          form.wholesalePrice
+                        }
+                        onChange={
+                          (event) =>
+                            setForm({
+                              ...form,
+
+                              wholesalePrice:
+                                event.target.value,
+                            })
+                        }
+                      />
+                    </label>
+
+                    <div
+                      style={{
+                        gridColumn:
+                          "1 / -1",
+                        fontSize: "12px",
+                        opacity: 0.72,
+                      }}
+                    >
+                      Minimum selling price:{" "}
+                      {
+                        selectedProduct
+                          .minimum_selling_price
+                      }
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
 
             {selectedProduct && (

@@ -67,6 +67,83 @@ def add_months(
     )
 
 
+def apply_receipt_product_prices(
+    *,
+    product: Product,
+    update_product_prices: bool,
+    selling_price: Decimal | None,
+    wholesale_price: Decimal | None,
+) -> dict | None:
+    if not update_product_prices:
+        return None
+
+    if (
+        selling_price is None
+        or wholesale_price is None
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Selling price and wholesale "
+                "price are required when "
+                "updating product prices"
+            ),
+        )
+
+    minimum_price = Decimal(
+        product.minimum_selling_price
+    )
+
+    if minimum_price > selling_price:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Minimum selling price cannot "
+                "be higher than selling price"
+            ),
+        )
+
+    if minimum_price > wholesale_price:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Minimum selling price cannot "
+                "be higher than wholesale price"
+            ),
+        )
+
+    before = {
+        "selling_price":
+            product.selling_price,
+        "wholesale_price":
+            product.wholesale_price,
+    }
+
+    product.selling_price = (
+        selling_price
+    )
+
+    product.wholesale_price = (
+        wholesale_price
+    )
+
+    return {
+        "before": before,
+        "after": {
+            "selling_price":
+                product.selling_price,
+            "wholesale_price":
+                product.wholesale_price,
+        },
+    }
+
+
 def stock_item_audit_snapshot(
     stock_item: StockItem,
 ) -> dict:
@@ -406,6 +483,21 @@ async def receive_serialized_stock(
             ),
         )
 
+    price_change = (
+        apply_receipt_product_prices(
+            product=product,
+            update_product_prices=(
+                payload.update_product_prices
+            ),
+            selling_price=(
+                payload.selling_price
+            ),
+            wholesale_price=(
+                payload.wholesale_price
+            ),
+        )
+    )
+
     primary_serials = [
         serial.serial_number
         for serial in payload.serials
@@ -557,6 +649,8 @@ async def receive_serialized_stock(
                     payload.reference_type,
                 "reference_id":
                     payload.reference_id,
+                "product_price_change":
+                    price_change,
             },
         )
 
@@ -629,6 +723,21 @@ async def receive_non_serialized_stock(
                 "numbers"
             ),
         )
+
+    price_change = (
+        apply_receipt_product_prices(
+            product=product,
+            update_product_prices=(
+                payload.update_product_prices
+            ),
+            selling_price=(
+                payload.selling_price
+            ),
+            wholesale_price=(
+                payload.wholesale_price
+            ),
+        )
+    )
 
     stock_item = await get_or_create_stock_item(
         session=session,
@@ -735,6 +844,8 @@ async def receive_non_serialized_stock(
                     payload.reference_type,
                 "reference_id":
                     payload.reference_id,
+                "product_price_change":
+                    price_change,
             },
         )
 

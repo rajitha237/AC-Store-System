@@ -229,12 +229,20 @@ class Product(Base):
             name="ck_products_selling_price_nonnegative",
         ),
         CheckConstraint(
+            "wholesale_price >= 0",
+            name="ck_products_wholesale_price_nonnegative",
+        ),
+        CheckConstraint(
             "minimum_selling_price >= 0",
             name="ck_products_minimum_price_nonnegative",
         ),
         CheckConstraint(
             "minimum_selling_price <= selling_price",
             name="ck_products_minimum_not_above_selling",
+        ),
+        CheckConstraint(
+            "minimum_selling_price <= wholesale_price",
+            name="ck_products_minimum_not_above_wholesale",
         ),
         CheckConstraint(
             "warranty_months >= 0",
@@ -345,6 +353,12 @@ class Product(Base):
     )
 
     selling_price: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2),
+        default=Decimal("0.00"),
+        nullable=False,
+    )
+
+    wholesale_price: Mapped[Decimal] = mapped_column(
         Numeric(18, 2),
         default=Decimal("0.00"),
         nullable=False,

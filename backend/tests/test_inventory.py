@@ -235,26 +235,390 @@ async def receive_non_serialized(
     quantity,
     unit_cost,
     reference_id,
+    update_product_prices=False,
+    selling_price=None,
+    wholesale_price=None,
 ):
+    payload = {
+        "product_id":
+            product_id,
+        "warehouse_id":
+            warehouse_id,
+        "quantity":
+            quantity,
+        "unit_cost":
+            unit_cost,
+        "reference_type":
+            "opening_balance",
+        "reference_id":
+            reference_id,
+        "notes":
+            "Inventory integration test receipt",
+        "update_product_prices":
+            update_product_prices,
+    }
+
+    if selling_price is not None:
+        payload["selling_price"] = (
+            selling_price
+        )
+
+    if wholesale_price is not None:
+        payload["wholesale_price"] = (
+            wholesale_price
+        )
+
     return await client.post(
         "/api/v1/inventory/receive/non-serialized",
         headers=admin_headers,
-        json={
-            "product_id":
-                product_id,
-            "warehouse_id":
-                warehouse_id,
-            "quantity":
-                quantity,
-            "unit_cost":
-                unit_cost,
-            "reference_type":
-                "opening_balance",
-            "reference_id":
-                reference_id,
-            "notes":
-                "Inventory integration test receipt",
-        },
+        json=payload,
+    )
+
+
+@pytest.mark.asyncio
+async def test_receive_price_update_flag_off_keeps_product_prices(
+    client,
+    admin_headers,
+    db_session,
+):
+    product = await create_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix="201",
+        serialized=False,
+    )
+
+    warehouse = await get_warehouse(
+        client,
+        admin_headers,
+    )
+
+    response = await receive_non_serialized(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        quantity="2.000",
+        unit_cost="110.00",
+        reference_id="PRICE-OFF-201",
+        update_product_prices=False,
+        selling_price="220.00",
+        wholesale_price="210.00",
+    )
+
+    assert response.status_code == 201, (
+        response.text
+    )
+
+    await db_session.refresh(
+        await db_session.get(
+            Product,
+            product["id"],
+        )
+    )
+
+    stored = await db_session.get(
+        Product,
+        product["id"],
+    )
+
+    assert stored is not None
+
+    assert (
+        stored.selling_price
+        == Decimal("150.00")
+    )
+
+    assert (
+        stored.wholesale_price
+        == Decimal("150.00")
+    )
+
+
+@pytest.mark.asyncio
+async def test_receive_price_update_flag_on_updates_product_prices(
+    client,
+    admin_headers,
+    db_session,
+):
+    product = await create_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix="202",
+        serialized=False,
+    )
+
+    warehouse = await get_warehouse(
+        client,
+        admin_headers,
+    )
+
+    response = await receive_non_serialized(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        quantity="3.000",
+        unit_cost="120.00",
+        reference_id="PRICE-ON-202",
+        update_product_prices=True,
+        selling_price="225.00",
+        wholesale_price="205.00",
+    )
+
+    assert response.status_code == 201, (
+        response.text
+    )
+
+    stored = await db_session.get(
+        Product,
+        product["id"],
+    )
+
+    assert stored is not None
+
+    await db_session.refresh(
+        stored
+    )
+
+    assert (
+        stored.selling_price
+        == Decimal("225.00")
+    )
+
+    assert (
+        stored.wholesale_price
+        == Decimal("205.00")
+    )
+
+    stock_result = (
+        await db_session.execute(
+            select(StockItem)
+            .where(
+                StockItem.product_id
+                == product["id"],
+                StockItem.warehouse_id
+                == warehouse["id"],
+            )
+        )
+    )
+
+    stock_item = (
+        stock_result.scalars().one()
+    )
+
+    assert (
+        stock_item.quantity_on_hand
+        == Decimal("3.000")
+    )
+
+    assert (
+        stock_item.average_cost
+        == Decimal("120.00")
+    )
+
+
+@pytest.mark.asyncio
+async def test_receive_price_update_rejects_selling_below_minimum(
+    client,
+    admin_headers,
+    db_session,
+):
+    product = await create_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix="203",
+        serialized=False,
+    )
+
+    warehouse = await get_warehouse(
+        client,
+        admin_headers,
+    )
+
+    response = await receive_non_serialized(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        quantity="4.000",
+        unit_cost="130.00",
+        reference_id="PRICE-BAD-SELL-203",
+        update_product_prices=True,
+        selling_price="139.99",
+        wholesale_price="180.00",
+    )
+
+    assert response.status_code == 422
+
+    stored = await db_session.get(
+        Product,
+        product["id"],
+    )
+
+    assert stored is not None
+
+    await db_session.refresh(
+        stored
+    )
+
+    assert (
+        stored.selling_price
+        == Decimal("150.00")
+    )
+
+    assert (
+        stored.wholesale_price
+        == Decimal("150.00")
+    )
+
+    stock_result = (
+        await db_session.execute(
+            select(StockItem)
+            .where(
+                StockItem.product_id
+                == product["id"],
+                StockItem.warehouse_id
+                == warehouse["id"],
+            )
+        )
+    )
+
+    assert (
+        stock_result.scalars().first()
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_receive_price_update_rejects_wholesale_below_minimum(
+    client,
+    admin_headers,
+    db_session,
+):
+    product = await create_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix="204",
+        serialized=False,
+    )
+
+    warehouse = await get_warehouse(
+        client,
+        admin_headers,
+    )
+
+    response = await receive_non_serialized(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        quantity="5.000",
+        unit_cost="140.00",
+        reference_id="PRICE-BAD-WHOLE-204",
+        update_product_prices=True,
+        selling_price="200.00",
+        wholesale_price="139.99",
+    )
+
+    assert response.status_code == 422
+
+    stored = await db_session.get(
+        Product,
+        product["id"],
+    )
+
+    assert stored is not None
+
+    await db_session.refresh(
+        stored
+    )
+
+    assert (
+        stored.selling_price
+        == Decimal("150.00")
+    )
+
+    assert (
+        stored.wholesale_price
+        == Decimal("150.00")
+    )
+
+    stock_result = (
+        await db_session.execute(
+            select(StockItem)
+            .where(
+                StockItem.product_id
+                == product["id"],
+                StockItem.warehouse_id
+                == warehouse["id"],
+            )
+        )
+    )
+
+    assert (
+        stock_result.scalars().first()
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_receive_price_update_requires_both_prices(
+    client,
+    admin_headers,
+    db_session,
+):
+    product = await create_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix="205",
+        serialized=False,
+    )
+
+    warehouse = await get_warehouse(
+        client,
+        admin_headers,
+    )
+
+    response = await receive_non_serialized(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        quantity="1.000",
+        unit_cost="100.00",
+        reference_id="PRICE-MISSING-205",
+        update_product_prices=True,
+        selling_price="200.00",
+        wholesale_price=None,
+    )
+
+    assert response.status_code == 422
+
+    stored = await db_session.get(
+        Product,
+        product["id"],
+    )
+
+    assert stored is not None
+
+    await db_session.refresh(
+        stored
+    )
+
+    assert (
+        stored.selling_price
+        == Decimal("150.00")
+    )
+
+    assert (
+        stored.wholesale_price
+        == Decimal("150.00")
     )
 
 

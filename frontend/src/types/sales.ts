@@ -216,6 +216,9 @@ export type SalesProductOption = {
   selling_price:
     | string
     | number;
+  wholesale_price:
+    | string
+    | number;
   minimum_selling_price?:
     | string
     | number
@@ -253,6 +256,7 @@ export type SalesDraftLine = {
 
   quantity: string;
   unitPrice: string;
+  priceType: "retail" | "wholesale";
   discountAmount: string;
   description: string;
 

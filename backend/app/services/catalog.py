@@ -432,6 +432,11 @@ async def create_product(
         track_serial_numbers=payload.track_serial_numbers,
         purchase_cost=payload.purchase_cost,
         selling_price=payload.selling_price,
+        wholesale_price=(
+            payload.wholesale_price
+            if payload.wholesale_price is not None
+            else payload.selling_price
+        ),
         minimum_selling_price=(
             payload.minimum_selling_price
         ),
@@ -589,6 +594,11 @@ async def update_product(
         "selling_price",
         product.selling_price,
     )
+    wholesale_price = update_data.get(
+        "wholesale_price",
+        product.wholesale_price,
+    )
+
     minimum_price = update_data.get(
         "minimum_selling_price",
         product.minimum_selling_price,
@@ -600,6 +610,15 @@ async def update_product(
             detail=(
                 "Minimum selling price cannot be greater "
                 "than selling price"
+            ),
+        )
+
+    if minimum_price > wholesale_price:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                "Minimum selling price cannot be greater "
+                "than wholesale price"
             ),
         )
 

@@ -63,6 +63,7 @@ export type Product = {
 
   purchase_cost: string | number;
   selling_price: string | number;
+  wholesale_price: string | number;
   minimum_selling_price: string | number;
 
   warranty_months: number;
@@ -115,6 +116,7 @@ export type ProductCreatePayload = {
 
   purchase_cost: string;
   selling_price: string;
+  wholesale_price: string;
   minimum_selling_price: string;
 
   warranty_months: number;
@@ -160,6 +162,7 @@ export type ProductUpdatePayload = {
 
   purchase_cost?: string | null;
   selling_price?: string | null;
+  wholesale_price?: string | null;
   minimum_selling_price?: string | null;
 
   warranty_months?: number | null;

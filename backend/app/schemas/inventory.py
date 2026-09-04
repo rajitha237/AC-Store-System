@@ -111,6 +111,22 @@ class SerializedStockReceiveRequest(BaseModel):
         decimal_places=2,
     )
 
+    update_product_prices: bool = False
+
+    selling_price: Decimal | None = Field(
+        default=None,
+        ge=Decimal("0.00"),
+        max_digits=18,
+        decimal_places=2,
+    )
+
+    wholesale_price: Decimal | None = Field(
+        default=None,
+        ge=Decimal("0.00"),
+        max_digits=18,
+        decimal_places=2,
+    )
+
     reference_type: str = Field(
         default="opening_balance",
         min_length=2,
@@ -200,6 +216,22 @@ class NonSerializedStockReceiveRequest(BaseModel):
     )
 
     unit_cost: Decimal = Field(
+        ge=Decimal("0.00"),
+        max_digits=18,
+        decimal_places=2,
+    )
+
+    update_product_prices: bool = False
+
+    selling_price: Decimal | None = Field(
+        default=None,
+        ge=Decimal("0.00"),
+        max_digits=18,
+        decimal_places=2,
+    )
+
+    wholesale_price: Decimal | None = Field(
+        default=None,
         ge=Decimal("0.00"),
         max_digits=18,
         decimal_places=2,
