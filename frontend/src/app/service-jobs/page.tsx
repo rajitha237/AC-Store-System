@@ -4266,6 +4266,10 @@ export default function ServiceJobsPage() {
                   </th>
 
                   <th>
+                    Technician
+                  </th>
+
+                  <th>
                     Priority
                   </th>
 
@@ -4339,6 +4343,13 @@ export default function ServiceJobsPage() {
                           job.service_type,
                         )}
                       </td>
+
+                        <td>
+                          <strong>
+                            {job.technician_name
+                              || "Unassigned"}
+                          </strong>
+                        </td>
 
                       <td>
                         <span

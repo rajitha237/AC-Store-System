@@ -17,10 +17,14 @@ from app.services.documents import (
     JobCardPDFData,
     build_job_card_pdf,
     build_payment_receipt_pdf,
+    build_purchase_order_pdf,
     build_sales_invoice_pdf,
 )
 from app.services.payment_service import (
     get_payment_or_404,
+)
+from app.services.purchasing import (
+    get_purchase_order,
 )
 from app.services.sales_service import (
     get_invoice,
@@ -62,6 +66,16 @@ CanViewJobs = Annotated[
     Depends(
         require_permission(
             "job_cards.view"
+        )
+    ),
+]
+
+
+CanViewPurchases = Annotated[
+    User,
+    Depends(
+        require_permission(
+            "purchasing.view"
         )
     ),
 ]
@@ -142,6 +156,50 @@ async def download_payment_receipt_pdf(
 
     filename = (
         f"{payment.receipt_number}.pdf"
+    )
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{filename}"'
+            )
+        },
+    )
+
+
+@router.get(
+    "/purchase-orders/{purchase_order_id}/pdf",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "application/pdf": {}
+            },
+            "description": (
+                "Purchase order PDF document"
+            ),
+        }
+    },
+)
+async def download_purchase_order_pdf(
+    purchase_order_id: int,
+    session: DatabaseSession,
+    _: CanViewPurchases,
+) -> StreamingResponse:
+    purchase_order = await get_purchase_order(
+        session,
+        purchase_order_id=purchase_order_id,
+    )
+
+    pdf_bytes = await build_purchase_order_pdf(
+        session,
+        purchase_order,
+    )
+
+    filename = (
+        f"{purchase_order.purchase_order_number}.pdf"
     )
 
     return StreamingResponse(

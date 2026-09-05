@@ -5,6 +5,9 @@ from app.services.documents.job_card import (
 from app.services.documents.payment_receipt import (
     build_payment_receipt_pdf,
 )
+from app.services.documents.purchase_order import (
+    build_purchase_order_pdf,
+)
 from app.services.documents.quotation import (
     QuotationItemPDFData,
     QuotationPDFData,
@@ -20,6 +23,7 @@ __all__ = [
     "QuotationPDFData",
     "build_job_card_pdf",
     "build_payment_receipt_pdf",
+    "build_purchase_order_pdf",
     "build_quotation_pdf",
     "build_sales_invoice_pdf",
 ]

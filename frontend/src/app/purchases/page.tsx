@@ -40,6 +40,10 @@ import {
 import {
   getWarehouses,
 } from "@/lib/inventory-api";
+import {
+  downloadPurchaseOrderPdf,
+  saveDownloadedDocument,
+} from "@/lib/documents-api";
 
 import {
   approvePurchaseOrder,
@@ -214,10 +218,10 @@ export default function PurchasesPage() {
 
   const [
     user,
+    setUser,
   ] =
     useState<UserResponse | null>(
-      () =>
-        getStoredUser(),
+      null,
     );
 
   const [
@@ -393,19 +397,39 @@ export default function PurchasesPage() {
     const token =
       getAccessToken();
 
+    const storedUser =
+      getStoredUser();
+
     if (
       !token
-      || !user
+      || !storedUser
     ) {
       clearAuthSession();
 
       router.replace(
         "/login",
       );
+
+      return;
     }
+
+    const hydrateTimer =
+      window.setTimeout(
+        () => {
+          setUser(
+            storedUser,
+          );
+        },
+        0,
+      );
+
+    return () => {
+      window.clearTimeout(
+        hydrateTimer,
+      );
+    };
   }, [
     router,
-    user,
   ]);
 
 
@@ -682,6 +706,72 @@ export default function PurchasesPage() {
         await loadBaseData();
         await refreshSelected(
           created.id,
+        );
+
+        try {
+          const document =
+            await downloadPurchaseOrderPdf(
+              created.id,
+            );
+
+          saveDownloadedDocument(
+            document,
+          );
+
+          setSuccess(
+            `${created.purchase_order_number} created. Purchase Order PDF downloaded.`,
+          );
+        } catch (
+          documentError
+        ) {
+          setSuccess(
+            `${created.purchase_order_number} created.`,
+          );
+
+          setError(
+            (
+              "Purchase order was created, "
+              + "but its PDF could not be downloaded. "
+              + apiError(
+                  documentError,
+                )
+            ),
+          );
+        }
+      } catch (
+        requestError
+      ) {
+        setError(
+          apiError(
+            requestError,
+          ),
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+
+  const printPurchaseOrderPdf =
+    async (
+      purchaseOrder:
+        PurchaseOrder,
+    ) => {
+      setSaving(true);
+      setError("");
+
+      try {
+        const document =
+          await downloadPurchaseOrderPdf(
+            purchaseOrder.id,
+          );
+
+        saveDownloadedDocument(
+          document,
+        );
+
+        setSuccess(
+          `${purchaseOrder.purchase_order_number} PDF downloaded.`,
         );
       } catch (
         requestError
@@ -1790,6 +1880,28 @@ export default function PurchasesPage() {
               </div>
             </div>
 
+
+              <button
+                type="button"
+                disabled={saving}
+                style={{
+                  ...buttonStyle,
+                  marginTop: 16,
+                  marginRight: 10,
+                  background:
+                    "#e0f2fe",
+                }}
+                onClick={() =>
+                  void printPurchaseOrderPdf(
+                    selected,
+                  )
+                }
+              >
+                <FileText
+                  size={16}
+                />{" "}
+                Print / Download PO
+              </button>
 
             {selected.status
               === "draft" ? (
