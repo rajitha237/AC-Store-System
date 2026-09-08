@@ -1158,3 +1158,73 @@ async def test_service_job_scheduled_visit_date_lifecycle(
         ]
         == "2026-08-16"
     )
+
+
+@pytest.mark.asyncio
+async def test_same_customer_can_have_multiple_service_jobs(
+    client,
+    admin_headers,
+    db_session,
+):
+    """
+    One registered customer/mobile number must be reusable
+    across multiple independent service jobs.
+    """
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix="991",
+    )
+
+    first_job = await create_job(
+        client,
+        admin_headers,
+        customer_id=customer["id"],
+        suffix="992",
+    )
+
+    second_job = await create_job(
+        client,
+        admin_headers,
+        customer_id=customer["id"],
+        suffix="993",
+    )
+
+    assert first_job["id"] != second_job["id"]
+    assert first_job["job_number"] != second_job["job_number"]
+
+    assert first_job["customer_id"] == customer["id"]
+    assert second_job["customer_id"] == customer["id"]
+
+    response = await client.get(
+        "/api/v1/service/jobs",
+        headers=admin_headers,
+        params={
+            "customer_id": customer["id"],
+            "page": 1,
+            "page_size": 100,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+
+    if isinstance(payload, dict):
+        rows = (
+            payload.get("items")
+            or payload.get("data")
+            or payload.get("results")
+            or []
+        )
+    else:
+        rows = payload
+
+    matching_ids = {
+        row["id"]
+        for row in rows
+        if row.get("customer_id") == customer["id"]
+    }
+
+    assert first_job["id"] in matching_ids
+    assert second_job["id"] in matching_ids

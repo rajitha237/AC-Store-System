@@ -1056,6 +1056,29 @@
   text-align: center;
 }
 
+.existingCustomerNotice {
+  background: #f6fef9;
+  border: 1px solid #abefc6;
+  border-radius: 9px;
+  display: grid;
+  gap: 4px;
+  margin-top: 7px;
+  padding: 9px 10px;
+}
+
+.existingCustomerNotice strong {
+  color: #067647;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.existingCustomerNotice span {
+  color: #475467;
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
 
 
 /* ===== LEGACY SERVICE JOB MANAGEMENT STATUS ===== */

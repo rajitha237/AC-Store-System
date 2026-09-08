@@ -6175,6 +6175,25 @@ export default function ServiceJobsPage() {
                         ""
                       }
                     />
+
+                    {createForm.customer_id > 0 && (
+                      <div
+                        className={
+                          styles.existingCustomerNotice
+                        }
+                      >
+                        <strong>
+                          Existing customer selected
+                        </strong>
+
+                        <span>
+                          A new service job will be created
+                          for this customer. You do not need
+                          to register the same mobile number
+                          again.
+                        </span>
+                      </div>
+                    )}
                   </label>
 
                   <label>
