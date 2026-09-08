@@ -42,6 +42,10 @@ from app.api.v1.sales import (
 from app.api.v1.returns import (
     router as returns_router,
 )
+
+from app.api.v1.reports import (
+    router as reports_router,
+)
 from app.api.v1.service import (
     router as service_router,
 )
@@ -127,6 +131,10 @@ api_router.include_router(
 
 api_router.include_router(
     documents_router
+)
+
+api_router.include_router(
+    reports_router
 )
 
 api_router.include_router(

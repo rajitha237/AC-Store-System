@@ -22,6 +22,7 @@ import {
   Building2,
   ShoppingCart,
   BookOpenText,
+  BarChart3,
 } from "lucide-react";
 
 import Link from "next/link";
@@ -117,6 +118,12 @@ const navigation = [
   icon: BookOpenText,
   available: true,
 },
+  {
+    label: "Financial Reports",
+    href: "/reports",
+    icon: BarChart3,
+    available: true,
+  },
 {
     label: "Installments",
     href: "/installments",

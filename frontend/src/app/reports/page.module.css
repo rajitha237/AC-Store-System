@@ -1,0 +1,452 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px;
+  min-width: 0;
+}
+
+.authLoading {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  color: #667085;
+  font-weight: 600;
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+  border: 1px solid #e4e7ec;
+  border-radius: 20px;
+  background:
+    linear-gradient(
+      135deg,
+      #ffffff 0%,
+      #f8fafc 100%
+    );
+}
+
+.hero h1 {
+  margin: 4px 0 8px;
+  color: #101828;
+  font-size: clamp(
+    26px,
+    3vw,
+    36px
+  );
+  line-height: 1.15;
+}
+
+.hero p {
+  max-width: 680px;
+  margin: 0;
+  color: #667085;
+  line-height: 1.6;
+}
+
+.eyebrow {
+  color: #175cd3;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.heroIcon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 16px;
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #e4e7ec;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.dateField {
+  display: flex;
+  min-width: 180px;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.dateField label {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dateField input {
+  min-height: 42px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0 12px;
+  color: #101828;
+  font: inherit;
+}
+
+.refreshButton,
+.pdfButton,
+.csvButton {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 16px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.refreshButton {
+  background: #101828;
+  color: #ffffff;
+}
+
+.pdfButton {
+  background: #b42318;
+  color: #ffffff;
+}
+
+.csvButton {
+  background: #067647;
+  color: #ffffff;
+}
+
+.refreshButton:disabled,
+.pdfButton:disabled,
+.csvButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.downloadGroup {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.errorBox {
+  border: 1px solid #fecdca;
+  border-radius: 12px;
+  background: #fef3f2;
+  padding: 13px 16px;
+  color: #b42318;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.loadingPanel {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid #e4e7ec;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #667085;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.periodBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #d1e9ff;
+  border-radius: 14px;
+  background: #eff8ff;
+  padding: 14px 18px;
+}
+
+.periodBar > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.periodBar span {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.periodBar strong {
+  color: #1849a9;
+}
+
+.periodStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #067647;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  gap: 14px;
+}
+
+.summaryCard {
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid #e4e7ec;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 18px;
+}
+
+.positiveCard {
+  border-color: #abefc6;
+  background: #f6fef9;
+}
+
+.warningCard {
+  border-color: #fedf89;
+  background: #fffaeb;
+}
+
+.cardIcon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: #f2f4f7;
+  color: #344054;
+}
+
+.cardLabel {
+  display: block;
+  margin-bottom: 5px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cardValue {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #101828;
+  font-size: 20px;
+}
+
+.cardHint {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.reportGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  gap: 16px;
+}
+
+.panel {
+  overflow: hidden;
+  border: 1px solid #e4e7ec;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid #eaecf0;
+  padding: 18px;
+}
+
+.panelHeader span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.panelHeader h2 {
+  margin: 3px 0 0;
+  color: #101828;
+  font-size: 18px;
+}
+
+.panelHeader svg {
+  color: #175cd3;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.reportRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #f2f4f7;
+  padding: 13px 18px;
+  color: #475467;
+  font-size: 14px;
+}
+
+.reportRow:last-child {
+  border-bottom: 0;
+}
+
+.reportRow strong {
+  color: #344054;
+  text-align: right;
+}
+
+.strongRow {
+  background: #f9fafb;
+  color: #101828;
+  font-weight: 700;
+}
+
+.totalRow {
+  background: #eff8ff;
+}
+
+.totalRow strong {
+  color: #1849a9;
+}
+
+.accountingNote {
+  border-left: 4px solid #1570ef;
+  border-radius: 10px;
+  background: #f5faff;
+  padding: 16px 18px;
+}
+
+.accountingNote strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #1849a9;
+}
+
+.accountingNote p {
+  margin: 0;
+  color: #475467;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media (
+  max-width: 1100px
+) {
+  .summaryGrid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .downloadGroup {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (
+  max-width: 760px
+) {
+  .page {
+    padding: 16px;
+  }
+
+  .hero {
+    padding: 20px;
+  }
+
+  .heroIcon {
+    display: none;
+  }
+
+  .summaryGrid,
+  .reportGrid {
+    grid-template-columns:
+      1fr;
+  }
+
+  .dateField {
+    width: 100%;
+  }
+
+  .refreshButton {
+    width: 100%;
+  }
+
+  .downloadGroup {
+    flex-direction: column;
+  }
+
+  .pdfButton,
+  .csvButton {
+    width: 100%;
+  }
+
+  .periodBar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .reportRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .reportRow strong {
+    text-align: left;
+  }
+}

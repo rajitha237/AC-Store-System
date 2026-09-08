@@ -1,3 +1,12 @@
+from app.services.documents.financial_report_excel import (
+    build_financial_report_excel,
+)
+
+from app.services.documents.financial_report import (
+    FinancialReportPDFData,
+    build_financial_report_pdf,
+)
+
 from app.services.documents.job_card import (
     JobCardPDFData,
     build_job_card_pdf,
