@@ -261,14 +261,19 @@ export default function TechnicianPage() {
             }
           ).items ?? [];
 
-        const assignedJobs =
+        const activeAssignedJobs =
           rawItems.filter(
             (job) =>
               job.technician_id
-              === currentUser.id,
+              === currentUser.id
+              && job.status !== "ready"
+              && job.status !== "delivered"
+              && job.status !== "cancelled",
           );
 
-        setJobs(assignedJobs);
+        setJobs(
+          activeAssignedJobs,
+        );
       } catch (requestError) {
         const status =
           (
