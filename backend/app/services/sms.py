@@ -405,7 +405,7 @@ async def queue_owner_job_reminders(
 ) -> list[SmsNotification]:
     """
     Queue owner SMS reminders for service jobs scheduled
-    today or tomorrow.
+    tomorrow.
 
     This function DOES NOT send SMS messages.
 
@@ -444,12 +444,8 @@ async def queue_owner_job_reminders(
             .where(
                 ServiceJobCard.company_id
                 == company_id,
-                ServiceJobCard.scheduled_visit_date.in_(
-                    [
-                        effective_today,
-                        tomorrow,
-                    ]
-                ),
+                ServiceJobCard.scheduled_visit_date
+                == tomorrow,
             )
             .order_by(
                 ServiceJobCard.scheduled_visit_date,
@@ -542,6 +538,220 @@ async def queue_owner_job_reminders(
 
 
 # ============================================================
+# INSTALLMENT DUE REMINDER SMS OUTBOX
+# ============================================================
+
+from decimal import Decimal
+
+from app.models.installment import (
+    InstallmentPlan,
+    InstallmentPlanStatus,
+    InstallmentSchedule,
+    InstallmentScheduleStatus,
+)
+
+
+INSTALLMENT_DUE_REMINDER_EVENT = (
+    "installment_due_reminder"
+)
+
+
+def build_installment_due_reminder_key(
+    *,
+    company_id: int,
+    schedule_id: int,
+    due_date: date,
+) -> str:
+    """Stable once-only key for one installment due reminder."""
+
+    return (
+        "installment-due-reminder:"
+        f"{company_id}:"
+        f"{schedule_id}:"
+        f"{due_date.isoformat()}"
+    )
+
+
+def build_installment_due_reminder_message(
+    *,
+    agreement_number: str,
+    due_date: date,
+    remaining_amount: Decimal,
+) -> str:
+    amount = remaining_amount.quantize(
+        Decimal("0.01")
+    )
+
+    return (
+        "Bandara Cool World: Installment "
+        f"{agreement_number} payment of "
+        f"LKR {amount:.2f} is due tomorrow "
+        f"({due_date.isoformat()}). Thank you."
+    )
+
+
+async def queue_installment_due_reminders(
+    session: AsyncSession,
+    *,
+    company_id: int,
+    today: date | None = None,
+) -> list[SmsNotification]:
+    """
+    Queue customer installment reminders for schedules
+    due tomorrow.
+
+    Only ACTIVE plans and PENDING/PARTIAL schedules with
+    a positive remaining amount are eligible.
+
+    This function DOES NOT send SMS messages.
+    """
+
+    effective_today = today or date.today()
+    tomorrow = effective_today + timedelta(days=1)
+
+    rows = (
+        await session.execute(
+            select(
+                InstallmentSchedule,
+                InstallmentPlan,
+                Customer,
+            )
+            .join(
+                InstallmentPlan,
+                InstallmentPlan.id
+                == InstallmentSchedule.plan_id,
+            )
+            .join(
+                Customer,
+                Customer.id
+                == InstallmentPlan.customer_id,
+            )
+            .where(
+                InstallmentPlan.company_id
+                == company_id,
+                InstallmentPlan.status
+                == InstallmentPlanStatus.ACTIVE.value,
+                InstallmentSchedule.due_date
+                == tomorrow,
+                InstallmentSchedule.status.in_(
+                    [
+                        InstallmentScheduleStatus
+                        .PENDING.value,
+                        InstallmentScheduleStatus
+                        .PARTIAL.value,
+                    ]
+                ),
+            )
+            .order_by(
+                InstallmentSchedule.due_date,
+                InstallmentSchedule.id,
+            )
+        )
+    ).all()
+
+    queued: list[SmsNotification] = []
+
+    for schedule, plan, customer in rows:
+        if (
+            schedule.id is None
+            or customer.id is None
+            or not customer.sms_allowed
+        ):
+            continue
+
+        remaining_amount = (
+            Decimal(schedule.amount_due)
+            - Decimal(schedule.amount_paid)
+        )
+
+        if remaining_amount <= Decimal("0.00"):
+            continue
+
+        raw_phone = (
+            customer.sms_phone or ""
+        ).strip()
+
+        if not raw_phone:
+            continue
+
+        try:
+            recipient_phone = (
+                normalize_sri_lankan_phone(
+                    raw_phone
+                )
+            )
+        except SmsPhoneError:
+            continue
+
+        deduplication_key = (
+            build_installment_due_reminder_key(
+                company_id=company_id,
+                schedule_id=schedule.id,
+                due_date=schedule.due_date,
+            )
+        )
+
+        existing_id = (
+            await session.execute(
+                select(SmsNotification.id).where(
+                    SmsNotification.deduplication_key
+                    == deduplication_key
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing_id is not None:
+            continue
+
+        agreement_number = (
+            (plan.agreement_number or "").strip()
+            or f"PLAN-{plan.id}"
+        )
+
+        notification = SmsNotification(
+            company_id=company_id,
+            job_card_id=None,
+            customer_id=customer.id,
+            recipient_type=(
+                SmsRecipientType.CUSTOMER.value
+            ),
+            recipient_phone=recipient_phone,
+            event_type=(
+                INSTALLMENT_DUE_REMINDER_EVENT
+            ),
+            message=(
+                build_installment_due_reminder_message(
+                    agreement_number=agreement_number,
+                    due_date=schedule.due_date,
+                    remaining_amount=remaining_amount,
+                )
+            ),
+            status=(
+                SmsNotificationStatus.PENDING.value
+            ),
+            deduplication_key=deduplication_key,
+            provider_message_id=None,
+            attempt_count=0,
+            last_error=None,
+            scheduled_for=datetime.combine(
+                effective_today,
+                time.min,
+            ),
+            sent_at=None,
+        )
+
+        session.add(notification)
+
+        # Detect duplicate-key / DB contract problems
+        # while still leaving commit control to the caller.
+        await session.flush()
+
+        queued.append(notification)
+
+    return queued
+
+
+# ============================================================
 # CUSTOMER SERVICE STATUS SMS OUTBOX
 # ============================================================
 
@@ -549,14 +759,8 @@ from app.models.customer import Customer
 
 
 CUSTOMER_SERVICE_STATUS_EVENTS = {
-    "waiting_approval":
-        "customer_service_waiting_approval",
-    "repairing":
-        "customer_service_repairing",
-    "ready":
-        "customer_service_ready",
-    "delivered":
-        "customer_service_delivered",
+    "received": "customer_service_received",
+    "ready": "customer_service_ready",
 }
 
 
@@ -584,38 +788,24 @@ def build_customer_service_status_message(
     job_number: str,
     status_value: str,
 ) -> str:
-    """
-    Customer-facing English SMS text.
+    if status_value == "received":
+        return (
+            f"Bandara Cool World: Your service job "
+            f"{job_number} has been received and registered. "
+            "Thank you."
+        )
 
-    Keep messages concise because provider SMS billing
-    can depend on message length / segment count.
-    """
+    if status_value == "ready":
+        return (
+            f"Bandara Cool World: Your service job "
+            f"{job_number} has been completed and is ready. "
+            "Thank you."
+        )
 
-    messages = {
-        "waiting_approval": (
-            f"Service update: {job_number} is awaiting "
-            "your approval. Please contact us for details."
-        ),
-        "repairing": (
-            f"Service update: repair work has started "
-            f"for {job_number}."
-        ),
-        "ready": (
-            f"Service update: {job_number} is ready "
-            "for collection. Please contact us if needed."
-        ),
-        "delivered": (
-            f"Service update: {job_number} has been "
-            "delivered. Thank you."
-        ),
-    }
-
-    try:
-        return messages[status_value]
-    except KeyError as exc:
-        raise ValueError(
-            "Unsupported customer service SMS status"
-        ) from exc
+    raise ValueError(
+        f"Unsupported customer service SMS status: "
+        f"{status_value}"
+    )
 
 
 async def queue_customer_service_status_notification(

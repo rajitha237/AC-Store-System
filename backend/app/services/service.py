@@ -755,6 +755,12 @@ async def create_job_card(
 
         session.add(history)
 
+        await queue_customer_service_status_notification(
+            session,
+            job=job,
+            status_value=ServiceJobStatus.RECEIVED.value,
+        )
+
         await session.commit()
 
     except Exception:

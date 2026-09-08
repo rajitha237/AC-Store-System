@@ -1,6 +1,7 @@
+import asyncio
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +10,7 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.db.init_db import initialize_database
 from app.db.session import engine
+from app.services.sms_runner import sms_worker_loop
 
 
 settings = get_settings()
@@ -30,9 +32,34 @@ async def lifespan(
 
     await initialize_database()
 
+    sms_worker_task: asyncio.Task[None] | None = None
+
+    if settings.sms_enabled:
+        sms_worker_task = asyncio.create_task(
+            sms_worker_loop(),
+            name="sms-worker",
+        )
+
+        logger.info(
+            "Automatic SMS worker enabled"
+        )
+    else:
+        logger.info(
+            "Automatic SMS worker disabled "
+            "because SMS_ENABLED=false"
+        )
+
     try:
         yield
     finally:
+        if sms_worker_task is not None:
+            sms_worker_task.cancel()
+
+            with suppress(
+                asyncio.CancelledError
+            ):
+                await sms_worker_task
+
         await engine.dispose()
 
         logger.info(

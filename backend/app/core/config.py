@@ -47,10 +47,12 @@ class Settings(BaseSettings):
     sms_enabled: bool = False
     sms_provider: str = "smslenz"
     sms_base_url: str = "https://smslenz.lk"
-    sms_sender_id: str = "SMSlenzDEMO"
+    sms_sender_id: str = "Bandaracool"
     sms_user_id: str = ""
     sms_api_key: str = ""
     sms_timeout_seconds: float = 15.0
+    sms_worker_interval_seconds: int = 60
+    sms_dispatch_limit: int = 50
 
     # Development/test fallbacks are retained temporarily
     # for local compatibility. Production validation below
