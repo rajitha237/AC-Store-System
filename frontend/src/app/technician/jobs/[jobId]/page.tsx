@@ -2231,6 +2231,18 @@ export default function TechnicianJobPage() {
               </p>
             </div>
 
+            {job.special_notes?.trim() ? (
+              <div>
+                <span>
+                  Special Notes
+                </span>
+
+                <p>
+                  {job.special_notes}
+                </p>
+              </div>
+            ) : null}
+
             <div>
               <span>
                 Diagnosis
