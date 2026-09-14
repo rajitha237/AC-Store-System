@@ -492,6 +492,12 @@ export default function ReturnsPage() {
     useState("");
 
   const [
+    replacementProductSearch,
+    setReplacementProductSearch,
+  ] =
+    useState("");
+
+  const [
     replacementWarehouseId,
     setReplacementWarehouseId,
   ] =
@@ -1264,6 +1270,60 @@ export default function ReturnsPage() {
   }
 
 
+  async function loadAllReplacementProducts() {
+    const allProducts:
+      SalesProductOption[] = [];
+
+    let productPage = 1;
+
+    while (true) {
+      const pageProducts =
+        await getSalesProducts(
+          undefined,
+          productPage,
+        );
+
+      allProducts.push(
+        ...pageProducts,
+      );
+
+      if (
+        pageProducts.length
+        < 100
+      ) {
+        break;
+      }
+
+      productPage += 1;
+    }
+
+    const uniqueProducts =
+      Array.from(
+        new Map(
+          allProducts.map(
+            (product) => [
+              product.id,
+              product,
+            ],
+          ),
+        ).values(),
+      );
+
+    return uniqueProducts.sort(
+      (a, b) =>
+        (
+          a.product_code
+          + " "
+          + a.name
+        ).localeCompare(
+          b.product_code
+          + " "
+          + b.name,
+        ),
+    );
+  }
+
+
   async function openReplacement() {
     if (!selected) {
       return;
@@ -1277,7 +1337,7 @@ export default function ReturnsPage() {
         warehouseData,
       ] =
         await Promise.all([
-          getSalesProducts(),
+          loadAllReplacementProducts(),
           getSalesWarehouses(),
         ]);
 
@@ -1309,6 +1369,10 @@ export default function ReturnsPage() {
     );
 
     setReplacementProductId(
+      "",
+    );
+
+    setReplacementProductSearch(
       "",
     );
 
@@ -3002,8 +3066,12 @@ export default function ReturnsPage() {
                     </button>
                   )}
 
-                  {selected.status
-                    === "inspected" && (
+                  {[
+                    "inspected",
+                    "waiting_approval",
+                  ].includes(
+                    selected.status,
+                  ) && (
                     <>
                       <button
                         type="button"
@@ -3335,9 +3403,62 @@ export default function ReturnsPage() {
                   </label>
 
                   <label>
+                    Search replacement product
+
+                    <input
+                      type="search"
+                      placeholder="Search by product code or name..."
+                      value={
+                        replacementProductSearch
+                      }
+                      onChange={
+                        (event) =>
+                          setReplacementProductSearch(
+                            event.target.value,
+                          )
+                      }
+                      autoComplete="off"
+                    />
+                  </label>
+
+                  <label>
                     Replacement product
 
                     <select
+                      size={
+                        replacementProductSearch
+                          .trim()
+                          ? Math.min(
+                              Math.max(
+                                products.filter(
+                                  (product) => {
+                                    const query =
+                                      replacementProductSearch
+                                        .trim()
+                                        .toLowerCase();
+
+                                    return (
+                                      product
+                                        .product_code
+                                        .toLowerCase()
+                                        .includes(
+                                          query,
+                                        )
+                                      || product
+                                        .name
+                                        .toLowerCase()
+                                        .includes(
+                                          query,
+                                        )
+                                    );
+                                  },
+                                ).length,
+                                2,
+                              ),
+                              8,
+                            )
+                          : 1
+                      }
                       value={
                         replacementProductId
                       }
@@ -3363,27 +3484,55 @@ export default function ReturnsPage() {
                         Select product
                       </option>
 
-                      {products.map(
-                        (product) => (
-                          <option
-                            key={
-                              product.id
+                      {products
+                        .filter(
+                          (product) => {
+                            const query =
+                              replacementProductSearch
+                                .trim()
+                                .toLowerCase();
+
+                            if (!query) {
+                              return true;
                             }
-                            value={
-                              product.id
-                            }
-                          >
-                            {
+
+                            return (
                               product
                                 .product_code
-                            }
-                            {" — "}
-                            {
-                              product.name
-                            }
-                          </option>
-                        ),
-                      )}
+                                .toLowerCase()
+                                .includes(
+                                  query,
+                                )
+                              || product
+                                .name
+                                .toLowerCase()
+                                .includes(
+                                  query,
+                                )
+                            );
+                          },
+                        )
+                        .map(
+                          (product) => (
+                            <option
+                              key={
+                                product.id
+                              }
+                              value={
+                                product.id
+                              }
+                            >
+                              {
+                                product
+                                  .product_code
+                              }
+                              {" — "}
+                              {
+                                product.name
+                              }
+                            </option>
+                          ),
+                        )}
                     </select>
                   </label>
 

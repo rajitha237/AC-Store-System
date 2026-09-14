@@ -290,13 +290,14 @@ export async function getSalesCustomers(
 
 export async function getSalesProducts(
   search?: string,
+  page = 1,
 ): Promise<SalesProductOption[]> {
   const response =
     await api.get<unknown>(
       "/catalog/products",
       {
         params: {
-          page: 1,
+          page,
           page_size: 100,
           is_active: true,
           search:
