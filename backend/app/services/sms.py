@@ -1316,3 +1316,197 @@ def retry_failed_sms_notification(
     notification.processing_started_at = None
 
     return True
+
+
+# ============================================================
+# OWNER DAILY CASH SUMMARY
+# ============================================================
+
+OWNER_DAILY_CASH_SUMMARY_EVENT = (
+    "owner_daily_cash_summary"
+)
+
+
+def build_owner_daily_cash_summary_key(
+    *,
+    company_id: int,
+    summary_date: date,
+) -> str:
+    """
+    Stable once-only key for one company/date.
+    """
+    return (
+        "owner-daily-cash-summary:"
+        f"{company_id}:"
+        f"{summary_date.isoformat()}"
+    )
+
+
+def build_owner_daily_cash_summary_message(
+    *,
+    summary_date: date,
+    total_cash_in,
+    total_cash_out,
+    net_cash_flow,
+) -> str:
+    """
+    Build the owner end-of-day cash summary message.
+    """
+    return (
+        "Bandara Cool World Daily Summary "
+        f"{summary_date.isoformat()}: "
+        f"Income LKR {total_cash_in:,.2f}, "
+        f"Expenses LKR {total_cash_out:,.2f}, "
+        f"Net LKR {net_cash_flow:,.2f}."
+    )
+
+
+async def queue_owner_daily_cash_summary(
+    session: AsyncSession,
+    *,
+    company_id: int,
+    local_now: datetime,
+    timezone_name: str = "Asia/Colombo",
+) -> list[SmsNotification]:
+    """
+    Queue one owner daily cash summary at/after 9:00 PM
+    company-local time.
+
+    This function only queues the SMS. The normal SMS
+    dispatcher sends it.
+
+    Duplicate daily messages are prevented through the
+    unique deduplication key.
+    """
+
+    if local_now.hour < 21:
+        return []
+
+    summary_date = (
+        local_now.date()
+    )
+
+    company = (
+        await session.execute(
+            select(
+                Company
+            ).where(
+                Company.id
+                == company_id
+            )
+        )
+    ).scalar_one_or_none()
+
+    if company is None:
+        return []
+
+    raw_owner_phone = (
+        company.owner_sms_phone
+        or ""
+    ).strip()
+
+    if not raw_owner_phone:
+        return []
+
+    owner_phone = (
+        normalize_sri_lankan_phone(
+            raw_owner_phone
+        )
+    )
+
+    deduplication_key = (
+        build_owner_daily_cash_summary_key(
+            company_id=company_id,
+            summary_date=summary_date,
+        )
+    )
+
+    existing_id = (
+        await session.execute(
+            select(
+                SmsNotification.id
+            ).where(
+                SmsNotification
+                .deduplication_key
+                == deduplication_key
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing_id is not None:
+        return []
+
+    from app.services.reports import (
+        build_financial_reports_summary,
+    )
+
+    report = (
+        await build_financial_reports_summary(
+            session,
+            company_id=company_id,
+            date_from=summary_date,
+            date_to=summary_date,
+            timezone_name=(
+                timezone_name
+            ),
+        )
+    )
+
+    cash_flow = (
+        report.cash_flow
+    )
+
+    message = (
+        build_owner_daily_cash_summary_message(
+            summary_date=summary_date,
+            total_cash_in=(
+                cash_flow.total_cash_in
+            ),
+            total_cash_out=(
+                cash_flow.total_cash_out
+            ),
+            net_cash_flow=(
+                cash_flow.net_cash_flow
+            ),
+        )
+    )
+
+    notification = (
+        SmsNotification(
+            company_id=company_id,
+            job_card_id=None,
+            customer_id=None,
+            recipient_type=(
+                SmsRecipientType
+                .OWNER
+                .value
+            ),
+            recipient_phone=(
+                owner_phone
+            ),
+            event_type=(
+                OWNER_DAILY_CASH_SUMMARY_EVENT
+            ),
+            message=message,
+            status=(
+                SmsNotificationStatus
+                .PENDING
+                .value
+            ),
+            deduplication_key=(
+                deduplication_key
+            ),
+            provider_message_id=None,
+            attempt_count=0,
+        )
+    )
+
+    session.add(
+        notification
+    )
+
+    await session.flush()
+
+    return [
+        notification
+    ]

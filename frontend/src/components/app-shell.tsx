@@ -23,6 +23,7 @@ import {
   ShoppingCart,
   BookOpenText,
   BarChart3,
+  MessageSquareText,
 } from "lucide-react";
 
 import Link from "next/link";
@@ -148,6 +149,12 @@ const navigation = [
     label: "Service Jobs",
     href: "/service-jobs",
     icon: Wrench,
+    available: true,
+  },
+  {
+    label: "SMS Center",
+    href: "/sms-center",
+    icon: MessageSquareText,
     available: true,
   },
   {

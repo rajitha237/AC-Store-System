@@ -14,6 +14,7 @@ from app.models.company import Company
 from app.services.sms import (
     dispatch_pending_sms_notifications,
     queue_installment_due_reminders,
+    queue_owner_daily_cash_summary,
     queue_owner_job_reminders,
     recover_stale_processing_sms_notifications,
 )
@@ -28,20 +29,23 @@ class SmsCycleResult:
     companies_checked: int = 0
     owner_reminders_queued: int = 0
     installment_reminders_queued: int = 0
+    daily_cash_summaries_queued: int = 0
     stale_rows_recovered: int = 0
     notifications_dispatched: int = 0
 
 
-def _company_local_date(
+def _company_timezone(
     timezone_name: str | None,
-):
+) -> ZoneInfo:
     name = (
         (timezone_name or "").strip()
         or "Asia/Colombo"
     )
 
     try:
-        timezone = ZoneInfo(name)
+        return ZoneInfo(
+            name
+        )
     except ZoneInfoNotFoundError:
         logger.warning(
             "Invalid company timezone %s; "
@@ -49,12 +53,26 @@ def _company_local_date(
             name,
         )
 
-        timezone = ZoneInfo(
+        return ZoneInfo(
             "Asia/Colombo"
         )
 
+
+def _company_local_now(
+    timezone_name: str | None,
+) -> datetime:
     return datetime.now(
-        timezone
+        _company_timezone(
+            timezone_name
+        )
+    )
+
+
+def _company_local_date(
+    timezone_name: str | None,
+):
+    return _company_local_now(
+        timezone_name
     ).date()
 
 
@@ -113,8 +131,22 @@ async def run_sms_cycle() -> SmsCycleResult:
     )
 
     for company_id, timezone_name in company_rows:
-        today = _company_local_date(
-            timezone_name
+        company_timezone = (
+            _company_timezone(
+                timezone_name
+            )
+        )
+
+        local_now = datetime.now(
+            company_timezone
+        )
+
+        today = (
+            local_now.date()
+        )
+
+        effective_timezone_name = (
+            company_timezone.key
         )
 
         async with AsyncSessionLocal() as session:
@@ -135,6 +167,17 @@ async def run_sms_cycle() -> SmsCycleResult:
                     )
                 )
 
+                daily_summary_rows = (
+                    await queue_owner_daily_cash_summary(
+                        session,
+                        company_id=company_id,
+                        local_now=local_now,
+                        timezone_name=(
+                            effective_timezone_name
+                        ),
+                    )
+                )
+
                 await session.commit()
 
                 result.owner_reminders_queued += len(
@@ -143,6 +186,10 @@ async def run_sms_cycle() -> SmsCycleResult:
 
                 result.installment_reminders_queued += len(
                     installment_rows
+                )
+
+                result.daily_cash_summaries_queued += len(
+                    daily_summary_rows
                 )
 
             except Exception:
@@ -204,11 +251,13 @@ async def sms_worker_loop() -> None:
                         "companies=%s "
                         "owner_queued=%s "
                         "installment_queued=%s "
+                        "daily_summary_queued=%s "
                         "dispatched=%s "
                         "stale_recovered=%s",
                         result.companies_checked,
                         result.owner_reminders_queued,
                         result.installment_reminders_queued,
+                        result.daily_cash_summaries_queued,
                         result.notifications_dispatched,
                         result.stale_rows_recovered,
                     )

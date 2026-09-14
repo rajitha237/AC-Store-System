@@ -49,6 +49,10 @@ from app.api.v1.reports import (
 from app.api.v1.service import (
     router as service_router,
 )
+
+from app.api.v1.sms_notifications import (
+    router as sms_notifications_router,
+)
 from app.api.v1.suppliers import (
     router as suppliers_router,
 )
@@ -127,6 +131,10 @@ api_router.include_router(
 
 api_router.include_router(
     service_router
+)
+
+api_router.include_router(
+    sms_notifications_router
 )
 
 api_router.include_router(
