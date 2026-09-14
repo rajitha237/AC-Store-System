@@ -43,6 +43,7 @@ import {
 
 import {
   getSalesInvoice,
+  getSalesInvoices,
   getSalesProducts,
   getSalesWarehouses,
   getAvailableSalesSerials,
@@ -53,6 +54,7 @@ import {
   changeReturnStatus,
   createReturn,
   getReturn,
+  getReturnableInvoice,
   getReturns,
   inspectReturn,
   processReturn,
@@ -65,6 +67,7 @@ import type {
 
 import type {
   SalesInvoiceDetailResponse,
+  SalesInvoiceResponse,
   SalesProductOption,
   SalesSerialOption,
   SalesWarehouseOption,
@@ -75,6 +78,7 @@ import type {
   ReturnItemCondition,
   ReturnResolution,
   ReturnStatus,
+  ReturnableInvoiceResponse,
   SalesReturnDetailResponse,
   SalesReturnListResponse,
 } from "@/types/returns";
@@ -380,10 +384,25 @@ export default function ReturnsPage() {
     useState(false);
 
   const [
-    invoiceId,
-    setInvoiceId,
+    invoiceSearch,
+    setInvoiceSearch,
   ] =
     useState("");
+
+  const [
+    invoiceSearchResults,
+    setInvoiceSearchResults,
+  ] =
+    useState<
+      SalesInvoiceResponse[]
+    >([]);
+
+  const [
+    invoiceSearchLoading,
+    setInvoiceSearchLoading,
+  ] =
+    useState(false);
+
 
   const [
     invoice,
@@ -407,6 +426,16 @@ export default function ReturnsPage() {
     setReturnReason,
   ] =
     useState("");
+
+  const [
+    returnEligibility,
+    setReturnEligibility,
+  ] =
+    useState<
+      ReturnableInvoiceResponse
+      | null
+    >(null);
+
 
   const [
     draftItems,
@@ -801,105 +830,180 @@ export default function ReturnsPage() {
       return;
     }
 
-    setInvoiceId("");
+    setInvoiceSearch("");
+    setInvoiceSearchResults([]);
     setInvoice(null);
+    setReturnEligibility(null);
     setDraftItems([]);
     setReturnReason("");
     setCreateOpen(true);
   }
 
 
-  async function loadInvoiceForReturn(
+  async function searchInvoicesForReturn(
     event:
       FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
 
-    const id =
-      Number(
-        invoiceId,
-      );
+    const search =
+      invoiceSearch.trim();
 
-    if (
-      !Number.isInteger(id)
-      || id <= 0
-    ) {
+    if (search.length < 2) {
       setError(
-        "Enter a valid invoice ID.",
+        "Enter at least 2 characters "
+        + "of the invoice number.",
       );
 
       return;
     }
 
-    setInvoiceLoading(
-      true,
-    );
-
+    setInvoiceSearchLoading(true);
     setError("");
 
     try {
-      const detail =
-        await getSalesInvoice(
-          id,
+      const result =
+        await getSalesInvoices({
+          page: 1,
+          pageSize: 20,
+          search,
+        });
+
+      const eligibleInvoices =
+        result.items.filter(
+          (item) =>
+            item.invoice_status
+              === "confirmed"
+            || item.invoice_status
+              === "returned",
         );
 
+      setInvoiceSearchResults(
+        eligibleInvoices,
+      );
+
       if (
-        detail.invoice_status
-        !== "confirmed"
-        && detail.invoice_status
-        !== "returned"
+        eligibleInvoices.length === 0
       ) {
         setError(
+          "No confirmed or returned "
+          + "invoices matched that search.",
+        );
+      }
+    } catch (err) {
+      setError(
+        apiError(
+          err,
+        ),
+      );
+    } finally {
+      setInvoiceSearchLoading(false);
+    }
+  }
+
+
+  async function selectInvoiceForReturn(
+    selectedInvoiceId: number,
+  ) {
+    setInvoiceSearchResults([]);
+
+    setInvoiceLoading(true);
+    setError("");
+
+    try {
+      const [
+        result,
+        eligibility,
+      ] =
+        await Promise.all([
+          getSalesInvoice(
+            selectedInvoiceId,
+          ),
+          getReturnableInvoice(
+            selectedInvoiceId,
+          ),
+        ]);
+
+      if (
+        result.invoice_status
+          !== "confirmed"
+        && result.invoice_status
+          !== "returned"
+      ) {
+        setInvoice(null);
+        setDraftItems([]);
+
+        setError(
           "Returns can only be created "
-          + "for a confirmed invoice.",
+          + "for a confirmed or "
+          + "previously returned invoice.",
         );
 
         return;
       }
 
-      setInvoice(
-        detail,
+      setInvoice(result);
+      setReturnEligibility(
+        eligibility,
       );
 
       setDraftItems(
-        detail.items.map(
-          (item) => ({
-            invoiceItemId:
-              item.id,
+        result.items.map(
+          (item) => {
+            const eligibilityItem =
+              eligibility.items.find(
+                (candidate) =>
+                  candidate
+                    .invoice_item_id
+                  === item.id,
+              );
 
-            selected:
-              false,
+            const remainingQuantity =
+              eligibilityItem
+                ?.remaining_quantity
+              ?? "0.000";
 
-            quantity:
-              item.serial_number_id
-                ? "1.000"
-                : String(
-                    item.quantity,
-                  ),
+            return {
+              invoiceItemId:
+                item.id,
 
-            condition:
-              "good",
+              selected:
+                false,
 
-            reason:
-              "",
+              quantity:
+                item.serial_number_id
+                  ? (
+                      eligibilityItem
+                        ?.is_returnable
+                        ? "1.000"
+                        : "0.000"
+                    )
+                  : remainingQuantity,
 
-            destinationWarehouseId:
-              "",
-          }),
+              condition:
+                "good",
+
+              reason:
+                "",
+
+              destinationWarehouseId:
+                "",
+            };
+          },
         ),
       );
-    } catch (
-      requestError
-    ) {
+    } catch (err) {
+      setInvoice(null);
+      setReturnEligibility(null);
+      setDraftItems([]);
+
       setError(
         apiError(
-          requestError,
+          err,
         ),
       );
     } finally {
-      setInvoiceLoading(
-        false,
-      );
+      setInvoiceLoading(false);
     }
   }
 
@@ -977,6 +1081,83 @@ export default function ReturnsPage() {
         setError(
           "Return quantity must "
           + "be greater than zero.",
+        );
+
+        return;
+      }
+    }
+
+    if (!returnEligibility) {
+      setError(
+        "Return availability could "
+        + "not be verified. Reload "
+        + "the invoice and try again.",
+      );
+
+      return;
+    }
+
+    for (
+      const item
+      of selectedItems
+    ) {
+      const eligibilityItem =
+        returnEligibility.items.find(
+          (candidate) =>
+            candidate
+              .invoice_item_id
+            === item.invoiceItemId,
+        );
+
+      if (
+        !eligibilityItem
+        || !eligibilityItem
+          .is_returnable
+      ) {
+        setError(
+          "One of the selected items "
+          + "is no longer returnable.",
+        );
+
+        return;
+      }
+
+      if (
+        numberValue(
+          item.quantity,
+        )
+        >
+        numberValue(
+          eligibilityItem
+            .remaining_quantity,
+        )
+      ) {
+        setError(
+          "Return quantity exceeds "
+          + "the available returnable "
+          + "quantity.",
+        );
+
+        return;
+      }
+
+      const invoiceItem =
+        invoice.items.find(
+          (candidate) =>
+            candidate.id
+            === item.invoiceItemId,
+        );
+
+      if (
+        invoiceItem
+          ?.serial_number_id
+        && numberValue(
+          item.quantity,
+        ) !== 1
+      ) {
+        setError(
+          "Serialized return quantity "
+          + "must be exactly 1.",
         );
 
         return;
@@ -2232,25 +2413,23 @@ export default function ReturnsPage() {
                   styles.invoiceLookup
                 }
                 onSubmit={
-                  loadInvoiceForReturn
+                  searchInvoicesForReturn
                 }
               >
                 <label>
-                  Confirmed invoice ID
+                  Search invoice number
 
                   <input
-                    type="number"
-                    min="1"
-                    required
+                    type="search"
+                    placeholder="Example: INV-000123"
+                    autoComplete="off"
                     value={
-                      invoiceId
+                      invoiceSearch
                     }
                     onChange={
                       (event) =>
-                        setInvoiceId(
-                          event
-                            .target
-                            .value,
+                        setInvoiceSearch(
+                          event.target.value,
                         )
                     }
                   />
@@ -2259,19 +2438,55 @@ export default function ReturnsPage() {
                 <button
                   type="submit"
                   className={
-                    styles
-                      .secondaryButton
+                    styles.secondaryButton
                   }
                   disabled={
-                    invoiceLoading
+                    invoiceSearchLoading
                   }
                 >
-                  {invoiceLoading
-                    ? "Loading..."
-                    : "Load invoice"
+                  {invoiceSearchLoading
+                    ? "Searching..."
+                    : "Search invoice"
                   }
                 </button>
               </form>
+
+              {invoiceSearchResults.length
+                > 0 && (
+                <div
+                  className={
+                    styles.itemList
+                  }
+                >
+                  {invoiceSearchResults.map(
+                    (item) => (
+                      <button
+                        key={
+                          item.id
+                        }
+                        type="button"
+                        className={
+                          styles.secondaryButton
+                        }
+                        disabled={
+                          invoiceLoading
+                        }
+                        onClick={() =>
+                          void selectInvoiceForReturn(
+                            item.id,
+                          )
+                        }
+                      >
+                        {item.invoice_number}
+                        {" · "}
+                        {item.invoice_date}
+                        {" · LKR "}
+                        {item.grand_total}
+                      </button>
+                    ),
+                  )}
+                </div>
+              )}
 
               {invoice && (
                 <>
@@ -2351,6 +2566,21 @@ export default function ReturnsPage() {
                             return null;
                           }
 
+                          const eligibilityItem =
+                            returnEligibility
+                              ?.items.find(
+                                (item) =>
+                                  item
+                                    .invoice_item_id
+                                  === invoiceItem.id,
+                              );
+
+                          const isReturnable =
+                            Boolean(
+                              eligibilityItem
+                                ?.is_returnable,
+                            );
+
                           return (
                             <article
                               key={
@@ -2375,6 +2605,9 @@ export default function ReturnsPage() {
                                   checked={
                                     draft
                                       .selected
+                                  }
+                                  disabled={
+                                    !isReturnable
                                   }
                                   onChange={
                                     (event) =>
@@ -2405,12 +2638,41 @@ export default function ReturnsPage() {
                                       invoiceItem
                                         .quantity,
                                     )}
+
+                                    {" • Returned: "}
+
+                                    {quantity(
+                                      eligibilityItem
+                                        ?.already_returned_quantity
+                                      ?? "0.000",
+                                    )}
+
+                                    {" • Available: "}
+
+                                    {quantity(
+                                      eligibilityItem
+                                        ?.remaining_quantity
+                                      ?? "0.000",
+                                    )}
+
                                     {" • "}
+
                                     {money(
                                       invoiceItem
                                         .line_total,
                                     )}
                                   </span>
+
+                                  {!isReturnable
+                                    && eligibilityItem
+                                      ?.block_reason && (
+                                    <small>
+                                      {
+                                        eligibilityItem
+                                          .block_reason
+                                      }
+                                    </small>
+                                  )}
 
                                   {invoiceItem
                                     .serial_number && (
@@ -2439,13 +2701,19 @@ export default function ReturnsPage() {
                                     <input
                                       type="number"
                                       min="0.001"
+                                      max={
+                                        eligibilityItem
+                                          ?.remaining_quantity
+                                        ?? "0.000"
+                                      }
                                       step="0.001"
                                       value={
                                         draft
                                           .quantity
                                       }
                                       disabled={
-                                        Boolean(
+                                        !isReturnable
+                                        || Boolean(
                                           invoiceItem
                                             .serial_number_id,
                                         )
@@ -3130,8 +3398,32 @@ export default function ReturnsPage() {
                     </button>
                   )}
 
-                  {selected.status
-                    === "approved" && (
+                                    {selected.status
+                    === "approved"
+                    && selected.resolution
+                      === "refund" && (
+                    <button
+                      type="button"
+                      className={
+                        styles.primaryButton
+                      }
+                      disabled={
+                        actionLoading
+                      }
+                      onClick={() => {
+                        router.push(
+                          `/credit-notes?returnId=${selected.id}`,
+                        );
+                      }}
+                    >
+                      Continue refund
+                    </button>
+                  )}
+
+{selected.status
+                    === "approved"
+                    && selected.resolution
+                      === "warranty_service" && (
                     <button
                       type="button"
                       className={
@@ -3151,31 +3443,7 @@ export default function ReturnsPage() {
                     </button>
                   )}
 
-                  {![
-                    "completed",
-                    "rejected",
-                  ].includes(
-                    selected.status,
-                  ) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setManualStatus(
-                          "cancelled",
-                        );
 
-                        setStatusRemarks(
-                          "",
-                        );
-
-                        setActionMode(
-                          "status",
-                        );
-                      }}
-                    >
-                      Change status
-                    </button>
-                  )}
                 </footer>
               </>
             )}
@@ -3218,7 +3486,7 @@ export default function ReturnsPage() {
                         : actionMode
                             === "replacement"
                           ? "Set replacement"
-                          : "Change status"
+                          : "Return action"
                   }
                 </h2>
               </div>

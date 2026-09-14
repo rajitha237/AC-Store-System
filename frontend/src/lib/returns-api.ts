@@ -9,6 +9,7 @@ import type {
   ReturnStatusChangeRequest,
   SalesReturnCreate,
   SalesReturnDetailResponse,
+  ReturnableInvoiceResponse,
   SalesReturnListParams,
   SalesReturnListResponse,
 } from "@/types/returns";
@@ -67,6 +68,22 @@ export async function getReturn(
       SalesReturnDetailResponse
     >(
       `/returns/${returnId}`,
+    );
+
+  return response.data;
+}
+
+
+export async function getReturnableInvoice(
+  invoiceId: number,
+): Promise<
+  ReturnableInvoiceResponse
+> {
+  const response =
+    await api.get<
+      ReturnableInvoiceResponse
+    >(
+      `/returns/invoice/${invoiceId}/returnable-items`,
     );
 
   return response.data;

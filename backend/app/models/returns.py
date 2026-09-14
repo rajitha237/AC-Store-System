@@ -41,6 +41,7 @@ class ReturnResolution(str, Enum):
     REPLACEMENT = "replacement"
     WARRANTY_SERVICE = "warranty_service"
     STORE_CREDIT = "store_credit"
+    RESTOCK_ONLY = "restock_only"
     REJECTED = "rejected"
 
 

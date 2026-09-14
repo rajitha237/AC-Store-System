@@ -371,3 +371,23 @@ class SalesReturnListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+class ReturnableInvoiceItemResponse(BaseModel):
+    invoice_item_id: int
+
+    sold_quantity: Decimal
+    already_returned_quantity: Decimal
+    remaining_quantity: Decimal
+
+    is_returnable: bool
+
+    block_reason: str | None = None
+
+
+class ReturnableInvoiceResponse(BaseModel):
+    invoice_id: int
+    invoice_number: str
+
+    items: list[
+        ReturnableInvoiceItemResponse
+    ]

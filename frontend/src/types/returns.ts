@@ -303,3 +303,25 @@ export type ReturnDraftItem = {
   destinationWarehouseId:
     string;
 };
+
+export type ReturnableInvoiceItemResponse = {
+  invoice_item_id: number;
+
+  sold_quantity: string;
+  already_returned_quantity: string;
+  remaining_quantity: string;
+
+  is_returnable: boolean;
+
+  block_reason:
+    string | null;
+};
+
+
+export type ReturnableInvoiceResponse = {
+  invoice_id: number;
+  invoice_number: string;
+
+  items:
+    ReturnableInvoiceItemResponse[];
+};

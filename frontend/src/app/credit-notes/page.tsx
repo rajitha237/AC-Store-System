@@ -478,6 +478,71 @@ export default function CreditNotesPage() {
   }, [router]);
 
 
+  useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    const params =
+      new URLSearchParams(
+        window.location.search,
+      );
+
+    const rawReturnId =
+      params.get(
+        "returnId",
+      );
+
+    if (!rawReturnId) {
+      return;
+    }
+
+    const returnId =
+      Number(
+        rawReturnId,
+      );
+
+    if (
+      !Number.isInteger(
+        returnId,
+      )
+      || returnId <= 0
+    ) {
+      return;
+    }
+
+    const timer =
+      window.setTimeout(
+        () => {
+          setCreateReturnId(
+            String(returnId),
+          );
+
+          setCreateNotes(
+            "",
+          );
+
+          setCreateOpen(
+            true,
+          );
+
+          window.history.replaceState(
+            {},
+            "",
+            "/credit-notes",
+          );
+        },
+        0,
+      );
+
+    return () => {
+      window.clearTimeout(
+        timer,
+      );
+    };
+  }, [authLoading]);
+
+
   const loadCreditNotes =
     useCallback(
       async (

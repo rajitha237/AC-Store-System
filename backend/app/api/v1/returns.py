@@ -22,6 +22,7 @@ from app.schemas.returns import (
     ReturnApprovalRequest,
     ReturnInspectionRequest,
     ReturnStatusChangeRequest,
+    ReturnableInvoiceResponse,
     SalesReturnCreate,
     SalesReturnDetailResponse,
     SalesReturnListResponse,
@@ -30,8 +31,10 @@ from app.services.returns import (
     approve_return,
     build_return_detail,
     change_return_status,
+    complete_restock_only_return,
     create_return,
     get_return,
+    get_returnable_invoice,
     inspect_return,
     list_returns,
     process_return,
@@ -139,6 +142,21 @@ async def read_returns(
 
 
 @router.get(
+    "/invoice/{invoice_id}/returnable-items",
+    response_model=ReturnableInvoiceResponse,
+)
+async def read_returnable_invoice_items(
+    invoice_id: int,
+    session: DatabaseSession,
+    _: CanViewReturns,
+) -> ReturnableInvoiceResponse:
+    return await get_returnable_invoice(
+        session=session,
+        invoice_id=invoice_id,
+    )
+
+
+@router.get(
     "/{return_id}",
     response_model=SalesReturnDetailResponse,
 )
@@ -240,6 +258,29 @@ async def issue_return_replacement(
         return_id=return_id,
         payload=payload,
         current_user=current_user,
+    )
+
+    return await build_return_detail(
+        session,
+        sales_return,
+    )
+
+
+@router.post(
+    "/{return_id}/complete-restock-only",
+    response_model=SalesReturnDetailResponse,
+)
+async def complete_sales_return_restock_only(
+    return_id: int,
+    session: DatabaseSession,
+    current_user: CanApproveReturns,
+) -> SalesReturnDetailResponse:
+    sales_return = (
+        await complete_restock_only_return(
+            session=session,
+            return_id=return_id,
+            current_user=current_user,
+        )
     )
 
     return await build_return_detail(

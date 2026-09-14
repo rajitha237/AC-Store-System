@@ -43,6 +43,8 @@ from app.schemas.returns import (
     ReturnApprovalRequest,
     ReturnInspectionRequest,
     ReturnStatusChangeRequest,
+    ReturnableInvoiceItemResponse,
+    ReturnableInvoiceResponse,
     SalesReturnCreate,
     SalesReturnDetailResponse,
     SalesReturnListResponse,
@@ -240,6 +242,103 @@ async def returned_quantity_for_item(
         value or ZERO_3
     )
 
+
+
+async def get_returnable_invoice(
+    session: AsyncSession,
+    invoice_id: int,
+) -> ReturnableInvoiceResponse:
+    invoice = await get_invoice(
+        session,
+        invoice_id,
+    )
+
+    if invoice.invoice_status not in {
+        InvoiceStatus.CONFIRMED.value,
+        InvoiceStatus.RETURNED.value,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Return eligibility is only "
+                "available for confirmed or "
+                "previously returned invoices"
+            ),
+        )
+
+    items: list[
+        ReturnableInvoiceItemResponse
+    ] = []
+
+    for invoice_item in invoice.items:
+        sold_quantity = qty(
+            invoice_item.quantity
+        )
+
+        if (
+            invoice_item.product_id is None
+            or invoice_item.item_type
+            == InvoiceItemType.LABOUR.value
+        ):
+            items.append(
+                ReturnableInvoiceItemResponse(
+                    invoice_item_id=invoice_item.id,
+                    sold_quantity=sold_quantity,
+                    already_returned_quantity=ZERO_3,
+                    remaining_quantity=ZERO_3,
+                    is_returnable=False,
+                    block_reason=(
+                        "Labour or non-product "
+                        "items cannot be returned"
+                    ),
+                )
+            )
+
+            continue
+
+        already_returned = (
+            await returned_quantity_for_item(
+                session,
+                invoice_item.id,
+            )
+        )
+
+        remaining_quantity = qty(
+            sold_quantity
+            - already_returned
+        )
+
+        if remaining_quantity < ZERO_3:
+            remaining_quantity = ZERO_3
+
+        is_returnable = (
+            remaining_quantity > ZERO_3
+        )
+
+        items.append(
+            ReturnableInvoiceItemResponse(
+                invoice_item_id=invoice_item.id,
+                sold_quantity=sold_quantity,
+                already_returned_quantity=(
+                    already_returned
+                ),
+                remaining_quantity=(
+                    remaining_quantity
+                ),
+                is_returnable=is_returnable,
+                block_reason=(
+                    None
+                    if is_returnable
+                    else "Item is fully returned"
+                ),
+            )
+        )
+
+    return ReturnableInvoiceResponse(
+        invoice_id=invoice.id,
+        invoice_number=invoice.invoice_number,
+        items=items,
+    )
 
 async def validate_destination_warehouse(
     session: AsyncSession,
@@ -1528,6 +1627,208 @@ async def reverse_returned_stock(
         session.add(reversal_movement)
 
         await session.flush()
+
+
+async def complete_restock_only_return(
+    session: AsyncSession,
+    return_id: int,
+    current_user: User,
+) -> SalesReturn:
+    sales_return = await get_return(
+        session,
+        return_id,
+    )
+
+    if sales_return.status != (
+        ReturnStatus.PROCESSING.value
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Only processing returns can "
+                "be completed as restock only"
+            ),
+        )
+
+    if sales_return.resolution != (
+        ReturnResolution.REPLACEMENT.value
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Restock-only correction is only "
+                "allowed for replacement returns"
+            ),
+        )
+
+    if not sales_return.items:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Return has no items to complete"
+            ),
+        )
+
+    for return_item in sales_return.items:
+        if return_item.product_id is None:
+            continue
+
+        if return_item.stock_movement_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Returned stock has not been "
+                    "received for every item"
+                ),
+            )
+
+        if (
+            return_item.replacement_product_id
+            is not None
+            or return_item.replacement_serial_number_id
+            is not None
+            or return_item.replacement_stock_movement_id
+            is not None
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "A replacement has already been "
+                    "assigned or issued for this return"
+                ),
+            )
+
+        movement = await session.get(
+            StockMovement,
+            return_item.stock_movement_id,
+        )
+
+        if movement is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Returned-stock movement "
+                    "was not found"
+                ),
+            )
+
+        if movement.movement_type != (
+            StockMovementType.SALE_RETURN.value
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Referenced stock movement is "
+                    "not a sale-return movement"
+                ),
+            )
+
+        if movement.reference_id != (
+            sales_return.return_number
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Returned-stock movement does "
+                    "not belong to this return"
+                ),
+            )
+
+    old_status = sales_return.status
+    old_resolution = sales_return.resolution
+
+    before_snapshot = (
+        sales_return_audit_snapshot(
+            sales_return
+        )
+    )
+
+    sales_return.status = (
+        ReturnStatus.COMPLETED.value
+    )
+
+    sales_return.resolution = (
+        ReturnResolution.RESTOCK_ONLY.value
+    )
+
+    sales_return.refund_amount = ZERO_2
+    sales_return.completed_at = utc_now()
+    sales_return.updated_by_id = (
+        current_user.id
+    )
+
+    await add_status_history(
+        session,
+        sales_return=sales_return,
+        old_status=old_status,
+        new_status=(
+            ReturnStatus.COMPLETED.value
+        ),
+        current_user=current_user,
+        remarks=(
+            "Return completed as restock only; "
+            "no replacement was issued"
+        ),
+    )
+
+    try:
+        await create_audit_log(
+            session=session,
+            user_id=current_user.id,
+            action=(
+                "return.completed_restock_only"
+            ),
+            module="returns",
+            entity_type="sales_return",
+            entity_id=sales_return.id,
+            entity_reference=(
+                sales_return.return_number
+            ),
+            description=(
+                f"Sales return "
+                f"{sales_return.return_number} "
+                "completed as restock only"
+            ),
+            before_data={
+                "return":
+                    before_snapshot,
+            },
+            after_data={
+                "return":
+                    sales_return_audit_snapshot(
+                        sales_return
+                    ),
+            },
+            metadata={
+                "old_status":
+                    old_status,
+                "new_status":
+                    sales_return.status,
+                "old_resolution":
+                    old_resolution,
+                "new_resolution":
+                    sales_return.resolution,
+                "invoice_id":
+                    sales_return.invoice_id,
+                "customer_id":
+                    sales_return.customer_id,
+                "stock_changed":
+                    False,
+                "replacement_issued":
+                    False,
+            },
+        )
+
+        await session.commit()
+
+    except Exception:
+        await session.rollback()
+        raise
+
+    return await get_return(
+        session,
+        return_id,
+    )
 
 
 async def process_refund(
