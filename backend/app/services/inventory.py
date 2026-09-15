@@ -107,17 +107,6 @@ def apply_receipt_product_prices(
             ),
         )
 
-    if minimum_price > wholesale_price:
-        raise HTTPException(
-            status_code=(
-                status.HTTP_422_UNPROCESSABLE_CONTENT
-            ),
-            detail=(
-                "Minimum selling price cannot "
-                "be higher than wholesale price"
-            ),
-        )
-
     before = {
         "selling_price":
             product.selling_price,

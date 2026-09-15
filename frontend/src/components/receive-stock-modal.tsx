@@ -813,17 +813,6 @@ export function ReceiveStockModal({
         return;
       }
 
-      if (
-        minimumPrice
-        > wholesalePrice
-      ) {
-        setError(
-          "Wholesale price cannot be below "
-          + "the minimum selling price.",
-        );
-
-        return;
-      }
     }
 
     setSaving(

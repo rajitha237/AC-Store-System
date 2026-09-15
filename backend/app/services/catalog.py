@@ -613,15 +613,6 @@ async def update_product(
             ),
         )
 
-    if minimum_price > wholesale_price:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=(
-                "Minimum selling price cannot be greater "
-                "than wholesale price"
-            ),
-        )
-
     if (
         "track_serial_numbers" in update_data
         and update_data["track_serial_numbers"]

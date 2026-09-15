@@ -907,3 +907,33 @@
       repeat(3, minmax(0, 1fr));
   }
 }
+
+/* ===== Live completion camera ===== */
+
+.cameraPanel {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.cameraPreview {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+  border-radius: 14px;
+  background: #0b1220;
+  object-fit: contain;
+}
+
+.cameraActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cameraError {
+  margin-top: 10px;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}

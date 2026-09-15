@@ -380,21 +380,6 @@ class ProductCreate(BaseModel):
                 "than selling price"
             )
 
-        effective_wholesale_price = (
-            self.wholesale_price
-            if self.wholesale_price is not None
-            else self.selling_price
-        )
-
-        if (
-            self.minimum_selling_price
-            > effective_wholesale_price
-        ):
-            raise ValueError(
-                "Minimum selling price cannot be greater "
-                "than wholesale price"
-            )
-
         return self
 
 

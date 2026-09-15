@@ -494,7 +494,7 @@ async def test_receive_price_update_rejects_selling_below_minimum(
 
 
 @pytest.mark.asyncio
-async def test_receive_price_update_rejects_wholesale_below_minimum(
+async def test_receive_price_update_allows_wholesale_below_minimum(
     client,
     admin_headers,
     db_session,
@@ -519,13 +519,15 @@ async def test_receive_price_update_rejects_wholesale_below_minimum(
         warehouse_id=warehouse["id"],
         quantity="5.000",
         unit_cost="140.00",
-        reference_id="PRICE-BAD-WHOLE-204",
+        reference_id="PRICE-WHOLE-BELOW-MIN-204",
         update_product_prices=True,
         selling_price="200.00",
         wholesale_price="139.99",
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 201, (
+        response.text
+    )
 
     stored = await db_session.get(
         Product,
@@ -540,12 +542,17 @@ async def test_receive_price_update_rejects_wholesale_below_minimum(
 
     assert (
         stored.selling_price
-        == Decimal("150.00")
+        == Decimal("200.00")
+    )
+
+    assert (
+        stored.minimum_selling_price
+        == Decimal("140.00")
     )
 
     assert (
         stored.wholesale_price
-        == Decimal("150.00")
+        == Decimal("139.99")
     )
 
     stock_result = (
@@ -560,10 +567,11 @@ async def test_receive_price_update_rejects_wholesale_below_minimum(
         )
     )
 
-    assert (
+    stock_item = (
         stock_result.scalars().first()
-        is None
     )
+
+    assert stock_item is not None
 
 
 @pytest.mark.asyncio

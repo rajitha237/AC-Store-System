@@ -317,6 +317,255 @@ export default function TechnicianJobPage() {
     setPhotoProcessing,
   ] = useState(false);
 
+  const [
+    cameraOpen,
+    setCameraOpen,
+  ] = useState(false);
+
+  const [
+    cameraStarting,
+    setCameraStarting,
+  ] = useState(false);
+
+  const [
+    cameraError,
+    setCameraError,
+  ] = useState("");
+
+  const cameraVideoRef =
+    useRef<HTMLVideoElement | null>(
+      null,
+    );
+
+  const cameraStreamRef =
+    useRef<MediaStream | null>(
+      null,
+    );
+
+  function stopLiveCamera() {
+    const stream =
+      cameraStreamRef.current;
+
+    if (stream) {
+      for (
+        const track
+        of stream.getTracks()
+      ) {
+        track.stop();
+      }
+    }
+
+    cameraStreamRef.current = null;
+
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject =
+        null;
+    }
+
+    setCameraOpen(false);
+    setCameraStarting(false);
+  }
+
+
+  async function startLiveCamera() {
+    if (
+      photoProcessing
+      || workPhotos.length >= 5
+    ) {
+      return;
+    }
+
+    if (
+      !navigator.mediaDevices
+      || !navigator.mediaDevices.getUserMedia
+    ) {
+      setCameraError(
+        "Live camera is not available on this device or browser.",
+      );
+
+      return;
+    }
+
+    try {
+      stopLiveCamera();
+      setCameraStarting(true);
+      setCameraError("");
+
+      const stream =
+        await navigator.mediaDevices
+          .getUserMedia({
+            video: {
+              facingMode: {
+                ideal: "environment",
+              },
+            },
+            audio: false,
+          });
+
+      cameraStreamRef.current =
+        stream;
+
+      setCameraOpen(true);
+
+      await new Promise<void>(
+        (resolve) => {
+          requestAnimationFrame(
+            () => resolve(),
+          );
+        },
+      );
+
+      const video =
+        cameraVideoRef.current;
+
+      if (!video) {
+        throw new Error(
+          "Unable to open the live camera preview.",
+        );
+      }
+
+      video.srcObject = stream;
+
+      await video.play();
+    } catch (cameraRequestError) {
+      stopLiveCamera();
+
+      setCameraError(
+        cameraRequestError
+          instanceof Error
+          && cameraRequestError.message
+          ? cameraRequestError.message
+          : "Unable to access the live camera.",
+      );
+    } finally {
+      setCameraStarting(false);
+    }
+  }
+
+
+  async function captureLivePhoto() {
+    const video =
+      cameraVideoRef.current;
+
+    if (
+      !video
+      || video.videoWidth < 1
+      || video.videoHeight < 1
+    ) {
+      setCameraError(
+        "Camera is not ready yet. Try again.",
+      );
+
+      return;
+    }
+
+    if (workPhotos.length >= 5) {
+      stopLiveCamera();
+      return;
+    }
+
+    try {
+      setPhotoProcessing(true);
+      setCameraError("");
+
+      const canvas =
+        document.createElement(
+          "canvas",
+        );
+
+      canvas.width =
+        video.videoWidth;
+
+      canvas.height =
+        video.videoHeight;
+
+      const context =
+        canvas.getContext("2d");
+
+      if (!context) {
+        throw new Error(
+          "Unable to capture the camera image.",
+        );
+      }
+
+      context.drawImage(
+        video,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+
+      const blob =
+        await new Promise<Blob>(
+          (resolve, reject) => {
+            canvas.toBlob(
+              (capturedBlob) => {
+                if (capturedBlob) {
+                  resolve(capturedBlob);
+                  return;
+                }
+
+                reject(
+                  new Error(
+                    "Unable to capture the camera image.",
+                  ),
+                );
+              },
+              "image/jpeg",
+              0.9,
+            );
+          },
+        );
+
+      const file =
+        new File(
+          [blob],
+          "work-photo.jpg",
+          {
+            type: "image/jpeg",
+          },
+        );
+
+      const compressed =
+        await compressWorkPhoto(
+          file,
+        );
+
+      const preview =
+        await fileToDataUrl(
+          compressed,
+        );
+
+      setWorkPhotos(
+        (current) => [
+          ...current,
+          compressed,
+        ].slice(0, 5),
+      );
+
+      setWorkPhotoPreviews(
+        (current) => [
+          ...current,
+          preview,
+        ].slice(0, 5),
+      );
+
+      stopLiveCamera();
+    } catch (captureError) {
+      setCameraError(
+        captureError
+          instanceof Error
+          && captureError.message
+          ? captureError.message
+          : "Unable to capture the photo.",
+      );
+    } finally {
+      setPhotoProcessing(false);
+    }
+  }
+
+
   const signatureCanvasRef =
     useRef<HTMLCanvasElement | null>(
       null,
@@ -482,101 +731,8 @@ export default function TechnicianJobPage() {
       `${safeName}.jpg`,
       {
         type: "image/jpeg",
-        lastModified:
-          Date.now(),
       },
     );
-  }
-
-
-  async function addWorkPhotoFiles(
-    fileList:
-      FileList | null,
-  ) {
-    if (
-      !fileList
-      || fileList.length === 0
-    ) {
-      return;
-    }
-
-    const remaining =
-      5 - workPhotos.length;
-
-    if (remaining <= 0) {
-      setError(
-        "Maximum 5 work photos are allowed.",
-      );
-
-      return;
-    }
-
-    try {
-      setPhotoProcessing(
-        true,
-      );
-
-      setError("");
-
-      const selected =
-        Array.from(
-          fileList,
-        ).slice(
-          0,
-          remaining,
-        );
-
-      const compressed:
-        File[] = [];
-
-      for (
-        const file
-        of selected
-      ) {
-        compressed.push(
-          await compressWorkPhoto(
-            file,
-          ),
-        );
-      }
-
-      const nextPhotos = [
-        ...workPhotos,
-        ...compressed,
-      ];
-
-      const previews =
-        await Promise.all(
-          nextPhotos.map(
-            (
-              photo,
-            ) =>
-              fileToDataUrl(
-                photo,
-              ),
-          ),
-        );
-
-      setWorkPhotos(
-        nextPhotos,
-      );
-
-      setWorkPhotoPreviews(
-        previews,
-      );
-    } catch (
-      photoError
-    ) {
-      setError(
-        apiErrorMessage(
-          photoError,
-        ),
-      );
-    } finally {
-      setPhotoProcessing(
-        false,
-      );
-    }
   }
 
 
@@ -1001,6 +1157,27 @@ export default function TechnicianJobPage() {
   }, [loadPage]);
 
 
+  useEffect(() => {
+    return () => {
+      const stream =
+        cameraStreamRef.current;
+
+      if (!stream) {
+        return;
+      }
+
+      for (
+        const track
+        of stream.getTracks()
+      ) {
+        track.stop();
+      }
+
+      cameraStreamRef.current = null;
+    };
+  }, []);
+
+
   // ACTIVE_JOB_LOCATION_ASSOCIATION_EFFECT
   useEffect(() => {
     if (
@@ -1163,6 +1340,8 @@ export default function TechnicianJobPage() {
       return;
     }
 
+    stopLiveCamera();
+    setCameraError("");
     setActionMode(null);
     setError("");
   }
@@ -1843,6 +2022,8 @@ export default function TechnicianJobPage() {
         job.id,
       );
 
+      stopLiveCamera();
+      setCameraError("");
       setActionMode(null);
       setCompletionNotes("");
       setWorkPhotos([]);
@@ -2870,7 +3051,7 @@ export default function TechnicianJobPage() {
                       </strong>
 
                       <span>
-                        Add 1 to 5 photos showing the completed work.
+                        Take 1 to 5 new photos of the completed work using the live camera.
                       </span>
                     </div>
                   </div>
@@ -2880,78 +3061,101 @@ export default function TechnicianJobPage() {
                       styles.photoActionRow
                     }
                   >
-                    <label
+                    <button
+                      type="button"
                       className={
                         styles.photoButton
+                      }
+                      disabled={
+                        photoProcessing
+                        || cameraStarting
+                        || workPhotos.length
+                          >= 5
+                      }
+                      onClick={() =>
+                        void startLiveCamera()
                       }
                     >
                       <Camera
                         size={18}
                       />
 
-                      Camera
+                      {cameraStarting
+                        ? "Opening camera..."
+                        : "Take photo"}
+                    </button>
+                  </div>
 
-                      <input
-                        className={
-                          styles.hiddenFileInput
-                        }
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        disabled={
-                          photoProcessing
-                          || workPhotos.length
-                            >= 5
-                        }
-                        onChange={(
-                          event,
-                        ) => {
-                          void addWorkPhotoFiles(
-                            event.target.files,
-                          );
-
-                          event.target.value =
-                            "";
-                        }}
-                      />
-                    </label>
-
-                    <label
+                  {cameraError ? (
+                    <div
                       className={
-                        styles.photoButton
+                        styles.cameraError
+                      }
+                      role="alert"
+                    >
+                      {cameraError}
+                    </div>
+                  ) : null}
+
+                  {cameraOpen ? (
+                    <div
+                      className={
+                        styles.cameraPanel
                       }
                     >
-                      <ImagePlus
-                        size={18}
-                      />
-
-                      Gallery
-
-                      <input
+                      <video
+                        ref={
+                          cameraVideoRef
+                        }
                         className={
-                          styles.hiddenFileInput
+                          styles.cameraPreview
                         }
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        disabled={
-                          photoProcessing
-                          || workPhotos.length
-                            >= 5
-                        }
-                        onChange={(
-                          event,
-                        ) => {
-                          void addWorkPhotoFiles(
-                            event.target.files,
-                          );
-
-                          event.target.value =
-                            "";
-                        }}
+                        autoPlay
+                        playsInline
+                        muted
                       />
-                    </label>
-                  </div>
+
+                      <div
+                        className={
+                          styles.cameraActions
+                        }
+                      >
+                        <button
+                          type="button"
+                          className={
+                            styles.photoButton
+                          }
+                          disabled={
+                            photoProcessing
+                          }
+                          onClick={() =>
+                            void captureLivePhoto()
+                          }
+                        >
+                          <Camera
+                            size={18}
+                          />
+
+                          Capture photo
+                        </button>
+
+                        <button
+                          type="button"
+                          className={
+                            styles.secondaryButton
+                          }
+                          disabled={
+                            photoProcessing
+                          }
+                          onClick={
+                            stopLiveCamera
+                          }
+                        >
+                          Cancel camera
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <small
                     className={

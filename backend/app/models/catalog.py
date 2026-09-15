@@ -241,10 +241,6 @@ class Product(Base):
             name="ck_products_minimum_not_above_selling",
         ),
         CheckConstraint(
-            "minimum_selling_price <= wholesale_price",
-            name="ck_products_minimum_not_above_wholesale",
-        ),
-        CheckConstraint(
             "warranty_months >= 0",
             name="ck_products_warranty_months_nonnegative",
         ),

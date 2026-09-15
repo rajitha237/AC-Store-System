@@ -207,6 +207,35 @@ def test_frontend_requires_photo_and_signature() -> None:
     )
 
     assert (
-        'capture="environment"'
+        "navigator.mediaDevices"
         in source
+    )
+
+    assert (
+        ".getUserMedia("
+        in source
+    )
+
+    assert (
+        'type="file"'
+        not in source[
+            source.index(
+                "Work Photos *"
+            ):
+            source.index(
+                "Customer Signature *"
+            )
+        ]
+    )
+
+    assert (
+        "Gallery"
+        not in source[
+            source.index(
+                "Work Photos *"
+            ):
+            source.index(
+                "Customer Signature *"
+            )
+        ]
     )

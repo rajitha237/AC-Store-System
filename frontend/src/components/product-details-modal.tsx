@@ -628,11 +628,6 @@ export function ProductDetailsModal({
         form.selling_price,
       );
 
-    const wholesalePrice =
-      Number(
-        form.wholesale_price,
-      );
-
     const minimumPrice =
       Number(
         form.minimum_selling_price,
@@ -646,19 +641,6 @@ export function ProductDetailsModal({
         "Minimum selling price "
         + "cannot be higher than "
         + "selling price.",
-      );
-
-      return;
-    }
-
-    if (
-      minimumPrice
-      > wholesalePrice
-    ) {
-      setError(
-        "Minimum selling price "
-        + "cannot be higher than "
-        + "wholesale price.",
       );
 
       return;
