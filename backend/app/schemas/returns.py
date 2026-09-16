@@ -288,6 +288,7 @@ class SalesReturnItemResponse(BaseModel):
 
     product_id: int | None
     serial_number_id: int | None
+    serial_number: str | None = None
 
     quantity: Decimal
     unit_price: Decimal
@@ -374,6 +375,9 @@ class SalesReturnListResponse(BaseModel):
 
 class ReturnableInvoiceItemResponse(BaseModel):
     invoice_item_id: int
+
+    serial_number_id: int | None = None
+    serial_number: str | None = None
 
     sold_quantity: Decimal
     already_returned_quantity: Decimal

@@ -47,6 +47,7 @@ from app.schemas.returns import (
     ReturnableInvoiceResponse,
     SalesReturnCreate,
     SalesReturnDetailResponse,
+    SalesReturnItemResponse,
     SalesReturnListResponse,
 )
 from app.services.inventory import (
@@ -275,6 +276,19 @@ async def get_returnable_invoice(
             invoice_item.quantity
         )
 
+        serial_number: str | None = None
+
+        if invoice_item.serial_number_id is not None:
+            serial_record = await session.get(
+                ProductSerialNumber,
+                invoice_item.serial_number_id,
+            )
+
+            if serial_record is not None:
+                serial_number = (
+                    serial_record.serial_number
+                )
+
         if (
             invoice_item.product_id is None
             or invoice_item.item_type
@@ -283,6 +297,10 @@ async def get_returnable_invoice(
             items.append(
                 ReturnableInvoiceItemResponse(
                     invoice_item_id=invoice_item.id,
+                    serial_number_id=(
+                        invoice_item.serial_number_id
+                    ),
+                    serial_number=serial_number,
                     sold_quantity=sold_quantity,
                     already_returned_quantity=ZERO_3,
                     remaining_quantity=ZERO_3,
@@ -318,6 +336,10 @@ async def get_returnable_invoice(
         items.append(
             ReturnableInvoiceItemResponse(
                 invoice_item_id=invoice_item.id,
+                serial_number_id=(
+                    invoice_item.serial_number_id
+                ),
+                serial_number=serial_number,
                 sold_quantity=sold_quantity,
                 already_returned_quantity=(
                     already_returned
@@ -2847,6 +2869,65 @@ async def build_return_detail(
             detail="Return invoice was not found",
         )
 
+    item_responses: list[
+        SalesReturnItemResponse
+    ] = []
+
+    for return_item in sales_return.items:
+        serial_number: str | None = None
+
+        if return_item.serial_number_id is not None:
+            serial_record = await session.get(
+                ProductSerialNumber,
+                return_item.serial_number_id,
+            )
+
+            if serial_record is not None:
+                serial_number = (
+                    serial_record.serial_number
+                )
+
+        item_responses.append(
+            SalesReturnItemResponse(
+                id=return_item.id,
+                return_id=return_item.return_id,
+                invoice_item_id=(
+                    return_item.invoice_item_id
+                ),
+                product_id=return_item.product_id,
+                serial_number_id=(
+                    return_item.serial_number_id
+                ),
+                serial_number=serial_number,
+                quantity=return_item.quantity,
+                unit_price=return_item.unit_price,
+                line_total=return_item.line_total,
+                condition=return_item.condition,
+                reason=return_item.reason,
+                destination_warehouse_id=(
+                    return_item
+                    .destination_warehouse_id
+                ),
+                stock_movement_id=(
+                    return_item.stock_movement_id
+                ),
+                replacement_product_id=(
+                    return_item
+                    .replacement_product_id
+                ),
+                replacement_serial_number_id=(
+                    return_item
+                    .replacement_serial_number_id
+                ),
+                replacement_stock_movement_id=(
+                    return_item
+                    .replacement_stock_movement_id
+                ),
+                notes=return_item.notes,
+                created_at=return_item.created_at,
+            )
+        )
+
     return SalesReturnDetailResponse(
         id=sales_return.id,
         company_id=sales_return.company_id,
@@ -2892,7 +2973,7 @@ async def build_return_detail(
         customer_phone=(
             customer.primary_phone
         ),
-        items=sales_return.items,
+        items=item_responses,
         status_history=(
             sales_return.status_history
         ),

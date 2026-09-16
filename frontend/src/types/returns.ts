@@ -132,6 +132,9 @@ export type SalesReturnItemResponse = {
   serial_number_id:
     number | null;
 
+  serial_number:
+    string | null;
+
   quantity:
     string;
 
@@ -306,6 +309,12 @@ export type ReturnDraftItem = {
 
 export type ReturnableInvoiceItemResponse = {
   invoice_item_id: number;
+
+  serial_number_id:
+    number | null;
+
+  serial_number:
+    string | null;
 
   sold_quantity: string;
   already_returned_quantity: string;

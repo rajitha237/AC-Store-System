@@ -15,6 +15,9 @@ from app.models import (
     StockMovement,
     User,
 )
+from app.models.inventory import (
+    ProductSerialNumber,
+)
 from app.models.credit_note import (
     CreditNote,
     CustomerRefund,
@@ -432,6 +435,390 @@ async def test_return_processing_rolls_back_stock_status_history_and_movement(
     assert (
         await audit_count(db_session)
         == audits_before
+    )
+
+
+
+@pytest.mark.asyncio
+async def test_serialized_replacement_happy_path_receives_original_and_issues_replacement(
+    client,
+    admin_headers,
+    db_session,
+):
+    from tests.test_inventory import (
+        create_customer,
+        create_product,
+        get_warehouse,
+    )
+
+    suffix = "901"
+
+    product = await create_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix=suffix,
+        serialized=True,
+    )
+
+    warehouse = await get_warehouse(
+        client,
+        admin_headers,
+    )
+
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix,
+    )
+
+    # Receive two serialized units:
+    # one will be sold/original returned unit,
+    # the other will become the replacement unit.
+    receive_response = await client.post(
+        "/api/v1/inventory/receive/serialized",
+        headers=admin_headers,
+        json={
+            "product_id":
+                product["id"],
+            "warehouse_id":
+                warehouse["id"],
+            "unit_cost":
+                "600.00",
+            "reference_type":
+                "opening_balance",
+            "reference_id":
+                "OPEN-SERIAL-REPL-901",
+            "serials": [
+                {
+                    "serial_number":
+                        "SN-ORIGINAL-RETURN-901",
+                },
+                {
+                    "serial_number":
+                        "SN-REPLACEMENT-901",
+                },
+            ],
+        },
+    )
+
+    assert receive_response.status_code == 201, (
+        receive_response.text
+    )
+
+    received_serials = (
+        receive_response.json()["serials"]
+    )
+
+    assert len(received_serials) == 2
+
+    original_serial_id = (
+        received_serials[0]["id"]
+    )
+
+    replacement_serial_id = (
+        received_serials[1]["id"]
+    )
+
+    # Create a serialized invoice using the original unit.
+    invoice_response = await client.post(
+        "/api/v1/sales/invoices",
+        headers=admin_headers,
+        json={
+            "branch_id":
+                warehouse["branch_id"],
+            "customer_id":
+                customer["id"],
+            "invoice_discount_amount":
+                "0.00",
+            "tax_amount":
+                "0.00",
+            "notes":
+                "Serialized replacement lifecycle test",
+            "items": [
+                {
+                    "product_id":
+                        product["id"],
+                    "warehouse_id":
+                        warehouse["id"],
+                    "serial_number_id":
+                        original_serial_id,
+                    "quantity":
+                        "1.000",
+                    "unit_price":
+                        "1200.00",
+                    "discount_amount":
+                        "0.00",
+                    "description":
+                        "Serialized replacement test unit",
+                }
+            ],
+        },
+    )
+
+    assert invoice_response.status_code == 201, (
+        invoice_response.text
+    )
+
+    invoice = invoice_response.json()
+
+    confirm_response = await confirm_invoice(
+        client,
+        admin_headers,
+        invoice["id"],
+    )
+
+    assert confirm_response.status_code == 200, (
+        confirm_response.text
+    )
+
+    invoice_detail_response = await client.get(
+        (
+            "/api/v1/sales/invoices/"
+            f"{invoice['id']}"
+        ),
+        headers=admin_headers,
+    )
+
+    assert (
+        invoice_detail_response.status_code
+        == 200
+    )
+
+    invoice_detail = (
+        invoice_detail_response.json()
+    )
+
+    assert len(invoice_detail["items"]) == 1
+
+    invoice_item = invoice_detail["items"][0]
+
+    assert (
+        invoice_item["serial_number_id"]
+        == original_serial_id
+    )
+
+    # Create the return for the serialized sold unit.
+    sales_return = await create_return(
+        client,
+        admin_headers,
+        invoice_id=invoice["id"],
+        invoice_item_id=invoice_item["id"],
+        quantity="1.000",
+        reason=(
+            "Serialized replacement lifecycle "
+            "integration test"
+        ),
+    )
+
+    inspected = await inspect_return(
+        client,
+        admin_headers,
+        sales_return["id"],
+    )
+
+    assert inspected["status"] in {
+        "inspection",
+        "waiting_approval",
+    }
+
+    approval_response = await client.post(
+        (
+            f"{RETURNS_URL}/"
+            f"{sales_return['id']}/approval"
+        ),
+        headers=admin_headers,
+        json={
+            "approved": True,
+            "resolution": "replacement",
+            "approval_notes":
+                "Serialized replacement approved",
+            "refund_amount": "0.00",
+        },
+    )
+
+    assert approval_response.status_code == 200, (
+        approval_response.text
+    )
+
+    approved = approval_response.json()
+
+    assert approved["status"] == "approved"
+    assert approved["resolution"] == "replacement"
+    assert len(approved["items"]) == 1
+
+    return_item_id = (
+        approved["items"][0]["id"]
+    )
+
+    # Before replacement issue:
+    # original serial is still sold/customer-linked,
+    # replacement serial remains available.
+    original_before = await db_session.get(
+        ProductSerialNumber,
+        original_serial_id,
+    )
+
+    replacement_before = await db_session.get(
+        ProductSerialNumber,
+        replacement_serial_id,
+    )
+
+    assert original_before is not None
+    assert replacement_before is not None
+
+    assert original_before.status == "sold"
+    assert (
+        original_before.current_customer_id
+        == customer["id"]
+    )
+    assert original_before.warehouse_id is None
+
+    assert (
+        replacement_before.status
+        == "available"
+    )
+    assert (
+        replacement_before.warehouse_id
+        == warehouse["id"]
+    )
+
+    admin = await get_admin_user(
+        db_session
+    )
+
+    # set_replacement_item is the real lifecycle path.
+    # For an approved replacement return it receives
+    # the original returned stock, then issues the
+    # selected replacement serial.
+    result = (
+        await returns_service.set_replacement_item(
+            session=db_session,
+            return_id=approved["id"],
+            payload=ReplacementItemRequest(
+                return_item_id=return_item_id,
+                replacement_product_id=(
+                    product["id"]
+                ),
+                replacement_serial_number_id=(
+                    replacement_serial_id
+                ),
+                warehouse_id=warehouse["id"],
+                notes=(
+                    "Serialized replacement "
+                    "happy-path test"
+                ),
+            ),
+            current_user=admin,
+        )
+    )
+
+    assert result.status == "completed"
+    assert result.completed_at is not None
+
+    refreshed_item = await fresh_return_item(
+        db_session,
+        return_item_id,
+    )
+
+    assert (
+        refreshed_item.serial_number_id
+        == original_serial_id
+    )
+    assert (
+        refreshed_item.stock_movement_id
+        is not None
+    )
+    assert (
+        refreshed_item.replacement_product_id
+        == product["id"]
+    )
+    assert (
+        refreshed_item
+        .replacement_serial_number_id
+        == replacement_serial_id
+    )
+    assert (
+        refreshed_item
+        .replacement_stock_movement_id
+        is not None
+    )
+
+    original_after = await db_session.get(
+        ProductSerialNumber,
+        original_serial_id,
+        populate_existing=True,
+    )
+
+    replacement_after = await db_session.get(
+        ProductSerialNumber,
+        replacement_serial_id,
+        populate_existing=True,
+    )
+
+    assert original_after is not None
+    assert replacement_after is not None
+
+    # Returned original is now physically back in
+    # the return destination warehouse and detached
+    # from the customer.
+    assert (
+        original_after.status
+        == "customer_returned"
+    )
+    assert (
+        original_after.current_customer_id
+        is None
+    )
+    assert (
+        original_after.warehouse_id
+        is not None
+    )
+
+    # Replacement serial has left warehouse stock
+    # and is linked to the customer.
+    assert (
+        replacement_after.status
+        == "replacement_issued"
+    )
+    assert (
+        replacement_after.current_customer_id
+        == customer["id"]
+    )
+    assert replacement_after.warehouse_id is None
+
+    return_movement = await db_session.get(
+        StockMovement,
+        refreshed_item.stock_movement_id,
+    )
+
+    replacement_movement = await db_session.get(
+        StockMovement,
+        (
+            refreshed_item
+            .replacement_stock_movement_id
+        ),
+    )
+
+    assert return_movement is not None
+    assert replacement_movement is not None
+
+    assert (
+        return_movement.movement_type
+        == "sale_return"
+    )
+    assert (
+        return_movement.serial_number_id
+        == original_serial_id
+    )
+
+    assert (
+        replacement_movement.movement_type
+        == "replacement_issue"
+    )
+    assert (
+        replacement_movement.serial_number_id
+        == replacement_serial_id
     )
 
 

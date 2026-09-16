@@ -971,7 +971,11 @@ export default function ReturnsPage() {
                 false,
 
               quantity:
-                item.serial_number_id
+                (
+                  eligibilityItem
+                    ?.serial_number_id
+                  ?? item.serial_number_id
+                )
                   ? (
                       eligibilityItem
                         ?.is_returnable
@@ -2674,13 +2678,19 @@ export default function ReturnsPage() {
                                     </small>
                                   )}
 
-                                  {invoiceItem
-                                    .serial_number && (
+                                  {(
+                                    eligibilityItem
+                                      ?.serial_number
+                                    ?? invoiceItem
+                                      .serial_number
+                                  ) && (
                                     <small>
                                       Serial:
                                       {" "}
                                       {
-                                        invoiceItem
+                                        eligibilityItem
+                                          ?.serial_number
+                                        ?? invoiceItem
                                           .serial_number
                                       }
                                     </small>
@@ -2714,7 +2724,9 @@ export default function ReturnsPage() {
                                       disabled={
                                         !isReturnable
                                         || Boolean(
-                                          invoiceItem
+                                          eligibilityItem
+                                            ?.serial_number_id
+                                          ?? invoiceItem
                                             .serial_number_id,
                                         )
                                       }
@@ -3176,6 +3188,14 @@ export default function ReturnsPage() {
                                 item.condition,
                               )}
                             </small>
+
+                            {item.serial_number && (
+                              <small>
+                                Serial:
+                                {" "}
+                                {item.serial_number}
+                              </small>
+                            )}
                           </div>
 
                           <div>
@@ -3664,6 +3684,12 @@ export default function ReturnsPage() {
                             {
                               item.product_id
                             }
+                            {item.serial_number
+                              ? (
+                                  " — Serial: "
+                                  + item.serial_number
+                                )
+                              : ""}
                           </option>
                         ),
                       )}
