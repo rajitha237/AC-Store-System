@@ -9,6 +9,7 @@ import {
   CircleAlert,
   ClipboardCheck,
   Eye,
+  FileDown,
   Loader2,
   PackageCheck,
   Plus,
@@ -60,6 +61,13 @@ import {
   processReturn,
   setReplacementItem,
 } from "@/lib/returns-api";
+
+
+import {
+  downloadReplacementIssueNotePdf,
+  saveDownloadedDocument,
+} from "@/lib/documents-api";
+
 
 import type {
   UserResponse,
@@ -802,6 +810,42 @@ export default function ReturnsPage() {
       );
     } finally {
       setDetailLoading(
+        false,
+      );
+    }
+  }
+
+
+  async function printReplacementIssueNote() {
+    if (!selected) {
+      return;
+    }
+
+    setActionLoading(
+      true,
+    );
+
+    setError("");
+
+    try {
+      const document =
+        await downloadReplacementIssueNotePdf(
+          selected.id,
+        );
+
+      saveDownloadedDocument(
+        document,
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    } finally {
+      setActionLoading(
         false,
       );
     }
@@ -3463,6 +3507,48 @@ export default function ReturnsPage() {
                     </button>
                   )}
 
+
+                  {selected.status
+                    === "completed"
+                    && selected.resolution
+                      === "replacement"
+                    && selected.items.some(
+                      (item) =>
+                        item
+                          .replacement_stock_movement_id
+                        !== null,
+                    ) && (
+                    <button
+                      type="button"
+                      className={
+                        styles.primaryButton
+                      }
+                      disabled={
+                        actionLoading
+                      }
+                      onClick={() =>
+                        void printReplacementIssueNote()
+                      }
+                    >
+                      {actionLoading
+                        ? (
+                          <Loader2
+                            size={16}
+                          />
+                        )
+                        : (
+                          <FileDown
+                            size={16}
+                          />
+                        )
+                      }
+
+                      {actionLoading
+                        ? "Preparing PDF..."
+                        : "Print Replacement Issue Note"
+                      }
+                    </button>
+                  )}
 
                 </footer>
               </>

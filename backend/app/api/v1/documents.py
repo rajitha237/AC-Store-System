@@ -13,11 +13,17 @@ from app.api.deps import (
 )
 from app.models import User
 from app.models.company import Company
+from app.models.credit_note import (
+    CustomerRefund,
+)
+from app.models.returns import SalesReturn
 from app.services.documents import (
     JobCardPDFData,
     build_job_card_pdf,
     build_payment_receipt_pdf,
     build_purchase_order_pdf,
+    build_refund_acknowledgement_pdf,
+    build_replacement_issue_note_pdf,
     build_sales_invoice_pdf,
 )
 from app.services.payment_service import (
@@ -45,6 +51,26 @@ CanViewSales = Annotated[
     Depends(
         require_permission(
             "sales.view"
+        )
+    ),
+]
+
+
+CanViewReturns = Annotated[
+    User,
+    Depends(
+        require_permission(
+            "returns.view"
+        )
+    ),
+]
+
+
+CanViewRefunds = Annotated[
+    User,
+    Depends(
+        require_permission(
+            "credit_notes.view"
         )
     ),
 ]
@@ -403,6 +429,116 @@ async def download_service_job_card_pdf(
         headers={
             "Content-Disposition": (
                 f'attachment; filename="{filename}"'
+            )
+        },
+    )
+
+
+@router.get(
+    "/refunds/{refund_id}/acknowledgement/pdf",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "application/pdf": {}
+            },
+            "description": (
+                "Posted refund acknowledgement PDF"
+            ),
+        }
+    },
+)
+async def download_refund_acknowledgement_pdf(
+    refund_id: int,
+    session: DatabaseSession,
+    _: CanViewRefunds,
+) -> StreamingResponse:
+    refund = await session.get(
+        CustomerRefund,
+        refund_id,
+    )
+
+    if refund is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=404,
+            detail="Refund not found",
+        )
+
+    pdf_bytes = await build_refund_acknowledgement_pdf(
+        session,
+        refund,
+    )
+
+    document_number = (
+        refund.refund_number
+        or f"refund-{refund.id}"
+    )
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                "attachment; "
+                f'filename="{document_number}-'
+                'acknowledgement.pdf"'
+            )
+        },
+    )
+
+
+@router.get(
+    "/returns/{return_id}/replacement-issue/pdf",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {
+                "application/pdf": {}
+            },
+            "description": (
+                "Completed replacement issue note PDF"
+            ),
+        }
+    },
+)
+async def download_replacement_issue_note_pdf(
+    return_id: int,
+    session: DatabaseSession,
+    _: CanViewReturns,
+) -> StreamingResponse:
+    sales_return = await session.get(
+        SalesReturn,
+        return_id,
+    )
+
+    if sales_return is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=404,
+            detail="Return not found",
+        )
+
+    pdf_bytes = await build_replacement_issue_note_pdf(
+        session,
+        sales_return,
+    )
+
+    document_number = (
+        sales_return.return_number
+        or f"return-{sales_return.id}"
+    )
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                "attachment; "
+                f'filename="{document_number}-'
+                'replacement-issue.pdf"'
             )
         },
     )

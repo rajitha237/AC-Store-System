@@ -25,6 +25,10 @@ from app.services.documents.quotation import (
 from app.services.documents.sales_invoice import (
     build_sales_invoice_pdf,
 )
+from app.services.documents.returns import (
+    build_refund_acknowledgement_pdf,
+    build_replacement_issue_note_pdf,
+)
 
 __all__ = [
     "JobCardPDFData",
@@ -34,5 +38,7 @@ __all__ = [
     "build_payment_receipt_pdf",
     "build_purchase_order_pdf",
     "build_quotation_pdf",
+    "build_refund_acknowledgement_pdf",
+    "build_replacement_issue_note_pdf",
     "build_sales_invoice_pdf",
 ]

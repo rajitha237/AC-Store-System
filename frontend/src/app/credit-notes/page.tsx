@@ -54,6 +54,13 @@ import {
   reverseRefund,
 } from "@/lib/credit-notes-api";
 
+
+import {
+  downloadRefundAcknowledgementPdf,
+  saveDownloadedDocument,
+} from "@/lib/documents-api";
+
+
 import type {
   UserResponse,
 } from "@/types/auth";
@@ -717,6 +724,41 @@ export default function CreditNotesPage() {
       );
     } finally {
       setDetailLoading(
+        false,
+      );
+    }
+  }
+
+
+  async function printRefundAcknowledgement(
+    refund:
+      CustomerRefundResponse,
+  ) {
+    setActionLoading(
+      true,
+    );
+
+    setError("");
+
+    try {
+      const document =
+        await downloadRefundAcknowledgementPdf(
+          refund.id,
+        );
+
+      saveDownloadedDocument(
+        document,
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        apiError(
+          requestError,
+        ),
+      );
+    } finally {
+      setActionLoading(
         false,
       );
     }
@@ -2209,6 +2251,32 @@ export default function CreditNotesPage() {
                                     />
 
                                     Post
+                                  </button>
+                                )}
+
+                                {refund.status
+                                  === "posted"
+                                  && !refund
+                                    .is_reversed && (
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      actionLoading
+                                    }
+                                    onClick={() =>
+                                      void printRefundAcknowledgement(
+                                        refund,
+                                      )
+                                    }
+                                  >
+                                    <FileText
+                                      size={14}
+                                    />
+
+                                    {actionLoading
+                                      ? "Preparing..."
+                                      : "Print acknowledgement"
+                                    }
                                   </button>
                                 )}
 

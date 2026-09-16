@@ -192,6 +192,43 @@ downloadPaymentReceiptPdf(
 }
 
 
+export async function
+downloadRefundAcknowledgementPdf(
+  refundId:
+    number,
+): Promise<
+  DownloadedDocument
+> {
+  return downloadPdf(
+    (
+      "/documents/"
+      + "refunds/"
+      + `${refundId}/acknowledgement/pdf`
+    ),
+    `refund-${refundId}-acknowledgement.pdf`,
+  );
+}
+
+
+export async function
+downloadReplacementIssueNotePdf(
+  returnId:
+    number,
+): Promise<
+  DownloadedDocument
+> {
+  return downloadPdf(
+    (
+      "/documents/"
+      + "returns/"
+      + `${returnId}/replacement-issue/pdf`
+    ),
+    `return-${returnId}-replacement-issue.pdf`,
+  );
+}
+
+
+
 export function
 saveDownloadedDocument(
   document:
