@@ -616,40 +616,15 @@ export default function InventoryPage() {
   ]);
 
 
-  const totalOnHand =
+  const warehouseCount =
     useMemo(
       () =>
-        balances.reduce(
-          (
-            total,
-            item,
-          ) =>
-            total
-            + numeric(
-                item
-                  .quantity_on_hand,
-              ),
-          0,
-        ),
-      [balances],
-    );
-
-
-  const totalAvailable =
-    useMemo(
-      () =>
-        balances.reduce(
-          (
-            total,
-            item,
-          ) =>
-            total
-            + numeric(
-                item
-                  .quantity_available,
-              ),
-          0,
-        ),
+        new Set(
+          balances.map(
+            (item) =>
+              item.warehouse_id,
+          ),
+        ).size,
       [balances],
     );
 
@@ -892,13 +867,11 @@ export default function InventoryPage() {
 
           <div>
             <span>
-              On hand
+              Low stock
             </span>
 
             <strong>
-              {quantity(
-                totalOnHand,
-              )}
+              {lowStockCount}
             </strong>
           </div>
         </article>
@@ -916,13 +889,11 @@ export default function InventoryPage() {
 
           <div>
             <span>
-              Available
+              Warehouses
             </span>
 
             <strong>
-              {quantity(
-                totalAvailable,
-              )}
+              {warehouseCount}
             </strong>
           </div>
         </article>

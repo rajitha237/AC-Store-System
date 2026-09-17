@@ -50,6 +50,8 @@ from app.schemas.sales import (
 )
 
 
+from app.services.quantity_precision import validate_product_quantity
+
 ZERO_2 = Decimal("0.00")
 ZERO_3 = Decimal("0.000")
 ONE_3 = Decimal("1.000")
@@ -448,6 +450,15 @@ async def create_draft_invoice(
                     "is inactive"
                 ),
             )
+
+        item.quantity = await validate_product_quantity(
+            session,
+            product=product,
+            value=item.quantity,
+            field_name=(
+                f"{product.product_code} quantity"
+            ),
+        )
 
         if (
             item.unit_price

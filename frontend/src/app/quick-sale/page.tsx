@@ -732,6 +732,13 @@ export default function QuickSalePage() {
       | QuickSaleSerial
       | null,
   ) {
+    if (savedDraft) {
+      setError(
+        "This sale is already saved as a draft. Confirm or reset it before changing products.",
+      );
+      return;
+    }
+
     // AC_QUICK_SALE_WAREHOUSE_AUTO_RESOLVE_V4
     let warehouseId =
       serial?.warehouse_id
@@ -772,10 +779,23 @@ export default function QuickSalePage() {
       return;
     }
 
+    if (
+      serial
+      && cart.some(
+        (item) =>
+          item.serialId === serial.id,
+      )
+    ) {
+      setError(
+        "This serial number is already in the cart.",
+      );
+      return;
+    }
+
     const key =
       serial
-        ? `${product.id}:${serial.id}`
-        : `${product.id}:standard`;
+        ? `${product.id}:${warehouseId}:${serial.id}`
+        : `${product.id}:${warehouseId}:standard`;
 
     let averageCost: number | null = null;
 
@@ -888,6 +908,13 @@ export default function QuickSalePage() {
     key: string,
     delta: number,
   ) {
+    if (savedDraft) {
+      setError(
+        "This sale is already saved as a draft. Confirm or reset it before changing quantities.",
+      );
+      return;
+    }
+
     setCart(
       (
         current,
@@ -935,11 +962,85 @@ export default function QuickSalePage() {
     );
   }
 
+  function setCartQuantity(
+    key: string,
+    value: string,
+  ) {
+    if (savedDraft) {
+      setError(
+        "This sale is already saved as a draft. Confirm or reset it before changing quantities.",
+      );
+      return;
+    }
+
+    const decimalPart =
+      value.split(".")[1];
+
+    if (
+      decimalPart
+      && decimalPart.length > 3
+    ) {
+      setError(
+        "Quantity supports up to 3 decimal places.",
+      );
+      return;
+    }
+
+    const requestedQuantity =
+      Number(value);
+
+    if (
+      !Number.isFinite(requestedQuantity)
+      || requestedQuantity <= 0
+    ) {
+      return;
+    }
+
+    setError("");
+
+    setCart(
+      (current) =>
+        current.map(
+          (item) => {
+            if (
+              item.key !== key
+              || item.serialId
+            ) {
+              return item;
+            }
+
+            return {
+              ...item,
+              quantity:
+                requestedQuantity,
+              discountAmount:
+                item.isFree
+                  ? Number(
+                      (
+                        item.unitPrice
+                        * requestedQuantity
+                      ).toFixed(2),
+                    )
+                  : item.discountAmount,
+            };
+          },
+        ),
+    );
+  }
+
+
   function changePriceType(
     key: string,
     priceType:
       "retail" | "wholesale",
   ) {
+    if (savedDraft) {
+      setError(
+        "This sale is already saved as a draft. Confirm or reset it before changing prices.",
+      );
+      return;
+    }
+
     setCart(
       (current) =>
         current.map(
@@ -977,6 +1078,13 @@ export default function QuickSalePage() {
     key: string,
     value: string,
   ) {
+    if (savedDraft) {
+      setError(
+        "This sale is already saved as a draft. Confirm or reset it before changing prices.",
+      );
+      return;
+    }
+
     const requestedPrice =
       Number(value);
 
@@ -1031,6 +1139,13 @@ export default function QuickSalePage() {
     key: string,
     enabled: boolean,
   ) {
+    if (savedDraft) {
+      setError(
+        "This sale is already saved as a draft. Confirm or reset it before changing free-item details.",
+      );
+      return;
+    }
+
     setCart(
       (current) =>
         current.map(
@@ -1086,6 +1201,13 @@ export default function QuickSalePage() {
     key: string,
     reason: string,
   ) {
+    if (savedDraft) {
+      setError(
+        "This sale is already saved as a draft. Confirm or reset it before changing free-item details.",
+      );
+      return;
+    }
+
     setCart(
       (current) =>
         current.map(
@@ -1124,6 +1246,13 @@ export default function QuickSalePage() {
   function removeCartItem(
     key: string,
   ) {
+    if (savedDraft) {
+      setError(
+        "This sale is already saved as a draft. Confirm or reset it before removing products.",
+      );
+      return;
+    }
+
     setCart(
       (
         current,
@@ -2166,9 +2295,39 @@ export default function QuickSalePage() {
                           <Minus size={14} />
                         </button>
 
-                        <span>
-                          {item.quantity}
-                        </span>
+                        <input
+                          type="number"
+                          min="0.001"
+                          step="0.001"
+                          inputMode="decimal"
+                          disabled={
+                            Boolean(
+                              item.serialId,
+                            )
+                          }
+                          value={
+                            item.quantity
+                          }
+                          onChange={(event) =>
+                            setCartQuantity(
+                              item.key,
+                              event.target.value,
+                            )
+                          }
+                          aria-label={
+                            `Quantity for ${item.productName}`
+                          }
+                          style={{
+                            width: 76,
+                            minHeight: 32,
+                            textAlign: "center",
+                            border:
+                              "1px solid #d8dfe8",
+                            borderRadius: 8,
+                            padding: "4px 6px",
+                            fontWeight: 700,
+                          }}
+                        />
 
                         <button
                           type="button"
@@ -2966,6 +3125,9 @@ export default function QuickSalePage() {
                   value={
                     form.branchId
                   }
+                  disabled={
+                    Boolean(savedDraft)
+                  }
                   onChange={(event) =>
                     setForm(
                       (
@@ -3148,6 +3310,9 @@ export default function QuickSalePage() {
                 <textarea
                   rows={3}
                   value={form.notes}
+                  disabled={
+                    Boolean(savedDraft)
+                  }
                   onChange={(event) =>
                     setForm(
                       (
