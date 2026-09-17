@@ -93,6 +93,7 @@ import type {
 
 type LineForm = {
   productId: string;
+  productSearch: string;
   quantity: string;
   unitCost: string;
   discount: string;
@@ -102,6 +103,7 @@ type LineForm = {
 
 const EMPTY_LINE: LineForm = {
   productId: "",
+  productSearch: "",
   quantity: "1.000",
   unitCost: "0.00",
   discount: "0.00",
@@ -461,10 +463,46 @@ export default function PurchasesPage() {
                 true,
               ),
 
-              getProducts({
-                page: 1,
-                pageSize: 100,
-              }),
+              (async () => {
+                const firstPage =
+                  await getProducts({
+                    page: 1,
+                    pageSize: 100,
+                  });
+
+                if (
+                  firstPage.total_pages <= 1
+                ) {
+                  return firstPage;
+                }
+
+                const remainingPages =
+                  await Promise.all(
+                    Array.from(
+                      {
+                        length:
+                          firstPage.total_pages
+                          - 1,
+                      },
+                      (_, index) =>
+                        getProducts({
+                          page: index + 2,
+                          pageSize: 100,
+                        }),
+                    ),
+                  );
+
+                return {
+                  ...firstPage,
+                  items: [
+                    ...firstPage.items,
+                    ...remainingPages.flatMap(
+                      (page) =>
+                        page.items,
+                    ),
+                  ],
+                };
+              })(),
 
               listPurchaseOrders({
                 page: 1,
@@ -1450,38 +1488,27 @@ export default function PurchasesPage() {
                   >
                     <label>
                       Product *
-                      <select
-                        required
-                        style={
-                          inputStyle
-                        }
-                        value={
-                          line
-                            .productId
-                        }
-                        onChange={
-                          (event) => {
-                            const value =
-                              event
-                                .target
-                                .value;
 
-                            const product =
-                              products
-                                .find(
-                                  (item) =>
-                                    String(
-                                      item.id,
-                                    )
-                                    === value,
-                                );
+                      <div
+                        style={{
+                          position: "relative",
+                          marginTop: 6,
+                        }}
+                      >
+                        <input
+                          type="search"
+                          style={inputStyle}
+                          value={
+                            line.productSearch
+                          }
+                          onChange={
+                            (event) => {
+                              const value =
+                                event.target.value;
 
-                            setLines(
-                              (
-                                current,
-                              ) =>
-                                current
-                                  .map(
+                              setLines(
+                                (current) =>
+                                  current.map(
                                     (
                                       item,
                                       lineIndex,
@@ -1490,47 +1517,189 @@ export default function PurchasesPage() {
                                       === index
                                         ? {
                                             ...item,
-                                            productId:
+                                            productSearch:
                                               value,
-                                            unitCost:
-                                              String(
-                                                product
-                                                  ?.purchase_cost
-                                                ?? "0.00",
-                                              ),
+                                            productId:
+                                              "",
                                           }
                                         : item,
                                   ),
-                            );
+                              );
+                            }
                           }
-                        }
-                      >
-                        <option value="">
-                          Select product
-                        </option>
+                          placeholder="Search product code or name"
+                          autoComplete="off"
+                        />
 
-                        {products.map(
-                          (product) => (
-                            <option
-                              key={
-                                product.id
-                              }
-                              value={
-                                product.id
-                              }
+                        {line.productSearch
+                          .trim()
+                          && !line.productId
+                          ? (
+                            <div
+                              style={{
+                                marginTop: 6,
+                                border:
+                                  "1px solid #d1d5db",
+                                borderRadius: 10,
+                                background:
+                                  "#ffffff",
+                                maxHeight: 220,
+                                overflowY: "auto",
+                              }}
                             >
-                              {
-                                product
-                                  .product_code
-                              }
-                              {" — "}
-                              {
-                                product.name
-                              }
-                            </option>
-                          ),
-                        )}
-                      </select>
+                              {products
+                                .filter(
+                                  (product) => {
+                                    const query =
+                                      line
+                                        .productSearch
+                                        .trim()
+                                        .toLowerCase();
+
+                                    return (
+                                      product
+                                        .name
+                                        .toLowerCase()
+                                        .includes(
+                                          query,
+                                        )
+                                      || (
+                                        product
+                                          .product_code
+                                        ?? ""
+                                      )
+                                        .toLowerCase()
+                                        .includes(
+                                          query,
+                                        )
+                                    );
+                                  },
+                                )
+                                .slice(0, 20)
+                                .map(
+                                  (product) => (
+                                    <button
+                                      key={
+                                        product.id
+                                      }
+                                      type="button"
+                                      onClick={() => {
+                                        setLines(
+                                          (
+                                            current,
+                                          ) =>
+                                            current.map(
+                                              (
+                                                item,
+                                                lineIndex,
+                                              ) =>
+                                                lineIndex
+                                                === index
+                                                  ? {
+                                                      ...item,
+                                                      productId:
+                                                        String(
+                                                          product.id,
+                                                        ),
+                                                      productSearch:
+                                                        `${product.product_code} — ${product.name}`,
+                                                      unitCost:
+                                                        String(
+                                                          product.purchase_cost
+                                                          ?? "0.00",
+                                                        ),
+                                                    }
+                                                  : item,
+                                            ),
+                                        );
+                                      }}
+                                      style={{
+                                        display:
+                                          "block",
+                                        width:
+                                          "100%",
+                                        padding:
+                                          "10px 12px",
+                                        border:
+                                          "none",
+                                        borderBottom:
+                                          "1px solid #f1f5f9",
+                                        background:
+                                          "transparent",
+                                        textAlign:
+                                          "left",
+                                        cursor:
+                                          "pointer",
+                                      }}
+                                    >
+                                      <strong>
+                                        {
+                                          product
+                                            .product_code
+                                        }
+                                      </strong>
+
+                                      {" — "}
+
+                                      {
+                                        product.name
+                                      }
+                                    </button>
+                                  ),
+                                )}
+
+                              {products.filter(
+                                (product) => {
+                                  const query =
+                                    line
+                                      .productSearch
+                                      .trim()
+                                      .toLowerCase();
+
+                                  return (
+                                    product.name
+                                      .toLowerCase()
+                                      .includes(
+                                        query,
+                                      )
+                                    || (
+                                      product
+                                        .product_code
+                                      ?? ""
+                                    )
+                                      .toLowerCase()
+                                      .includes(
+                                        query,
+                                      )
+                                  );
+                                },
+                              ).length
+                              === 0
+                                ? (
+                                  <div
+                                    style={{
+                                      padding:
+                                        "10px 12px",
+                                      color:
+                                        "#64748b",
+                                    }}
+                                  >
+                                    No matching products
+                                  </div>
+                                )
+                                : null}
+                            </div>
+                          )
+                          : null}
+
+                        <input
+                          type="hidden"
+                          required
+                          value={
+                            line.productId
+                          }
+                        />
+                      </div>
                     </label>
 
 
