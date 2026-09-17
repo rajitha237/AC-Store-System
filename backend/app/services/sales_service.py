@@ -1005,10 +1005,34 @@ async def confirm_invoice(
     payload: SalesInvoiceConfirmRequest,
     current_user: User,
 ) -> SalesInvoice:
-    invoice = await get_invoice(
-        session,
-        invoice_id,
+    invoice_result = await session.execute(
+        select(SalesInvoice)
+        .options(
+            selectinload(
+                SalesInvoice.items
+            ),
+            selectinload(
+                SalesInvoice.trade_ins
+            ),
+            selectinload(
+                SalesInvoice.payments
+            ),
+        )
+        .where(
+            SalesInvoice.id == invoice_id
+        )
+        .with_for_update()
     )
+
+    invoice = (
+        invoice_result.scalar_one_or_none()
+    )
+
+    if invoice is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sales invoice was not found",
+        )
 
     if invoice.invoice_status != (
         InvoiceStatus.DRAFT.value
@@ -1089,9 +1113,17 @@ async def confirm_invoice(
                 )
 
             if product.track_serial_numbers:
-                serial_record = await session.get(
-                    ProductSerialNumber,
-                    item.serial_number_id,
+                serial_result = await session.execute(
+                    select(ProductSerialNumber)
+                    .where(
+                        ProductSerialNumber.id
+                        == item.serial_number_id
+                    )
+                    .with_for_update()
+                )
+
+                serial_record = (
+                    serial_result.scalar_one_or_none()
                 )
 
                 if serial_record is None:
@@ -1160,6 +1192,7 @@ async def confirm_invoice(
                         StockItem.product_id
                         == product.id,
                     )
+                    .with_for_update()
                 )
 
                 stock_item = (
@@ -1321,6 +1354,7 @@ async def confirm_invoice(
                         StockItem.product_id
                         == product.id,
                     )
+                    .with_for_update()
                 )
 
                 stock_item = (
