@@ -31,6 +31,7 @@ from app.models import (
 )
 from app.models.customer import CustomerStatus
 from app.models.service import ApprovalStatus
+from app.services.quantity_precision import validate_product_quantity
 from app.services.sms import queue_customer_service_status_notification
 from app.schemas.service import (
     ServiceApprovalRequest,
@@ -1017,8 +1018,11 @@ async def add_service_part(
         product_id=product.id,
     )
 
-    requested_quantity = quantity(
-        payload.quantity
+    requested_quantity = await validate_product_quantity(
+        session,
+        product=product,
+        value=payload.quantity,
+        field_name="Service part quantity",
     )
 
     quantity_on_hand = quantity(

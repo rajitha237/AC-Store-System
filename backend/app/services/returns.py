@@ -38,6 +38,7 @@ from app.models.sales import (
     InvoiceStatus,
 )
 from app.services.audit import create_audit_log
+from app.services.quantity_precision import validate_product_quantity
 from app.schemas.returns import (
     ReplacementItemRequest,
     ReturnApprovalRequest,
@@ -605,8 +606,11 @@ async def create_return(
                 ),
             )
 
-        requested_qty = qty(
-            requested.quantity
+        requested_qty = await validate_product_quantity(
+            session,
+            product=product,
+            value=requested.quantity,
+            field_name="Return quantity",
         )
 
         already_returned = (

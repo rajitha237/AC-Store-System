@@ -64,6 +64,7 @@ from app.schemas.purchasing import (
     PurchaseOrderResponse,
     PurchaseOrderUpdate,
 )
+from app.services.quantity_precision import validate_product_quantity
 from app.services.audit import create_audit_log
 from app.services.inventory import (
     get_active_company,
@@ -2276,6 +2277,13 @@ async def receive_purchase_order(
                         po_item.product_id
                     ),
                 )
+            )
+
+            receive_quantity = await validate_product_quantity(
+                session,
+                product=product,
+                value=request_item.quantity,
+                field_name="Purchase receipt quantity",
             )
 
             is_serialized = bool(

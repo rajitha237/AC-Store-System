@@ -1326,6 +1326,13 @@ async def confirm_invoice(
                 )
 
             else:
+                sale_quantity = await validate_product_quantity(
+                    session,
+                    product=product,
+                    value=item.quantity,
+                    field_name="Sale quantity",
+                )
+
                 if item.warehouse_id is None:
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
@@ -1390,7 +1397,7 @@ async def confirm_invoice(
                     )
                 )
 
-                if item.quantity > available:
+                if sale_quantity > available:
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail=(
@@ -1424,7 +1431,7 @@ async def confirm_invoice(
                     Decimal(
                         stock_item.quantity_on_hand
                     )
-                    - item.quantity
+                    - sale_quantity
                 )
 
                 session.add(
@@ -1438,7 +1445,7 @@ async def confirm_invoice(
                             StockMovementType
                             .SALE_ISSUE.value
                         ),
-                        quantity=-item.quantity,
+                        quantity=-sale_quantity,
                         unit_cost=(
                             stock_item.average_cost
                         ),

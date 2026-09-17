@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.quantity_precision import validate_product_quantity
 from app.services.audit import create_audit_log
 from app.models import (
     Company,
@@ -728,6 +729,13 @@ async def receive_non_serialized_stock(
         )
     )
 
+    received_quantity = await validate_product_quantity(
+        session,
+        product=product,
+        value=payload.quantity,
+        field_name="Received quantity",
+    )
+
     stock_item = await get_or_create_stock_item(
         session=session,
         warehouse_id=warehouse.id,
@@ -745,13 +753,13 @@ async def receive_non_serialized_stock(
         calculate_weighted_average_cost(
             old_quantity=old_quantity,
             old_average_cost=old_average_cost,
-            received_quantity=payload.quantity,
+            received_quantity=received_quantity,
             received_unit_cost=payload.unit_cost,
         )
     )
 
     stock_item.quantity_on_hand = (
-        old_quantity + payload.quantity
+        old_quantity + received_quantity
     )
 
     movement = StockMovement(
@@ -766,7 +774,7 @@ async def receive_non_serialized_stock(
             == "purchase_receipt"
             else StockMovementType.OPENING_BALANCE.value
         ),
-        quantity=payload.quantity,
+        quantity=received_quantity,
         unit_cost=payload.unit_cost,
         reference_type=payload.reference_type,
         reference_id=payload.reference_id,
@@ -1625,8 +1633,11 @@ async def adjust_non_serialized_stock(
         product_id=product.id,
     )
 
-    quantity = Decimal(
-        payload.quantity
+    quantity = await validate_product_quantity(
+        session,
+        product=product,
+        value=payload.quantity,
+        field_name="Adjustment quantity",
     )
 
     quantity_on_hand = Decimal(
