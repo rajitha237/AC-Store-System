@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, time
 from decimal import Decimal
 from math import ceil
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     Customer,
+    Company,
     CustomerPayment,
     InstallmentPlan,
     InstallmentPlanStatus,
@@ -24,6 +26,7 @@ from app.schemas.payment import (
     PaymentDetailResponse,
     PaymentListResponse,
     PaymentReceiveRequest,
+    PaymentUpdateRequest,
     PaymentReverseRequest,
     PaymentTransactionResponse,
 )
@@ -64,6 +67,52 @@ async def _guard_active_installment_invoice(
         )
 
 
+
+def _company_zone(
+    timezone_name: str,
+) -> ZoneInfo:
+    try:
+        return ZoneInfo(
+            timezone_name
+        )
+    except Exception as exc:
+        raise ValueError(
+            "Invalid company timezone: "
+            f"{timezone_name}"
+        ) from exc
+
+
+def _business_today(
+    timezone_name: str,
+):
+    return (
+        datetime.now(timezone.utc)
+        .astimezone(
+            _company_zone(
+                timezone_name
+            )
+        )
+        .date()
+    )
+
+
+def _business_day_start(
+    value,
+    timezone_name: str,
+) -> datetime:
+    local_start = datetime.combine(
+        value,
+        time.min,
+        tzinfo=_company_zone(
+            timezone_name
+        ),
+    )
+
+    return local_start.astimezone(
+        timezone.utc
+    )
+
+
 def money(
     value: Decimal,
 ) -> Decimal:
@@ -88,6 +137,16 @@ def payment_audit_snapshot(
             str(money(payment.amount)),
         "payment_method":
             payment.payment_method,
+        "payment_date":
+            payment.payment_date.isoformat()
+            if payment.payment_date
+            else None,
+        "cheque_date":
+            payment.cheque_date.isoformat()
+            if payment.cheque_date
+            else None,
+        "notes":
+            payment.notes,
         "reference_number":
             payment.reference_number,
         "is_reversed":
@@ -475,6 +534,305 @@ async def receive_invoice_payment(
     return PaymentTransactionResponse(
         message=(
             "Customer payment recorded "
+            "successfully"
+        ),
+        payment=detail,
+        invoice_id=invoice.id,
+        invoice_number=(
+            invoice.invoice_number
+        ),
+        grand_total=invoice.grand_total,
+        paid_amount=invoice.paid_amount,
+        balance_amount=invoice.balance_amount,
+        payment_status=(
+            invoice.payment_status
+        ),
+        customer_id=customer.id,
+        customer_balance=(
+            customer.current_balance
+        ),
+    )
+
+
+
+async def update_invoice_payment(
+    session: AsyncSession,
+    payment_id: int,
+    payload: PaymentUpdateRequest,
+    current_user: User,
+) -> PaymentTransactionResponse:
+    payment = await get_payment_or_404(
+        session,
+        payment_id,
+    )
+
+    if payment.is_reversed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Reversed payments cannot "
+                "be edited"
+            ),
+        )
+
+    if payment.invoice_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Only invoice-linked payments "
+                "can be edited here"
+            ),
+        )
+
+    invoice = await get_invoice_or_404(
+        session,
+        payment.invoice_id,
+    )
+
+    await _guard_active_installment_invoice(
+        session,
+        invoice.id,
+    )
+
+    customer = await get_customer_or_404(
+        session,
+        payment.customer_id,
+    )
+
+    company = await session.get(
+        Company,
+        invoice.company_id,
+    )
+
+    if company is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=(
+                "Invoice company could not "
+                "be resolved"
+            ),
+        )
+
+    business_today = _business_today(
+        company.timezone
+    )
+
+    if payload.payment_date > business_today:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Payment date cannot be "
+                "in the future"
+            ),
+        )
+
+    old_amount = money(
+        payment.amount
+    )
+
+    new_amount = money(
+        payload.amount
+    )
+
+    other_paid = money(
+        Decimal(invoice.paid_amount)
+        - old_amount
+    )
+
+    maximum_payment = money(
+        Decimal(invoice.grand_total)
+        - Decimal(invoice.credited_amount)
+        - other_paid
+    )
+
+    if new_amount > maximum_payment:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Payment amount cannot exceed "
+                f"available invoice balance "
+                f"{maximum_payment}"
+            ),
+        )
+
+    delta = money(
+        new_amount - old_amount
+    )
+
+    if (
+        delta > ZERO
+        and delta > money(
+            customer.current_balance
+        )
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Payment increase exceeds "
+                "customer outstanding balance"
+            ),
+        )
+
+    payment_before_snapshot = (
+        payment_audit_snapshot(
+            payment
+        )
+    )
+
+    invoice_before_snapshot = (
+        invoice_payment_audit_snapshot(
+            invoice
+        )
+    )
+
+    customer_before_snapshot = (
+        customer_payment_audit_snapshot(
+            customer
+        )
+    )
+
+    try:
+        payment.amount = new_amount
+        payment.payment_method = (
+            payload.payment_method.value
+        )
+        payment.reference_number = (
+            payload.reference_number
+        )
+        payment.cheque_date = (
+            payload.cheque_date
+            if payload.payment_method
+            == PaymentMethod.CHEQUE
+            else None
+        )
+        payment.notes = payload.notes
+
+        payment.payment_date = (
+            _business_day_start(
+                payload.payment_date,
+                company.timezone,
+            )
+        )
+
+        invoice.paid_amount = money(
+            other_paid + new_amount
+        )
+
+        invoice.balance_amount = money(
+            max(
+                ZERO,
+                Decimal(invoice.grand_total)
+                - Decimal(
+                    invoice.credited_amount
+                )
+                - Decimal(
+                    invoice.paid_amount
+                ),
+            )
+        )
+
+        if invoice.paid_amount == ZERO:
+            invoice.payment_status = (
+                PaymentStatus.UNPAID.value
+            )
+        elif invoice.balance_amount == ZERO:
+            invoice.payment_status = (
+                PaymentStatus.PAID.value
+            )
+        else:
+            invoice.payment_status = (
+                PaymentStatus.PARTIAL.value
+            )
+
+        invoice.updated_by_id = (
+            current_user.id
+        )
+
+        customer.current_balance = money(
+            max(
+                ZERO,
+                Decimal(
+                    customer.current_balance
+                )
+                - delta,
+            )
+        )
+
+        await create_audit_log(
+            session=session,
+            user_id=current_user.id,
+            action="payment.updated",
+            module="payments",
+            entity_type="customer_payment",
+            entity_id=payment.id,
+            entity_reference=(
+                payment.receipt_number
+            ),
+            description=(
+                f"Payment "
+                f"{payment.receipt_number} "
+                "updated"
+            ),
+            before_data={
+                "payment":
+                    payment_before_snapshot,
+                "invoice":
+                    invoice_before_snapshot,
+                "customer":
+                    customer_before_snapshot,
+            },
+            after_data={
+                "payment":
+                    payment_audit_snapshot(
+                        payment
+                    ),
+                "invoice":
+                    invoice_payment_audit_snapshot(
+                        invoice
+                    ),
+                "customer":
+                    customer_payment_audit_snapshot(
+                        customer
+                    ),
+            },
+            metadata={
+                "invoice_id":
+                    invoice.id,
+                "customer_id":
+                    customer.id,
+                "old_amount":
+                    str(old_amount),
+                "new_amount":
+                    str(new_amount),
+            },
+        )
+
+        await session.commit()
+
+        await session.refresh(payment)
+        await session.refresh(invoice)
+        await session.refresh(customer)
+
+    except Exception:
+        await session.rollback()
+        raise
+
+    detail = await build_payment_detail(
+        session,
+        payment,
+    )
+
+    return PaymentTransactionResponse(
+        message=(
+            "Customer payment updated "
             "successfully"
         ),
         payment=detail,

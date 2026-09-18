@@ -2568,3 +2568,574 @@ async def test_split_payment_overpayment_is_rejected_atomically(
     assert len(
         detail["payments"]
     ) == 1
+
+
+@pytest.mark.asyncio
+async def test_customer_payment_update_recalculates_balances_and_reverses(
+    client,
+    admin_headers,
+    db_session,
+):
+    suffix = "390"
+
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    product = await create_non_serialized_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix=suffix,
+        selling_price="100000.00",
+    )
+
+    warehouse = await get_main_warehouse(
+        client,
+        admin_headers,
+    )
+
+    await receive_stock(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        suffix=suffix,
+        quantity="2.000",
+    )
+
+    branch_id = await get_main_branch_id(
+        db_session
+    )
+
+    create_response = await client.post(
+        "/api/v1/sales/invoices",
+        headers=admin_headers,
+        json={
+            "branch_id": branch_id,
+            "customer_id": customer["id"],
+            "invoice_discount_amount": "0.00",
+            "tax_amount": "0.00",
+            "items": [
+                {
+                    "product_id": product["id"],
+                    "warehouse_id": warehouse["id"],
+                    "serial_number_id": None,
+                    "quantity": "1.000",
+                    "unit_price": "100000.00",
+                    "discount_amount": "0.00",
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201, (
+        create_response.text
+    )
+
+    invoice_id = create_response.json()["id"]
+
+    confirm_response = await client.post(
+        (
+            "/api/v1/sales/invoices/"
+            f"{invoice_id}/confirm"
+        ),
+        headers=admin_headers,
+        json={},
+    )
+
+    assert confirm_response.status_code == 200, (
+        confirm_response.text
+    )
+
+    assert dec(
+        confirm_response.json()["balance_amount"]
+    ) == Decimal("100000.00")
+
+    payment_response = await client.post(
+        "/api/v1/payments",
+        headers=admin_headers,
+        json={
+            "invoice_id": invoice_id,
+            "amount": "40000.00",
+            "payment_method": "cash",
+            "reference_number": "EDIT-390-A",
+            "notes": "Original payment",
+        },
+    )
+
+    assert payment_response.status_code == 201, (
+        payment_response.text
+    )
+
+    payment = payment_response.json()["payment"]
+    payment_id = payment["id"]
+
+    assert dec(
+        payment_response.json()["paid_amount"]
+    ) == Decimal("40000.00")
+
+    assert dec(
+        payment_response.json()["balance_amount"]
+    ) == Decimal("60000.00")
+
+    customer_row = await db_session.get(
+        Customer,
+        customer["id"],
+    )
+
+    await db_session.refresh(customer_row)
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("60000.00")
+
+    increase_response = await client.patch(
+        f"/api/v1/payments/{payment_id}",
+        headers=admin_headers,
+        json={
+            "payment_date": "2026-09-18",
+            "amount": "55000.00",
+            "payment_method": "cheque",
+            "reference_number": "EDIT-390-CHQ",
+            "cheque_date": "2026-09-25",
+            "notes": "Edited upward",
+        },
+    )
+
+    assert increase_response.status_code == 200, (
+        increase_response.text
+    )
+
+    increased = increase_response.json()
+
+    assert dec(
+        increased["paid_amount"]
+    ) == Decimal("55000.00")
+
+    assert dec(
+        increased["balance_amount"]
+    ) == Decimal("45000.00")
+
+    assert (
+        increased["payment_status"]
+        == "partial"
+    )
+
+    assert (
+        increased["payment"]["payment_method"]
+        == "cheque"
+    )
+
+    assert (
+        increased["payment"]["reference_number"]
+        == "EDIT-390-CHQ"
+    )
+
+    assert (
+        increased["payment"]["cheque_date"]
+        == "2026-09-25"
+    )
+
+    await db_session.refresh(customer_row)
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("45000.00")
+
+    decrease_response = await client.patch(
+        f"/api/v1/payments/{payment_id}",
+        headers=admin_headers,
+        json={
+            "payment_date": "2026-09-17",
+            "amount": "25000.00",
+            "payment_method": "card",
+            "reference_number": "EDIT-390-CARD",
+            "cheque_date": None,
+            "notes": "Edited downward",
+        },
+    )
+
+    assert decrease_response.status_code == 200, (
+        decrease_response.text
+    )
+
+    decreased = decrease_response.json()
+
+    assert dec(
+        decreased["paid_amount"]
+    ) == Decimal("25000.00")
+
+    assert dec(
+        decreased["balance_amount"]
+    ) == Decimal("75000.00")
+
+    assert (
+        decreased["payment"]["payment_method"]
+        == "card"
+    )
+
+    assert (
+        decreased["payment"]["cheque_date"]
+        is None
+    )
+
+    await db_session.refresh(customer_row)
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("75000.00")
+
+    reverse_response = await client.post(
+        (
+            f"/api/v1/payments/"
+            f"{payment_id}/reverse"
+        ),
+        headers=admin_headers,
+        json={
+            "reason":
+                "Delete from Cash Book test"
+        },
+    )
+
+    assert reverse_response.status_code == 200, (
+        reverse_response.text
+    )
+
+    reversed_result = reverse_response.json()
+
+    assert dec(
+        reversed_result["paid_amount"]
+    ) == Decimal("0.00")
+
+    assert dec(
+        reversed_result["balance_amount"]
+    ) == Decimal("100000.00")
+
+    assert (
+        reversed_result["payment_status"]
+        == "unpaid"
+    )
+
+    await db_session.refresh(customer_row)
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("100000.00")
+
+    audit_rows = (
+        await db_session.execute(
+            select(AuditLog).where(
+                AuditLog.entity_type
+                == "customer_payment",
+                AuditLog.entity_id
+                == payment_id,
+            )
+        )
+    ).scalars().all()
+
+    actions = {
+        row.action
+        for row in audit_rows
+    }
+
+    assert "payment.received" in actions
+    assert "payment.updated" in actions
+    assert "payment.reversed" in actions
+
+
+@pytest.mark.asyncio
+async def test_customer_payment_update_rejects_invalid_cheque_and_overpayment(
+    client,
+    admin_headers,
+    db_session,
+):
+    suffix = "391"
+
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    product = await create_non_serialized_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix=suffix,
+        selling_price="100000.00",
+    )
+
+    warehouse = await get_main_warehouse(
+        client,
+        admin_headers,
+    )
+
+    await receive_stock(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        suffix=suffix,
+        quantity="2.000",
+    )
+
+    branch_id = await get_main_branch_id(
+        db_session
+    )
+
+    create_response = await client.post(
+        "/api/v1/sales/invoices",
+        headers=admin_headers,
+        json={
+            "branch_id": branch_id,
+            "customer_id": customer["id"],
+            "invoice_discount_amount": "0.00",
+            "tax_amount": "0.00",
+            "items": [
+                {
+                    "product_id": product["id"],
+                    "warehouse_id": warehouse["id"],
+                    "serial_number_id": None,
+                    "quantity": "1.000",
+                    "unit_price": "100000.00",
+                    "discount_amount": "0.00",
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    invoice_id = create_response.json()["id"]
+
+    confirmed = await client.post(
+        (
+            "/api/v1/sales/invoices/"
+            f"{invoice_id}/confirm"
+        ),
+        headers=admin_headers,
+        json={},
+    )
+
+    assert confirmed.status_code == 200
+
+    payment_response = await client.post(
+        "/api/v1/payments",
+        headers=admin_headers,
+        json={
+            "invoice_id": invoice_id,
+            "amount": "40000.00",
+            "payment_method": "cash",
+        },
+    )
+
+    assert payment_response.status_code == 201
+
+    payment_id = (
+        payment_response.json()["payment"]["id"]
+    )
+
+    missing_cheque_date = await client.patch(
+        f"/api/v1/payments/{payment_id}",
+        headers=admin_headers,
+        json={
+            "payment_date": "2026-09-18",
+            "amount": "40000.00",
+            "payment_method": "cheque",
+            "reference_number": "BAD-CHQ-391",
+            "cheque_date": None,
+            "notes": None,
+        },
+    )
+
+    assert missing_cheque_date.status_code == 422
+
+    overpayment = await client.patch(
+        f"/api/v1/payments/{payment_id}",
+        headers=admin_headers,
+        json={
+            "payment_date": "2026-09-18",
+            "amount": "100001.00",
+            "payment_method": "cash",
+            "reference_number": None,
+            "cheque_date": None,
+            "notes": None,
+        },
+    )
+
+    assert overpayment.status_code == 422
+
+    detail_response = await client.get(
+        (
+            "/api/v1/sales/invoices/"
+            f"{invoice_id}"
+        ),
+        headers=admin_headers,
+    )
+
+    assert detail_response.status_code == 200
+
+    detail = detail_response.json()
+
+    assert dec(
+        detail["paid_amount"]
+    ) == Decimal("40000.00")
+
+    assert dec(
+        detail["balance_amount"]
+    ) == Decimal("60000.00")
+
+    customer_row = await db_session.get(
+        Customer,
+        customer["id"],
+    )
+
+    await db_session.refresh(customer_row)
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("60000.00")
+
+
+@pytest.mark.asyncio
+async def test_customer_payment_update_rejects_future_payment_date(
+    client,
+    admin_headers,
+    db_session,
+):
+    suffix = "392"
+
+    customer = await create_customer(
+        client,
+        admin_headers,
+        suffix=suffix,
+    )
+
+    product = await create_non_serialized_product(
+        client,
+        admin_headers,
+        db_session,
+        suffix=suffix,
+        selling_price="100000.00",
+    )
+
+    warehouse = await get_main_warehouse(
+        client,
+        admin_headers,
+    )
+
+    await receive_stock(
+        client,
+        admin_headers,
+        product_id=product["id"],
+        warehouse_id=warehouse["id"],
+        suffix=suffix,
+        quantity="2.000",
+    )
+
+    branch_id = await get_main_branch_id(
+        db_session
+    )
+
+    create_response = await client.post(
+        "/api/v1/sales/invoices",
+        headers=admin_headers,
+        json={
+            "branch_id": branch_id,
+            "customer_id": customer["id"],
+            "invoice_discount_amount": "0.00",
+            "tax_amount": "0.00",
+            "items": [
+                {
+                    "product_id": product["id"],
+                    "warehouse_id": warehouse["id"],
+                    "serial_number_id": None,
+                    "quantity": "1.000",
+                    "unit_price": "100000.00",
+                    "discount_amount": "0.00",
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    invoice_id = create_response.json()["id"]
+
+    confirmed = await client.post(
+        (
+            "/api/v1/sales/invoices/"
+            f"{invoice_id}/confirm"
+        ),
+        headers=admin_headers,
+        json={},
+    )
+
+    assert confirmed.status_code == 200
+
+    payment_response = await client.post(
+        "/api/v1/payments",
+        headers=admin_headers,
+        json={
+            "invoice_id": invoice_id,
+            "amount": "40000.00",
+            "payment_method": "cash",
+        },
+    )
+
+    assert payment_response.status_code == 201
+
+    payment_id = (
+        payment_response.json()["payment"]["id"]
+    )
+
+    future_response = await client.patch(
+        f"/api/v1/payments/{payment_id}",
+        headers=admin_headers,
+        json={
+            "payment_date": "2099-12-31",
+            "amount": "40000.00",
+            "payment_method": "cash",
+            "reference_number": None,
+            "cheque_date": None,
+            "notes": None,
+        },
+    )
+
+    assert future_response.status_code == 422
+
+    detail_response = await client.get(
+        (
+            "/api/v1/sales/invoices/"
+            f"{invoice_id}"
+        ),
+        headers=admin_headers,
+    )
+
+    assert detail_response.status_code == 200
+
+    detail = detail_response.json()
+
+    assert dec(
+        detail["paid_amount"]
+    ) == Decimal("40000.00")
+
+    assert dec(
+        detail["balance_amount"]
+    ) == Decimal("60000.00")
+
+    customer_row = await db_session.get(
+        Customer,
+        customer["id"],
+    )
+
+    await db_session.refresh(
+        customer_row
+    )
+
+    assert dec(
+        customer_row.current_balance
+    ) == Decimal("60000.00")

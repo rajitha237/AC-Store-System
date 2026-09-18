@@ -1,12 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    field_validator,
-)
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.sales import PaymentMethod
 
@@ -51,6 +46,62 @@ class PaymentReceiveRequest(BaseModel):
         value: str | None,
     ) -> str | None:
         return clean_optional_text(value)
+
+
+
+class PaymentUpdateRequest(BaseModel):
+    payment_date: date
+
+    amount: Decimal = Field(
+        gt=Decimal("0.00"),
+        max_digits=18,
+        decimal_places=2,
+    )
+
+    payment_method: PaymentMethod = (
+        PaymentMethod.CASH
+    )
+
+    reference_number: str | None = Field(
+        default=None,
+        max_length=150,
+    )
+
+    cheque_date: date | None = None
+
+    notes: str | None = None
+
+    @field_validator(
+        "reference_number",
+        "notes",
+    )
+    @classmethod
+    def normalize_text(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        return clean_optional_text(value)
+
+    @model_validator(mode="after")
+    def validate_cheque_date(
+        self,
+    ):
+        if (
+            self.payment_method
+            == PaymentMethod.CHEQUE
+            and self.cheque_date is None
+        ):
+            raise ValueError(
+                "Cheque date is required"
+            )
+
+        if (
+            self.payment_method
+            != PaymentMethod.CHEQUE
+        ):
+            self.cheque_date = None
+
+        return self
 
 
 class PaymentReverseRequest(BaseModel):

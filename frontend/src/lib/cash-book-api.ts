@@ -140,3 +140,35 @@ export async function reverseManualCashBookEntry(
 
   return response.data;
 }
+
+
+export type CustomerPaymentUpdateRequest = {
+  payment_date: string;
+  amount: string;
+  payment_method: string;
+  reference_number: string | null;
+  cheque_date: string | null;
+  notes: string | null;
+};
+
+export async function updateCustomerPayment(
+  paymentId: number,
+  payload: CustomerPaymentUpdateRequest,
+): Promise<void> {
+  await api.patch(
+    `/payments/${paymentId}`,
+    payload,
+  );
+}
+
+export async function reverseCustomerPayment(
+  paymentId: number,
+  reason: string,
+): Promise<void> {
+  await api.post(
+    `/payments/${paymentId}/reverse`,
+    {
+      reason,
+    },
+  );
+}

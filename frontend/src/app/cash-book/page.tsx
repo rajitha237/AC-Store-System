@@ -40,6 +40,8 @@ import {
   getCashBook,
   reverseManualCashBookEntry,
   updateManualCashBookEntry,
+  updateCustomerPayment,
+  reverseCustomerPayment,
 } from "@/lib/cash-book-api";
 
 import type {
@@ -710,7 +712,32 @@ export default function CashBookPage() {
     setError("");
 
     try {
-      if (manualEditTarget) {
+      if (
+        manualEditTarget?.source_type
+          === "customer_payment"
+      ) {
+        await updateCustomerPayment(
+          manualEditTarget.source_id,
+          {
+            payment_date:
+              manualEntryDate,
+            amount:
+              amount.toFixed(2),
+            payment_method:
+              manualPaymentMethod,
+            reference_number:
+              reference || null,
+            cheque_date:
+              manualPaymentMethod
+                === "cheque"
+                ? manualChequeDate
+                : null,
+            notes:
+              manualNotes.trim()
+                || null,
+          },
+        );
+      } else if (manualEditTarget) {
         await updateManualCashBookEntry(
           manualEditTarget.source_id,
           payload,
@@ -738,10 +765,20 @@ export default function CashBookPage() {
   function openEditManualEntry(
     transaction: CashBookTransaction,
   ) {
-    if (
+    const isManual =
       transaction.source_type
-        !== "manual_cash_book"
-      || !transaction.can_edit
+        === "manual_cash_book";
+
+    const isCustomerPayment =
+      transaction.source_type
+        === "customer_payment";
+
+    if (
+      (!isManual && !isCustomerPayment)
+      || (
+        isManual
+        && !transaction.can_edit
+      )
     ) {
       return;
     }
@@ -808,6 +845,48 @@ export default function CashBookPage() {
       await confirmManualCashBookCheque(
         transaction.source_id,
         {},
+      );
+
+      await loadCashBook();
+    } catch (requestError) {
+      setError(
+        errorMessage(requestError),
+      );
+    } finally {
+      setLifecycleSavingId(null);
+    }
+  }
+
+  async function deleteSourcePayment(
+    transaction: CashBookTransaction,
+  ) {
+    if (
+      transaction.source_type
+        !== "customer_payment"
+      || lifecycleSavingId !== null
+    ) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Reverse this customer payment? "
+        + "Invoice and customer balances "
+        + "will be restored.",
+      )
+    ) {
+      return;
+    }
+
+    setLifecycleSavingId(
+      transaction.source_id,
+    );
+    setError("");
+
+    try {
+      await reverseCustomerPayment(
+        transaction.source_id,
+        "Reversed from Cash Book",
       );
 
       await loadCashBook();
@@ -1562,16 +1641,61 @@ export default function CashBookPage() {
                                   </button>
                                 </div>
                               )
-                              : (
-                                <span
-                                  className={
-                                    styles.noAction
-                                  }
-                                  title="Manage this record from its original payment."
-                                >
-                                  Source managed
-                                </span>
-                              )}
+                              : transaction.source_type
+                                  === "customer_payment"
+                                ? (
+                                  <div
+                                    className={
+                                      styles.actionButtons
+                                    }
+                                  >
+                                    <button
+                                      type="button"
+                                      className={
+                                        styles.editButton
+                                      }
+                                      disabled={
+                                        lifecycleSavingId
+                                          === transaction.source_id
+                                      }
+                                      onClick={() =>
+                                        openEditManualEntry(
+                                          transaction,
+                                        )
+                                      }
+                                    >
+                                      Edit
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className={
+                                        styles.deleteButton
+                                      }
+                                      disabled={
+                                        lifecycleSavingId
+                                          === transaction.source_id
+                                      }
+                                      onClick={() =>
+                                        void deleteSourcePayment(
+                                          transaction,
+                                        )
+                                      }
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                )
+                                : (
+                                  <span
+                                    className={
+                                      styles.noAction
+                                    }
+                                    title="Manage this record from its original payment."
+                                  >
+                                    Source managed
+                                  </span>
+                                )}
                         </td>
                       </tr>
                     ),
@@ -1758,6 +1882,9 @@ export default function CashBookPage() {
                   }
                   disabled={
                     manualSaving
+                    || manualEditTarget
+                      ?.source_type
+                      === "customer_payment"
                   }
                   onClick={() =>
                     setManualEntryType(
@@ -1778,6 +1905,9 @@ export default function CashBookPage() {
                   }
                   disabled={
                     manualSaving
+                    || manualEditTarget
+                      ?.source_type
+                      === "customer_payment"
                   }
                   onClick={() =>
                     setManualEntryType(
@@ -1926,6 +2056,9 @@ export default function CashBookPage() {
                     }
                     disabled={
                       manualSaving
+                      || manualEditTarget
+                        ?.source_type
+                        === "customer_payment"
                     }
                     onChange={(
                       event
@@ -1979,6 +2112,9 @@ export default function CashBookPage() {
                     }
                     disabled={
                       manualSaving
+                      || manualEditTarget
+                        ?.source_type
+                        === "customer_payment"
                     }
                     onChange={(
                       event

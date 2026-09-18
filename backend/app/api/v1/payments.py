@@ -18,6 +18,7 @@ from app.schemas.payment import (
     PaymentReceiveRequest,
     PaymentReverseRequest,
     PaymentTransactionResponse,
+    PaymentUpdateRequest,
 )
 from app.services.payment_service import (
     build_payment_detail,
@@ -25,6 +26,7 @@ from app.services.payment_service import (
     list_payments,
     receive_invoice_payment,
     reverse_invoice_payment,
+    update_invoice_payment,
 )
 
 
@@ -137,6 +139,25 @@ async def receive_payment(
 ) -> PaymentTransactionResponse:
     return await receive_invoice_payment(
         session=session,
+        payload=payload,
+        current_user=current_user,
+    )
+
+
+
+@router.patch(
+    "/{payment_id}",
+    response_model=PaymentTransactionResponse,
+)
+async def update_payment(
+    payment_id: int,
+    payload: PaymentUpdateRequest,
+    session: DatabaseSession,
+    current_user: CanReceivePayments,
+) -> PaymentTransactionResponse:
+    return await update_invoice_payment(
+        session=session,
+        payment_id=payment_id,
         payload=payload,
         current_user=current_user,
     )
