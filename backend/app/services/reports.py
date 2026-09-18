@@ -291,6 +291,14 @@ async def build_financial_reports_summary(
             == "cash_out",
             ManualCashBookEntry.reversed_at
             .is_(None),
+            (
+                ManualCashBookEntry.cheque_status
+                .is_(None)
+                | (
+                    ManualCashBookEntry.cheque_status
+                    == "cleared"
+                )
+            ),
         ),
     )
 

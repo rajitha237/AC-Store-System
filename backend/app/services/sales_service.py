@@ -17,6 +17,7 @@ from app.models import (
     Customer,
     CustomerPayment,
     InvoiceStatus,
+    PaymentMethod,
     PaymentStatus,
     Product,
     ProductSerialNumber,
@@ -1513,6 +1514,16 @@ async def confirm_invoice(
             )
 
         for initial_payment in initial_payments:
+            if (
+                initial_payment.payment_method
+                == PaymentMethod.CHEQUE
+                and initial_payment.cheque_date is None
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Cheque date is required",
+                )
+
             payment = CustomerPayment(
                 company_id=invoice.company_id,
                 branch_id=invoice.branch_id,
@@ -1528,6 +1539,9 @@ async def confirm_invoice(
                 ),
                 reference_number=(
                     initial_payment.reference_number
+                ),
+                cheque_date=(
+                    initial_payment.cheque_date
                 ),
                 notes=initial_payment.notes,
                 created_by_id=current_user.id,
@@ -1757,6 +1771,16 @@ async def post_split_payments(
 
     try:
         for entry in payments:
+            if (
+                entry.payment_method
+                == PaymentMethod.CHEQUE
+                and entry.cheque_date is None
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Cheque date is required",
+                )
+
             payment = CustomerPayment(
                 company_id=invoice.company_id,
                 branch_id=invoice.branch_id,
@@ -1772,6 +1796,7 @@ async def post_split_payments(
                 reference_number=(
                     entry.reference_number
                 ),
+                cheque_date=entry.cheque_date,
                 notes=entry.notes,
                 created_by_id=current_user.id,
             )
@@ -1956,6 +1981,16 @@ async def post_payment(
         invoice.customer_id,
     )
 
+    if (
+        payload.payment_method
+        == PaymentMethod.CHEQUE
+        and payload.cheque_date is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Cheque date is required",
+        )
+
     payment = CustomerPayment(
         company_id=invoice.company_id,
         branch_id=invoice.branch_id,
@@ -1969,6 +2004,7 @@ async def post_payment(
         reference_number=(
             payload.reference_number
         ),
+        cheque_date=payload.cheque_date,
         notes=payload.notes,
         created_by_id=current_user.id,
     )

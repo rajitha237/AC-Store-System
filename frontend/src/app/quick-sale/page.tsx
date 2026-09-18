@@ -76,6 +76,7 @@ type QuickSalePaymentRow = {
     | "other";
   amount: string;
   referenceNumber: string;
+  chequeDate: string;
 };
 
 
@@ -328,6 +329,7 @@ export default function QuickSalePage() {
       paymentMethod: "cash",
       amount: "",
       referenceNumber: "",
+      chequeDate: "",
     },
   ]);
 
@@ -1287,6 +1289,7 @@ export default function QuickSalePage() {
             paymentMethod: "cash",
             amount: "",
             referenceNumber: "",
+            chequeDate: "",
           },
         ];
       },
@@ -1308,6 +1311,7 @@ export default function QuickSalePage() {
               paymentMethod: "cash",
               amount: "",
               referenceNumber: "",
+              chequeDate: "",
             },
           ];
         }
@@ -1413,6 +1417,12 @@ export default function QuickSalePage() {
             payment.referenceNumber
               .trim()
               || null,
+          cheque_date:
+            payment.paymentMethod
+              === "cheque"
+              ? payment.chequeDate
+                || null
+              : null,
           notes:
             form.notes.trim()
             || null,
@@ -1856,6 +1866,7 @@ export default function QuickSalePage() {
         paymentMethod: "cash",
         amount: "",
         referenceNumber: "",
+        chequeDate: "",
       },
     ]);
 
@@ -3032,7 +3043,27 @@ export default function QuickSalePage() {
                         />
                       </label>
 
-                      <button
+                                            {payment.paymentMethod === "cheque" ? (
+                        <label>
+                          <span>Cheque Date</span>
+                          <input
+                            type="date"
+                            required
+                            value={payment.chequeDate}
+                            onChange={(event) =>
+                              updatePaymentRow(
+                                payment.id,
+                                {
+                                  chequeDate:
+                                    event.target.value,
+                                },
+                              )
+                            }
+                          />
+                        </label>
+                      ) : null}
+
+<button
                         type="button"
                         className={
                           styles.paymentRemoveButton

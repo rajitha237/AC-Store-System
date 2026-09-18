@@ -22,13 +22,18 @@ from app.schemas.cash_book import (
     ManualCashBookEntryCreate,
     ManualCashBookEntryResponse,
     ManualCashBookEntryReverseRequest,
+    ManualCashBookEntryUpdate,
+    ManualChequeClearRequest,
 )
 from app.services.cash_book import (
     cash_book_summary,
+    clear_manual_cash_book_cheque,
     create_manual_cash_book_entry,
+    delete_manual_cash_book_entry,
     get_active_cash_book_company,
     list_cash_book,
     reverse_manual_cash_book_entry,
+    update_manual_cash_book_entry,
 )
 
 
@@ -128,6 +133,70 @@ async def reverse_manual_entry(
             payload=payload,
             current_user=current_user,
         )
+    )
+
+    return ManualCashBookEntryResponse.model_validate(
+        entry
+    )
+
+
+@router.patch(
+    "/manual/{entry_id}",
+    response_model=ManualCashBookEntryResponse,
+)
+async def update_manual_entry(
+    entry_id: int,
+    payload: ManualCashBookEntryUpdate,
+    session: DatabaseSession,
+    current_user: CanReverseCashBookEntry,
+) -> ManualCashBookEntryResponse:
+    entry = await update_manual_cash_book_entry(
+        session,
+        entry_id=entry_id,
+        payload=payload,
+        current_user=current_user,
+    )
+
+    return ManualCashBookEntryResponse.model_validate(
+        entry
+    )
+
+
+@router.post(
+    "/manual/{entry_id}/confirm-cheque",
+    response_model=ManualCashBookEntryResponse,
+)
+async def confirm_manual_cheque(
+    entry_id: int,
+    payload: ManualChequeClearRequest,
+    session: DatabaseSession,
+    current_user: CanReverseCashBookEntry,
+) -> ManualCashBookEntryResponse:
+    entry = await clear_manual_cash_book_cheque(
+        session,
+        entry_id=entry_id,
+        payload=payload,
+        current_user=current_user,
+    )
+
+    return ManualCashBookEntryResponse.model_validate(
+        entry
+    )
+
+
+@router.delete(
+    "/manual/{entry_id}",
+    response_model=ManualCashBookEntryResponse,
+)
+async def delete_manual_entry(
+    entry_id: int,
+    session: DatabaseSession,
+    current_user: CanReverseCashBookEntry,
+) -> ManualCashBookEntryResponse:
+    entry = await delete_manual_cash_book_entry(
+        session,
+        entry_id=entry_id,
+        current_user=current_user,
     )
 
     return ManualCashBookEntryResponse.model_validate(

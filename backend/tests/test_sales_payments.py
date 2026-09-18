@@ -2098,6 +2098,8 @@ async def test_confirm_invoice_with_atomic_split_payments(
                         "cheque",
                     "reference_number":
                         "CHQ-310",
+                    "cheque_date":
+                        "2026-09-18",
                     "notes":
                         "Cheque portion",
                 },
@@ -2348,6 +2350,8 @@ async def test_confirm_then_receive_outstanding_with_split_payments(
                         "cheque",
                     "reference_number":
                         "CHQ-311",
+                    "cheque_date":
+                        "2026-09-18",
                     "notes":
                         "Later cheque payment",
                 },

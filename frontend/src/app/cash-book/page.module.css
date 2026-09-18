@@ -1010,3 +1010,48 @@
     width: 100%;
   }
 }
+
+
+/* Cash Book lifecycle actions */
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.editButton,
+.deleteButton,
+.confirmChequeButton {
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.editButton {
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  background: transparent;
+}
+
+.deleteButton {
+  border: 1px solid rgba(220, 38, 38, 0.28);
+  background: transparent;
+}
+
+.confirmChequeButton {
+  border: 0;
+  background: #166534;
+  color: #ffffff;
+}
+
+.editButton:disabled,
+.deleteButton:disabled,
+.confirmChequeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

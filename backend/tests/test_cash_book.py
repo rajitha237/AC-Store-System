@@ -58,6 +58,7 @@ def test_customer_payment_maps_to_cash_in() -> None:
         ),
         amount=Decimal("1500.00"),
         payment_method="cash",
+        cheque_date=None,
         notes="Sale payment",
         is_reversed=False,
         created_by_id=1,
@@ -141,6 +142,10 @@ def test_manual_cash_in_mapping() -> None:
         payment_method="cash",
         category="Other income",
         description="Manual income",
+        notes=None,
+        cheque_date=None,
+        cheque_status=None,
+        cheque_cleared_at=None,
         reversed_at=None,
     )
 
@@ -172,6 +177,10 @@ def test_manual_cash_out_mapping() -> None:
         payment_method="cash",
         category="Expense",
         description="Office expense",
+        notes=None,
+        cheque_date=None,
+        cheque_status=None,
+        cheque_cleared_at=None,
         reversed_at=None,
     )
 
@@ -486,6 +495,10 @@ def test_manual_cash_book_snapshot() -> None:
         ),
         amount=Decimal("125.50"),
         payment_method="cash",
+        cheque_date=None,
+        cheque_status=None,
+        cheque_cleared_at=None,
+        cheque_cleared_by_id=None,
         category="Expense",
         description="Office expense",
         reference_number="REF-5",

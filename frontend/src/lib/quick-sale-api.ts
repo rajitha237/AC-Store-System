@@ -391,6 +391,7 @@ export type QuickSalePaymentInput = {
   amount: number;
   payment_method: string;
   reference_number?: string | null;
+  cheque_date?: string | null;
   notes?: string | null;
 };
 

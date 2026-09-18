@@ -87,6 +87,7 @@ type SalesPaymentRow = {
   paymentMethod: PaymentMethod;
   amount: string;
   referenceNumber: string;
+  chequeDate: string;
   notes: string;
 };
 
@@ -551,6 +552,7 @@ export default function SalesPage() {
       paymentMethod: "cash",
       amount: "",
       referenceNumber: "",
+      chequeDate: "",
       notes: "",
     },
   ]);
@@ -622,6 +624,7 @@ export default function SalesPage() {
       paymentMethod: "cash",
       amount: "",
       referenceNumber: "",
+      chequeDate: "",
       notes: "",
     },
   ]);
@@ -1107,6 +1110,7 @@ export default function SalesPage() {
         paymentMethod: "cash",
         amount: "",
         referenceNumber: "",
+        chequeDate: "",
         notes: "",
       },
     ]);
@@ -1557,6 +1561,7 @@ export default function SalesPage() {
             paymentMethod: "cash",
             amount: "",
             referenceNumber: "",
+            chequeDate: "",
             notes: "",
           },
         ];
@@ -1605,6 +1610,7 @@ export default function SalesPage() {
               amount: "",
               referenceNumber:
                 "",
+              chequeDate: "",
               notes: "",
             },
           ];
@@ -1678,6 +1684,13 @@ export default function SalesPage() {
               payment
                 .referenceNumber,
             ),
+
+          cheque_date:
+            payment.paymentMethod
+              === "cheque"
+              ? payment.chequeDate
+                || null
+              : null,
 
           notes:
             cleanText(
@@ -2029,6 +2042,7 @@ export default function SalesPage() {
                 created.balance_amount,
               referenceNumber:
                 "",
+              chequeDate: "",
               notes: "",
             },
           ],
@@ -2245,6 +2259,7 @@ export default function SalesPage() {
         paymentMethod: "cash",
         amount,
         referenceNumber: "",
+        chequeDate: "",
         notes: "",
       },
     ]);
@@ -2274,6 +2289,7 @@ export default function SalesPage() {
             paymentMethod: "cash",
             amount: "",
             referenceNumber: "",
+            chequeDate: "",
             notes: "",
           },
         ];
@@ -2321,6 +2337,7 @@ export default function SalesPage() {
                 "cash",
               amount: "",
               referenceNumber: "",
+              chequeDate: "",
               notes: "",
             },
           ];
@@ -4290,6 +4307,7 @@ export default function SalesPage() {
                                     calculatedCustomerPayable
                                       .toFixed(2),
                                   referenceNumber: "",
+                                  chequeDate: "",
                                   notes: "",
                                 },
                               ]);
@@ -4492,7 +4510,27 @@ export default function SalesPage() {
                                   />
                                 </label>
 
-                                <label>
+                                                                {payment.paymentMethod === "cheque" ? (
+                                  <label>
+                                    Cheque Date
+                                    <input
+                                      type="date"
+                                      required
+                                      value={payment.chequeDate}
+                                      onChange={(event) =>
+                                        updateInitialPaymentRow(
+                                          payment.id,
+                                          {
+                                            chequeDate:
+                                              event.target.value,
+                                          },
+                                        )
+                                      }
+                                    />
+                                  </label>
+                                ) : null}
+
+<label>
                                   Notes
 
                                   <input
@@ -5155,6 +5193,7 @@ export default function SalesPage() {
                                             .balance_amount,
                                         referenceNumber:
                                           "",
+                                        chequeDate: "",
                                         notes:
                                           "",
                                       },
@@ -5365,7 +5404,27 @@ export default function SalesPage() {
                                       />
                                     </label>
 
-                                    <label>
+                                                                        {payment.paymentMethod === "cheque" ? (
+                                      <label>
+                                        Cheque Date
+                                        <input
+                                          type="date"
+                                          required
+                                          value={payment.chequeDate}
+                                          onChange={(event) =>
+                                            updateInitialPaymentRow(
+                                              payment.id,
+                                              {
+                                                chequeDate:
+                                                  event.target.value,
+                                              },
+                                            )
+                                          }
+                                        />
+                                      </label>
+                                    ) : null}
+
+<label>
                                       Notes
 
                                       <input

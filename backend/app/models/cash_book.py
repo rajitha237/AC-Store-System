@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Date,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -30,6 +31,11 @@ class ManualCashBookEntry(Base):
         CheckConstraint(
             "amount > 0",
             name="ck_manual_cash_book_entries_amount_positive",
+        ),
+        CheckConstraint(
+            "cheque_status IS NULL OR "
+            "cheque_status IN ('pending', 'cleared')",
+            name="ck_manual_cash_book_entries_cheque_status",
         ),
         Index(
             "ix_manual_cash_book_entries_company_entry_date",
@@ -112,6 +118,33 @@ class ManualCashBookEntry(Base):
 
     reference_number: Mapped[str | None] = mapped_column(
         String(100),
+        nullable=True,
+        index=True,
+    )
+
+    cheque_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        index=True,
+    )
+
+    cheque_status: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+    )
+
+    cheque_cleared_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    cheque_cleared_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "users.id",
+            ondelete="RESTRICT",
+        ),
         nullable=True,
         index=True,
     )

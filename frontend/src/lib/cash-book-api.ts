@@ -9,6 +9,8 @@ import type {
   ManualCashBookEntry,
   ManualCashBookEntryCreate,
   ManualCashBookEntryReverseRequest,
+  ManualCashBookEntryUpdate,
+  ManualChequeClearRequest,
 } from "@/types/cash-book";
 
 
@@ -80,6 +82,46 @@ export async function createManualCashBookEntry(
     await api.post<ManualCashBookEntry>(
       "/cash-book/manual",
       payload,
+    );
+
+  return response.data;
+}
+
+
+export async function updateManualCashBookEntry(
+  entryId: number,
+  payload: ManualCashBookEntryUpdate,
+): Promise<ManualCashBookEntry> {
+  const response =
+    await api.patch<ManualCashBookEntry>(
+      `/cash-book/manual/${entryId}`,
+      payload,
+    );
+
+  return response.data;
+}
+
+
+export async function confirmManualCashBookCheque(
+  entryId: number,
+  payload: ManualChequeClearRequest = {},
+): Promise<ManualCashBookEntry> {
+  const response =
+    await api.post<ManualCashBookEntry>(
+      `/cash-book/manual/${entryId}/confirm-cheque`,
+      payload,
+    );
+
+  return response.data;
+}
+
+
+export async function deleteManualCashBookEntry(
+  entryId: number,
+): Promise<ManualCashBookEntry> {
+  const response =
+    await api.delete<ManualCashBookEntry>(
+      `/cash-book/manual/${entryId}`,
     );
 
   return response.data;

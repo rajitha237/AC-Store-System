@@ -14,6 +14,7 @@ from app.models import (
     InstallmentPlan,
     InstallmentPlanStatus,
     InvoiceStatus,
+    PaymentMethod,
     PaymentStatus,
     SalesInvoice,
     User,
@@ -221,6 +222,7 @@ async def build_payment_detail(
         payment_date=payment.payment_date,
         amount=payment.amount,
         payment_method=payment.payment_method,
+        cheque_date=payment.cheque_date,
         reference_number=(
             payment.reference_number
         ),
@@ -331,6 +333,16 @@ async def receive_invoice_payment(
         )
     )
 
+    if (
+        payload.payment_method
+        == PaymentMethod.CHEQUE
+        and payload.cheque_date is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Cheque date is required",
+        )
+
     payment = CustomerPayment(
         company_id=invoice.company_id,
         branch_id=invoice.branch_id,
@@ -344,6 +356,7 @@ async def receive_invoice_payment(
         reference_number=(
             payload.reference_number
         ),
+        cheque_date=payload.cheque_date,
         notes=payload.notes,
         is_reversed=False,
         created_by_id=current_user.id,

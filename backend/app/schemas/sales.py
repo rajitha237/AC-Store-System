@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import date, datetime, date
 from decimal import Decimal
 
 from pydantic import (
@@ -251,6 +251,8 @@ class InitialPaymentCreate(BaseModel):
         max_length=150,
     )
 
+    cheque_date: date | None = None
+
     notes: str | None = None
 
     @field_validator(
@@ -358,6 +360,7 @@ class CustomerPaymentResponse(BaseModel):
     payment_method: str
 
     reference_number: str | None
+    cheque_date: date | None
     notes: str | None
 
     is_reversed: bool
@@ -460,6 +463,8 @@ class PaymentCreate(BaseModel):
         default=None,
         max_length=150,
     )
+
+    cheque_date: date | None = None
 
     notes: str | None = None
 

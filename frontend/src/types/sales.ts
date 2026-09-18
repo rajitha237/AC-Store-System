@@ -59,6 +59,7 @@ export type InitialPaymentCreate = {
   amount: string;
   payment_method: PaymentMethod;
   reference_number?: string | null;
+  cheque_date?: string | null;
   notes?: string | null;
 };
 

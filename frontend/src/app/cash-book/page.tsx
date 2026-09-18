@@ -34,9 +34,12 @@ import type {
 } from "@/types/auth";
 
 import {
+  confirmManualCashBookCheque,
   createManualCashBookEntry,
+  deleteManualCashBookEntry,
   getCashBook,
   reverseManualCashBookEntry,
+  updateManualCashBookEntry,
 } from "@/lib/cash-book-api";
 
 import type {
@@ -279,6 +282,28 @@ export default function CashBookPage() {
     manualSaving,
     setManualSaving,
   ] = useState(false);
+
+  const [
+    manualEntryDate,
+    setManualEntryDate,
+  ] = useState("");
+
+  const [
+    manualChequeDate,
+    setManualChequeDate,
+  ] = useState("");
+
+  const [
+    manualEditTarget,
+    setManualEditTarget,
+  ] = useState<CashBookTransaction | null>(
+    null,
+  );
+
+  const [
+    lifecycleSavingId,
+    setLifecycleSavingId,
+  ] = useState<number | null>(null);
 
   const pageSize = 50;
 
@@ -539,23 +564,32 @@ export default function CashBookPage() {
   function openManualEntry(
     entryType: "cash_in" | "cash_out",
   ) {
-    setManualEntryType(
-      entryType,
-    );
-
+    setManualEntryType(entryType);
     setManualAmount("");
     setManualPaymentMethod("cash");
     setManualCategory("");
     setManualDescription("");
     setManualReference("");
     setManualNotes("");
+
+    const now = new Date();
+
+    const localToday = [
+      now.getFullYear(),
+      String(
+        now.getMonth() + 1,
+      ).padStart(2, "0"),
+      String(
+        now.getDate(),
+      ).padStart(2, "0"),
+    ].join("-");
+
+    setManualEntryDate(localToday);
+    setManualChequeDate("");
+    setManualEditTarget(null);
     setError("");
-
-    setManualEntryOpen(
-      true,
-    );
+    setManualEntryOpen(true);
   }
-
 
   async function submitManualEntry(
     event: React.FormEvent<HTMLFormElement>,
@@ -566,21 +600,51 @@ export default function CashBookPage() {
       return;
     }
 
-    const amount =
-      Number(
-        manualAmount,
-      );
+    const amount = Number(manualAmount);
 
     if (
-      !Number.isFinite(
-        amount,
-      )
+      !Number.isFinite(amount)
       || amount <= 0
     ) {
       setError(
         "Enter a valid amount greater than zero.",
       );
+      return;
+    }
 
+    if (!manualEntryDate) {
+      setError(
+        "Select the transaction date.",
+      );
+      return;
+    }
+
+    const now = new Date();
+
+    const localToday = [
+      now.getFullYear(),
+      String(
+        now.getMonth() + 1,
+      ).padStart(2, "0"),
+      String(
+        now.getDate(),
+      ).padStart(2, "0"),
+    ].join("-");
+
+    if (manualEntryDate > localToday) {
+      setError(
+        "Transaction date cannot be in the future.",
+      );
+      return;
+    }
+
+    if (
+      manualPaymentMethod === "cheque"
+      && !manualChequeDate
+    ) {
+      setError(
+        "Select the cheque date.",
+      );
       return;
     }
 
@@ -590,11 +654,11 @@ export default function CashBookPage() {
     const description =
       manualDescription.trim();
 
-    if (!category) {
-      setError(
-        "Enter a category.",
-      );
+    const reference =
+      manualReference.trim();
 
+    if (!category) {
+      setError("Enter a category.");
       return;
     }
 
@@ -602,15 +666,11 @@ export default function CashBookPage() {
       setError(
         "Category must be 100 characters or less.",
       );
-
       return;
     }
 
     if (!description) {
-      setError(
-        "Enter a description.",
-      );
-
+      setError("Enter a description.");
       return;
     }
 
@@ -618,67 +678,188 @@ export default function CashBookPage() {
       setError(
         "Description must be 255 characters or less.",
       );
-
       return;
     }
-
-    const reference =
-      manualReference.trim();
 
     if (reference.length > 100) {
       setError(
         "Reference must be 100 characters or less.",
       );
-
       return;
     }
 
-    setManualSaving(
-      true,
-    );
+    const payload = {
+      entry_type: manualEntryType,
+      entry_date: manualEntryDate,
+      amount: amount.toFixed(2),
+      payment_method:
+        manualPaymentMethod,
+      category,
+      description,
+      reference_number:
+        reference || null,
+      cheque_date:
+        manualPaymentMethod === "cheque"
+          ? manualChequeDate
+          : null,
+      notes:
+        manualNotes.trim() || null,
+    };
 
+    setManualSaving(true);
     setError("");
 
     try {
-      await createManualCashBookEntry({
-        entry_type:
-          manualEntryType,
-        amount:
-          amount.toFixed(2),
-        payment_method:
-          manualPaymentMethod,
-        category,
-        description,
-        reference_number:
-          reference || null,
-        notes:
-          manualNotes.trim()
-            || null,
-      });
+      if (manualEditTarget) {
+        await updateManualCashBookEntry(
+          manualEditTarget.source_id,
+          payload,
+        );
+      } else {
+        await createManualCashBookEntry(
+          payload,
+        );
+      }
 
-      setManualEntryOpen(
-        false,
-      );
-
+      setManualEntryOpen(false);
+      setManualEditTarget(null);
       setPage(1);
 
       await loadCashBook();
-    } catch (
-      requestError
-    ) {
+    } catch (requestError) {
       setError(
-        errorMessage(
-          requestError,
-        ),
+        errorMessage(requestError),
       );
     } finally {
-      setManualSaving(
-        false,
-      );
+      setManualSaving(false);
     }
   }
 
+  function openEditManualEntry(
+    transaction: CashBookTransaction,
+  ) {
+    if (
+      transaction.source_type
+        !== "manual_cash_book"
+      || !transaction.can_edit
+    ) {
+      return;
+    }
 
+    setManualEditTarget(transaction);
+    setManualEntryType(
+      transaction.direction,
+    );
+    setManualEntryDate(
+      transaction.transaction_date.slice(
+        0,
+        10,
+      ),
+    );
+    setManualAmount(transaction.amount);
+    setManualPaymentMethod(
+      transaction.payment_method,
+    );
+    setManualCategory(
+      transaction.category,
+    );
+    setManualDescription(
+      transaction.description,
+    );
+    setManualReference(
+      transaction.reference_number || "",
+    );
+    setManualChequeDate(
+      transaction.cheque_date || "",
+    );
+    setManualNotes(
+      transaction.notes || "",
+    );
+
+    setError("");
+    setManualEntryOpen(true);
+  }
+
+  async function confirmIssuedCheque(
+    transaction: CashBookTransaction,
+  ) {
+    if (
+      !transaction.can_confirm_cheque
+      || lifecycleSavingId !== null
+    ) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Has this issued cheque actually cleared? "
+        + "Only confirm after the cheque was paid.",
+      )
+    ) {
+      return;
+    }
+
+    setLifecycleSavingId(
+      transaction.source_id,
+    );
+    setError("");
+
+    try {
+      await confirmManualCashBookCheque(
+        transaction.source_id,
+        {},
+      );
+
+      await loadCashBook();
+    } catch (requestError) {
+      setError(
+        errorMessage(requestError),
+      );
+    } finally {
+      setLifecycleSavingId(null);
+    }
+  }
+
+  async function deleteManualEntry(
+    transaction: CashBookTransaction,
+  ) {
+    if (
+      transaction.source_type
+        !== "manual_cash_book"
+      || !transaction.can_delete
+      || lifecycleSavingId !== null
+    ) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Delete this manual Cash Book entry? "
+        + "Its audit history will be preserved.",
+      )
+    ) {
+      return;
+    }
+
+    setLifecycleSavingId(
+      transaction.source_id,
+    );
+    setError("");
+
+    try {
+      await deleteManualCashBookEntry(
+        transaction.source_id,
+      );
+
+      await loadCashBook();
+    } catch (requestError) {
+      setError(
+        errorMessage(requestError),
+      );
+    } finally {
+      setLifecycleSavingId(null);
+    }
+  }
 
   if (
     authLoading
@@ -1311,32 +1492,86 @@ export default function CashBookPage() {
                           }
                         >
                           {transaction
-                            .source_type
-                            === "manual_cash_book"
-                            ? (
-                              <button
-                                type="button"
-                                className={
-                                  styles.reverseButton
-                                }
-                                onClick={() =>
-                                  openReverseDialog(
-                                    transaction,
-                                  )
-                                }
-                              >
-                                Reverse
-                              </button>
-                            )
-                            : (
-                              <span
-                                className={
-                                  styles.noAction
-                                }
-                              >
-                                —
-                              </span>
-                            )}
+                              .source_type
+                              === "manual_cash_book"
+                              ? (
+                                <div
+                                  className={
+                                    styles.rowActions
+                                  }
+                                >
+                                  {transaction
+                                    .can_confirm_cheque
+                                    ? (
+                                      <button
+                                        type="button"
+                                        className={
+                                          styles.confirmChequeButton
+                                        }
+                                        disabled={
+                                          lifecycleSavingId
+                                            === transaction.source_id
+                                        }
+                                        onClick={() =>
+                                          void confirmIssuedCheque(
+                                            transaction,
+                                          )
+                                        }
+                                      >
+                                        Confirm Paid
+                                      </button>
+                                    )
+                                    : null}
+
+                                  <button
+                                    type="button"
+                                    className={
+                                      styles.editButton
+                                    }
+                                    disabled={
+                                      !transaction.can_edit
+                                      || lifecycleSavingId
+                                        === transaction.source_id
+                                    }
+                                    onClick={() =>
+                                      openEditManualEntry(
+                                        transaction,
+                                      )
+                                    }
+                                  >
+                                    Edit
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={
+                                      styles.deleteButton
+                                    }
+                                    disabled={
+                                      !transaction.can_delete
+                                      || lifecycleSavingId
+                                        === transaction.source_id
+                                    }
+                                    onClick={() =>
+                                      void deleteManualEntry(
+                                        transaction,
+                                      )
+                                    }
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              )
+                              : (
+                                <span
+                                  className={
+                                    styles.noAction
+                                  }
+                                  title="Manage this record from its original payment."
+                                >
+                                  Source managed
+                                </span>
+                              )}
                         </td>
                       </tr>
                     ),
@@ -1470,10 +1705,14 @@ export default function CashBookPage() {
                 <h2
                   id="manual-cash-entry-title"
                 >
-                  {manualEntryType
-                    === "cash_in"
-                    ? "Add Cash In"
-                    : "Add Cash Out"}
+                  {manualEditTarget
+                      ? "Edit Cash Book Entry"
+                      : (
+                        manualEntryType
+                          === "cash_in"
+                          ? "Add Cash In"
+                          : "Add Cash Out"
+                      )}
                 </h2>
               </div>
 
@@ -1556,6 +1795,28 @@ export default function CashBookPage() {
                 }
               >
                 <label>
+                    Transaction Date *
+
+                    <input
+                      required
+                      type="date"
+                      value={
+                        manualEntryDate
+                      }
+                      disabled={
+                        manualSaving
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setManualEntryDate(
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </label>
+
+                  <label>
                   Amount *
 
                   <input
@@ -1583,50 +1844,75 @@ export default function CashBookPage() {
                 </label>
 
                 <label>
-                  Payment Method *
+                    Payment Method *
 
-                  <select
-                    required
-                    value={
-                      manualPaymentMethod
-                    }
-                    disabled={
-                      manualSaving
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setManualPaymentMethod(
-                        event.target
-                          .value,
-                      )
-                    }
-                  >
-                    <option
-                      value="cash"
-                    >
-                      Cash
-                    </option>
+                    <select
+                      required
+                      value={
+                        manualPaymentMethod
+                      }
+                      disabled={
+                        manualSaving
+                      }
+                      onChange={(
+                        event
+                      ) => {
+                        const method =
+                          event.target.value;
 
-                    <option
-                      value="card"
-                    >
-                      Card
-                    </option>
+                        setManualPaymentMethod(
+                          method,
+                        );
 
-                    <option
-                      value="bank_transfer"
+                        if (
+                          method !== "cheque"
+                        ) {
+                          setManualChequeDate("");
+                        }
+                      }}
                     >
-                      Bank Transfer
-                    </option>
+                      <option value="cash">
+                        Cash
+                      </option>
 
-                    <option
-                      value="cheque"
-                    >
-                      Cheque
-                    </option>
-                  </select>
-                </label>
+                      <option value="card">
+                        Card
+                      </option>
+
+                      <option value="bank_transfer">
+                        Bank Transfer
+                      </option>
+
+                      <option value="cheque">
+                        Cheque
+                      </option>
+                    </select>
+                  </label>
+
+                  {manualPaymentMethod
+                    === "cheque" ? (
+                    <label>
+                      Cheque Date *
+
+                      <input
+                        required
+                        type="date"
+                        value={
+                          manualChequeDate
+                        }
+                        disabled={
+                          manualSaving
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setManualChequeDate(
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </label>
+                  ) : null}
 
                 <label>
                   Category *
@@ -1766,13 +2052,17 @@ export default function CashBookPage() {
                   }
                 >
                   {manualSaving
-                    ? "Saving..."
-                    : (
-                      manualEntryType
-                        === "cash_in"
-                        ? "Save Cash In"
-                        : "Save Cash Out"
-                    )}
+                      ? "Saving..."
+                      : (
+                        manualEditTarget
+                          ? "Save Changes"
+                          : (
+                            manualEntryType
+                              === "cash_in"
+                              ? "Save Cash In"
+                              : "Save Cash Out"
+                          )
+                      )}
                 </button>
               </div>
             </form>

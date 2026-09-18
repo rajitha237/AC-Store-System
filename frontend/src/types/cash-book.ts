@@ -26,9 +26,20 @@ export type CashBookTransaction = {
   category: string;
   description: string;
 
+  reference_number: string | null;
+  notes: string | null;
+
   branch_id: number | null;
 
   status: string;
+
+  cheque_date: string | null;
+  cheque_status: string | null;
+  cheque_cleared_at: string | null;
+
+  can_edit: boolean;
+  can_delete: boolean;
+  can_confirm_cheque: boolean;
 
   running_balance: string | null;
 };
@@ -47,11 +58,31 @@ export type CashBookListResponse = {
 
 export type ManualCashBookEntryCreate = {
   entry_type: CashBookEntryType;
+  entry_date?: string | null;
   amount: string;
   payment_method?: string;
   category: string;
   description: string;
   reference_number?: string | null;
+  cheque_date?: string | null;
+  notes?: string | null;
+};
+
+
+export type ManualCashBookEntryUpdate = {
+  entry_type: CashBookEntryType;
+  entry_date: string;
+  amount: string;
+  payment_method?: string;
+  category: string;
+  description: string;
+  reference_number?: string | null;
+  cheque_date?: string | null;
+  notes?: string | null;
+};
+
+
+export type ManualChequeClearRequest = {
   notes?: string | null;
 };
 
@@ -78,6 +109,12 @@ export type ManualCashBookEntry = {
   description: string;
 
   reference_number: string | null;
+
+  cheque_date: string | null;
+  cheque_status: string | null;
+  cheque_cleared_at: string | null;
+  cheque_cleared_by_id: number | null;
+
   notes: string | null;
 
   created_by_id: number;

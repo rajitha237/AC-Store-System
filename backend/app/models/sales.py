@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import date, datetime, date
 from decimal import Decimal
 from enum import Enum
 
@@ -546,6 +546,12 @@ class CustomerPayment(Base):
 
     reference_number: Mapped[str | None] = mapped_column(
         String(150),
+        nullable=True,
+        index=True,
+    )
+
+    cheque_date: Mapped[date | None] = mapped_column(
+        Date,
         nullable=True,
         index=True,
     )
