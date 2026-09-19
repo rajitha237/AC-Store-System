@@ -13,6 +13,7 @@ from app.models import (
     Customer,
     Company,
     CustomerPayment,
+    InstallmentPaymentAllocation,
     InstallmentPlan,
     InstallmentPlanStatus,
     InvoiceStatus,
@@ -29,6 +30,7 @@ from app.schemas.payment import (
     PaymentUpdateRequest,
     PaymentReverseRequest,
     PaymentTransactionResponse,
+    InstallmentPaymentMetadataUpdateResponse,
 )
 
 
@@ -555,12 +557,328 @@ async def receive_invoice_payment(
 
 
 
+async def update_installment_payment_metadata(
+    session: AsyncSession,
+    payment_id: int,
+    payload: PaymentUpdateRequest,
+    current_user: User,
+) -> InstallmentPaymentMetadataUpdateResponse:
+    payment_result = await session.execute(
+        select(CustomerPayment)
+        .where(
+            CustomerPayment.id == payment_id
+        )
+        .with_for_update()
+    )
+    payment = payment_result.scalar_one_or_none()
+
+    if payment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer payment not found",
+        )
+
+    if payment.is_reversed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Reversed payments cannot "
+                "be edited"
+            ),
+        )
+
+    allocation_result = await session.execute(
+        select(InstallmentPaymentAllocation)
+        .where(
+            InstallmentPaymentAllocation.payment_id
+            == payment.id,
+            InstallmentPaymentAllocation.is_reversed
+            .is_(False),
+        )
+        .order_by(
+            InstallmentPaymentAllocation.id
+        )
+    )
+    allocations = (
+        allocation_result.scalars().all()
+    )
+
+    if not allocations:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This payment is not linked to "
+                "an active installment allocation"
+            ),
+        )
+
+    plan_ids = {
+        allocation.plan_id
+        for allocation in allocations
+    }
+
+    if len(plan_ids) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Installment payment has "
+                "inconsistent allocations"
+            ),
+        )
+
+    plan_id = next(iter(plan_ids))
+
+    plan_result = await session.execute(
+        select(InstallmentPlan)
+        .where(
+            InstallmentPlan.id == plan_id
+        )
+        .with_for_update()
+    )
+    plan = plan_result.scalar_one_or_none()
+
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Installment plan could not "
+                "be resolved"
+            ),
+        )
+
+    if (
+        plan.customer_id != payment.customer_id
+        or plan.company_id != payment.company_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Installment payment ownership "
+                "is inconsistent"
+            ),
+        )
+
+    customer = await get_customer_or_404(
+        session,
+        payment.customer_id,
+    )
+
+    company = await session.get(
+        Company,
+        payment.company_id,
+    )
+
+    if company is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Payment company could not "
+                "be resolved"
+            ),
+        )
+
+    business_today = _business_today(
+        company.timezone
+    )
+
+    if payload.payment_date > business_today:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Payment date cannot be "
+                "in the future"
+            ),
+        )
+
+    old_amount = money(payment.amount)
+    new_amount = money(payload.amount)
+
+    if new_amount != old_amount:
+        later_result = await session.execute(
+            select(
+                InstallmentPaymentAllocation.payment_id
+            )
+            .where(
+                InstallmentPaymentAllocation.plan_id
+                == plan.id,
+                InstallmentPaymentAllocation.is_reversed
+                .is_(False),
+                InstallmentPaymentAllocation.payment_id
+                != payment.id,
+                InstallmentPaymentAllocation.id
+                > allocations[-1].id,
+            )
+            .limit(1)
+        )
+
+        has_later_payment = (
+            later_result.scalar_one_or_none()
+            is not None
+        )
+
+        if has_later_payment:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Amount cannot be changed for "
+                    "a historical installment payment "
+                    "because a later payment has already "
+                    "been allocated. Date, method, "
+                    "reference, cheque date and notes "
+                    "can still be edited."
+                ),
+            )
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Installment payment amount changes "
+                "require allocation recalculation. "
+                "Date, method, reference, cheque date "
+                "and notes can still be edited."
+            ),
+        )
+
+    payment_before_snapshot = (
+        payment_audit_snapshot(payment)
+    )
+    customer_before_snapshot = (
+        customer_payment_audit_snapshot(
+            customer
+        )
+    )
+
+    try:
+        payment.payment_method = (
+            payload.payment_method.value
+        )
+        payment.reference_number = (
+            payload.reference_number
+        )
+        payment.cheque_date = (
+            payload.cheque_date
+            if payload.payment_method
+            == PaymentMethod.CHEQUE
+            else None
+        )
+        payment.notes = payload.notes
+        payment.payment_date = (
+            _business_day_start(
+                payload.payment_date,
+                company.timezone,
+            )
+        )
+
+        await create_audit_log(
+            session=session,
+            user_id=current_user.id,
+            action=(
+                "installment_payment.metadata_updated"
+            ),
+            module="payments",
+            entity_type="customer_payment",
+            entity_id=payment.id,
+            entity_reference=(
+                payment.receipt_number
+            ),
+            description=(
+                f"Installment payment "
+                f"{payment.receipt_number} "
+                "metadata updated"
+            ),
+            before_data={
+                "payment":
+                    payment_before_snapshot,
+                "customer":
+                    customer_before_snapshot,
+            },
+            after_data={
+                "payment":
+                    payment_audit_snapshot(
+                        payment
+                    ),
+                "customer":
+                    customer_payment_audit_snapshot(
+                        customer
+                    ),
+            },
+            metadata={
+                "installment_plan_id":
+                    plan.id,
+                "agreement_number":
+                    plan.agreement_number,
+                "amount_changed":
+                    False,
+            },
+        )
+
+        await session.commit()
+        await session.refresh(payment)
+        await session.refresh(customer)
+
+    except Exception:
+        await session.rollback()
+        raise
+
+    detail = await build_payment_detail(
+        session,
+        payment,
+    )
+
+    return InstallmentPaymentMetadataUpdateResponse(
+        message=(
+            "Installment payment updated "
+            "successfully"
+        ),
+        payment=detail,
+        installment_plan_id=plan.id,
+        agreement_number=(
+            plan.agreement_number
+        ),
+        customer_id=customer.id,
+        customer_balance=(
+            customer.current_balance
+        ),
+    )
+
+
 async def update_invoice_payment(
     session: AsyncSession,
     payment_id: int,
     payload: PaymentUpdateRequest,
     current_user: User,
-) -> PaymentTransactionResponse:
+) -> (
+    PaymentTransactionResponse
+    | InstallmentPaymentMetadataUpdateResponse
+):
+    allocation_probe = await session.execute(
+        select(
+            InstallmentPaymentAllocation.id
+        )
+        .where(
+            InstallmentPaymentAllocation.payment_id
+            == payment_id,
+            InstallmentPaymentAllocation.is_reversed
+            .is_(False),
+        )
+        .limit(1)
+    )
+
+    if (
+        allocation_probe.scalar_one_or_none()
+        is not None
+    ):
+        return await (
+            update_installment_payment_metadata(
+                session=session,
+                payment_id=payment_id,
+                payload=payload,
+                current_user=current_user,
+            )
+        )
+
     payment = await get_payment_or_404(
         session,
         payment_id,

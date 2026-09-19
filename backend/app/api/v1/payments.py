@@ -18,6 +18,7 @@ from app.schemas.payment import (
     PaymentReceiveRequest,
     PaymentReverseRequest,
     PaymentTransactionResponse,
+    InstallmentPaymentMetadataUpdateResponse,
     PaymentUpdateRequest,
 )
 from app.services.payment_service import (
@@ -147,14 +148,20 @@ async def receive_payment(
 
 @router.patch(
     "/{payment_id}",
-    response_model=PaymentTransactionResponse,
+    response_model=(
+        PaymentTransactionResponse
+        | InstallmentPaymentMetadataUpdateResponse
+    ),
 )
 async def update_payment(
     payment_id: int,
     payload: PaymentUpdateRequest,
     session: DatabaseSession,
     current_user: CanReceivePayments,
-) -> PaymentTransactionResponse:
+) -> (
+    PaymentTransactionResponse
+    | InstallmentPaymentMetadataUpdateResponse
+):
     return await update_invoice_payment(
         session=session,
         payment_id=payment_id,

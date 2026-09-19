@@ -176,6 +176,15 @@ class PaymentListResponse(BaseModel):
     total_pages: int
 
 
+class InstallmentPaymentMetadataUpdateResponse(BaseModel):
+    message: str
+    payment: PaymentDetailResponse
+    installment_plan_id: int
+    agreement_number: str | None
+    customer_id: int
+    customer_balance: Decimal
+
+
 class PaymentTransactionResponse(BaseModel):
     message: str
 
