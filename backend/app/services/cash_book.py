@@ -580,21 +580,15 @@ async def clear_manual_cash_book_cheque(
 ) -> ManualCashBookEntry:
     from fastapi import HTTPException, status
 
-    entry = await _locked_manual_cash_book_entry(
-        session,
-        entry_id=entry_id,
-        company_id=current_user.company_id,
-    )
-
     company = await get_active_cash_book_company(
         session
     )
 
-    if company.id != current_user.company_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cash book entry was not found",
-        )
+    entry = await _locked_manual_cash_book_entry(
+        session,
+        entry_id=entry_id,
+        company_id=company.id,
+    )
 
     if entry.reversed_at is not None:
         raise HTTPException(
