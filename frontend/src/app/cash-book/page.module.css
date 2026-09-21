@@ -1055,3 +1055,134 @@
   cursor: not-allowed;
   opacity: 0.5;
 }
+
+/* Cash Book payment-method breakdown */
+
+.breakdownSection {
+  overflow: hidden;
+  border: 1px solid
+    rgba(127, 127, 127, 0.2);
+  border-radius: 16px;
+  background:
+    rgba(127, 127, 127, 0.025);
+}
+
+.breakdownHeader {
+  padding: 20px;
+  border-bottom: 1px solid
+    rgba(127, 127, 127, 0.16);
+}
+
+.breakdownHeader p {
+  margin: 5px 0 0;
+  font-size: 0.85rem;
+  opacity: 0.65;
+}
+
+.methodGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px;
+}
+
+.methodCard {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid
+    rgba(127, 127, 127, 0.16);
+  border-radius: 14px;
+  background:
+    rgba(127, 127, 127, 0.035);
+}
+
+.methodCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 14px;
+  border-bottom: 1px solid
+    rgba(127, 127, 127, 0.12);
+}
+
+.methodCardHeader span {
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.methodCardHeader strong {
+  overflow: hidden;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.methodMetrics {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+}
+
+.methodMetrics > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 15px 16px;
+}
+
+.methodMetrics > div + div {
+  border-left: 1px solid
+    rgba(127, 127, 127, 0.12);
+}
+
+.methodMetrics span,
+.methodNet span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.58;
+}
+
+.methodMetrics strong,
+.methodNet strong {
+  overflow: hidden;
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.methodNet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  border-top: 1px solid
+    rgba(127, 127, 127, 0.12);
+  background:
+    rgba(127, 127, 127, 0.035);
+}
+
+@media (
+  max-width: 1200px
+) {
+  .methodGrid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (
+  max-width: 700px
+) {
+  .methodGrid {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+
+  .breakdownHeader {
+    padding: 18px;
+  }
+}

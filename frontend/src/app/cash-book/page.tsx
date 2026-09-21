@@ -1308,174 +1308,161 @@ export default function CashBookPage() {
 
         <section
           className={
-            styles.transactionsCard
+            styles.breakdownSection
           }
           aria-label="Payment method breakdown"
         >
           <div
             className={
-              styles.cardHeader
+              styles.breakdownHeader
             }
           >
-            <div>
-              <div
-                className={
-                  styles.cardTitle
-                }
-              >
-                <WalletCards
-                  size={19}
-                  aria-hidden="true"
-                />
+            <div
+              className={
+                styles.cardTitle
+              }
+            >
+              <WalletCards
+                size={19}
+                aria-hidden="true"
+              />
 
-                <h2>
-                  Payment Method Breakdown
-                </h2>
-              </div>
-
-              <p>
-                Money movement for the
-                selected date range,
-                separated by payment method.
-              </p>
+              <h2>
+                Payment Method Breakdown
+              </h2>
             </div>
+
+            <p>
+              Money movement for the
+              selected date range,
+              separated by payment method.
+            </p>
           </div>
 
           <div
-            style={{
-              overflowX: "auto",
-            }}
+            className={
+              styles.methodGrid
+            }
           >
-            <table>
-              <thead>
-                <tr>
-                  <th>Method</th>
+            {[
+              {
+                label: "Cash",
+                incoming:
+                  summary
+                    ?.cash_method_in,
+                outgoing:
+                  summary
+                    ?.cash_method_out,
+              },
+              {
+                label:
+                  "Bank Transfer",
+                incoming:
+                  summary
+                    ?.bank_transfer_in,
+                outgoing:
+                  summary
+                    ?.bank_transfer_out,
+              },
+              {
+                label: "Cheque",
+                incoming:
+                  summary?.cheque_in,
+                outgoing:
+                  summary?.cheque_out,
+              },
+              {
+                label: "Card",
+                incoming:
+                  summary?.card_in,
+                outgoing:
+                  summary?.card_out,
+              },
+            ].map((item) => {
+              const incoming =
+                Number(
+                  item.incoming
+                  ?? 0,
+                );
 
-                  <th
+              const outgoing =
+                Number(
+                  item.outgoing
+                  ?? 0,
+                );
+
+              const net =
+                incoming - outgoing;
+
+              return (
+                <article
+                  key={
+                    item.label
+                  }
+                  className={
+                    styles.methodCard
+                  }
+                >
+                  <div
                     className={
-                      styles.numberCell
+                      styles.methodCardHeader
                     }
                   >
-                    Money In
-                  </th>
+                    <span>
+                      {item.label}
+                    </span>
 
-                  <th
+                    <strong>
+                      {money(net)}
+                    </strong>
+                  </div>
+
+                  <div
                     className={
-                      styles.numberCell
+                      styles.methodMetrics
                     }
                   >
-                    Money Out
-                  </th>
+                    <div>
+                      <span>
+                        Money In
+                      </span>
 
-                  <th
-                    className={
-                      styles.numberCell
-                    }
-                  >
-                    Net
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {[
-                  {
-                    label: "Cash",
-                    incoming:
-                      summary
-                        ?.cash_method_in,
-                    outgoing:
-                      summary
-                        ?.cash_method_out,
-                  },
-                  {
-                    label:
-                      "Bank Transfer",
-                    incoming:
-                      summary
-                        ?.bank_transfer_in,
-                    outgoing:
-                      summary
-                        ?.bank_transfer_out,
-                  },
-                  {
-                    label: "Card",
-                    incoming:
-                      summary?.card_in,
-                    outgoing:
-                      summary?.card_out,
-                  },
-                  {
-                    label: "Cheque",
-                    incoming:
-                      summary?.cheque_in,
-                    outgoing:
-                      summary?.cheque_out,
-                  },
-                ].map((item) => {
-                  const incoming =
-                    Number(
-                      item.incoming
-                      ?? 0,
-                    );
-
-                  const outgoing =
-                    Number(
-                      item.outgoing
-                      ?? 0,
-                    );
-
-                  return (
-                    <tr
-                      key={
-                        item.label
-                      }
-                    >
-                      <td>
-                        <strong>
-                          {
-                            item.label
-                          }
-                        </strong>
-                      </td>
-
-                      <td
-                        className={
-                          styles.numberCell
-                        }
-                      >
+                      <strong>
                         {money(
                           incoming,
                         )}
-                      </td>
+                      </strong>
+                    </div>
 
-                      <td
-                        className={
-                          styles.numberCell
-                        }
-                      >
+                    <div>
+                      <span>
+                        Money Out
+                      </span>
+
+                      <strong>
                         {money(
                           outgoing,
                         )}
-                      </td>
+                      </strong>
+                    </div>
+                  </div>
 
-                      <td
-                        className={
-                          styles.numberCell
-                        }
-                      >
-                        <strong>
-                          {money(
-                            incoming
-                            - outgoing,
-                          )}
-                        </strong>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  <div
+                    className={
+                      styles.methodNet
+                    }
+                  >
+                    <span>
+                      Net movement
+                    </span>
+
+                    <strong>
+                      {money(net)}
+                    </strong>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
 
