@@ -1129,3 +1129,157 @@ async def test_return_credit_refund_audit_chain(
     assert not missing, (
         f"Missing audit actions: {sorted(missing)}"
     )
+
+
+@pytest.mark.asyncio
+async def test_unpaid_invoice_return_can_be_approved_for_credit_note(
+    client,
+    admin_headers,
+    db_session,
+):
+    fixture = await create_confirmed_sale(
+        client,
+        admin_headers,
+        db_session,
+        suffix="410",
+    )
+
+    invoice_id = fixture["invoice"]["id"]
+
+    assert dec(
+        fixture["invoice"]["paid_amount"]
+    ) == Decimal("0.00")
+
+    sales_return = await create_return(
+        client,
+        admin_headers,
+        invoice_id=invoice_id,
+        invoice_item_id=(
+            fixture["invoice_item"]["id"]
+        ),
+        quantity="1.000",
+    )
+
+    inspected = await inspect_return(
+        client,
+        admin_headers,
+        sales_return["id"],
+    )
+
+    assert inspected["status"] in {
+        "inspection",
+        "waiting_approval",
+    }
+
+    approval_response = await client.post(
+        (
+            f"{RETURNS_URL}/"
+            f"{sales_return['id']}/approval"
+        ),
+        headers=admin_headers,
+        json={
+            "approved": True,
+            "resolution": "refund",
+            "approval_notes": (
+                "Approved as invoice credit "
+                "for returned goods"
+            ),
+            "refund_amount": "1200.00",
+        },
+    )
+
+    assert approval_response.status_code == 200, (
+        approval_response.text
+    )
+
+    approved = approval_response.json()
+
+    assert approved["status"] == "approved"
+    assert approved["resolution"] == "refund"
+    assert dec(
+        approved["refund_amount"]
+    ) == Decimal("1200.00")
+
+    create_response = await client.post(
+        CREDIT_URL,
+        headers=admin_headers,
+        json={
+            "return_id": approved["id"],
+            "notes": (
+                "Unpaid invoice return "
+                "credit-note regression test"
+            ),
+        },
+    )
+
+    assert create_response.status_code == 201, (
+        create_response.text
+    )
+
+    credit_note = create_response.json()
+
+    assert dec(
+        credit_note["amount"]
+    ) == Decimal("1200.00")
+
+    approval_response = await client.post(
+        (
+            f"{CREDIT_URL}/"
+            f"{credit_note['id']}/approval"
+        ),
+        headers=admin_headers,
+        json={
+            "notes": (
+                "Approve unpaid invoice "
+                "return credit"
+            ),
+        },
+    )
+
+    assert approval_response.status_code == 200, (
+        approval_response.text
+    )
+
+    post_response = await client.post(
+        (
+            f"{CREDIT_URL}/"
+            f"{credit_note['id']}/post"
+        ),
+        headers=admin_headers,
+    )
+
+    assert post_response.status_code == 200, (
+        post_response.text
+    )
+
+    invoice_response = await client.get(
+        f"/api/v1/sales/invoices/{invoice_id}",
+        headers=admin_headers,
+    )
+
+    assert invoice_response.status_code == 200
+
+    invoice = invoice_response.json()
+
+    assert dec(
+        invoice["credited_amount"]
+    ) == Decimal("1200.00")
+
+    assert dec(
+        invoice["paid_amount"]
+    ) == Decimal("0.00")
+
+    return_response = await client.get(
+        (
+            f"{RETURNS_URL}/"
+            f"{sales_return['id']}"
+        ),
+        headers=admin_headers,
+    )
+
+    assert return_response.status_code == 200
+
+    final_return = return_response.json()
+
+    assert final_return["status"] == "completed"
+    assert final_return["resolution"] == "refund"

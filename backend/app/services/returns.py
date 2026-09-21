@@ -1018,29 +1018,6 @@ async def approve_return(
                 ),
             )
 
-        if (
-            payload.resolution
-            == ReturnResolution.REFUND
-        ):
-            invoice = await get_invoice(
-                session,
-                sales_return.invoice_id,
-            )
-
-            if (
-                payload.refund_amount
-                > Decimal(invoice.paid_amount)
-            ):
-                raise HTTPException(
-                    status_code=(
-                        status.HTTP_422_UNPROCESSABLE_CONTENT
-                    ),
-                    detail=(
-                        "Refund amount cannot exceed "
-                        "the amount paid on the invoice"
-                    ),
-                )
-
         sales_return.status = (
             ReturnStatus.APPROVED.value
         )
