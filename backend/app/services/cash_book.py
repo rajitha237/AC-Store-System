@@ -1369,6 +1369,25 @@ async def list_cash_book(
     cash_in = ZERO
     cash_out = ZERO
 
+    method_totals = {
+        "cash": {
+            "cash_in": ZERO,
+            "cash_out": ZERO,
+        },
+        "bank_transfer": {
+            "cash_in": ZERO,
+            "cash_out": ZERO,
+        },
+        "card": {
+            "cash_in": ZERO,
+            "cash_out": ZERO,
+        },
+        "cheque": {
+            "cash_in": ZERO,
+            "cash_out": ZERO,
+        },
+    }
+
     for transaction in period_transactions:
         signed_amount = _signed_amount(
             transaction
@@ -1384,6 +1403,33 @@ async def list_cash_book(
                 cash_out
                 + abs(signed_amount)
             )
+
+        method = str(
+            transaction.payment_method
+            or ""
+        ).lower()
+
+        if method in method_totals:
+            if signed_amount > ZERO:
+                method_totals[
+                    method
+                ]["cash_in"] = money(
+                    method_totals[
+                        method
+                    ]["cash_in"]
+                    + signed_amount
+                )
+            elif signed_amount < ZERO:
+                method_totals[
+                    method
+                ]["cash_out"] = money(
+                    method_totals[
+                        method
+                    ]["cash_out"]
+                    + abs(
+                        signed_amount
+                    )
+                )
 
         running_balance = money(
             running_balance
@@ -1456,6 +1502,30 @@ async def list_cash_book(
             closing_balance=money(
                 closing_balance
             ),
+            cash_method_in=method_totals[
+                "cash"
+            ]["cash_in"],
+            cash_method_out=method_totals[
+                "cash"
+            ]["cash_out"],
+            bank_transfer_in=method_totals[
+                "bank_transfer"
+            ]["cash_in"],
+            bank_transfer_out=method_totals[
+                "bank_transfer"
+            ]["cash_out"],
+            card_in=method_totals[
+                "card"
+            ]["cash_in"],
+            card_out=method_totals[
+                "card"
+            ]["cash_out"],
+            cheque_in=method_totals[
+                "cheque"
+            ]["cash_in"],
+            cheque_out=method_totals[
+                "cheque"
+            ]["cash_out"],
             transaction_count=total,
         ),
     )

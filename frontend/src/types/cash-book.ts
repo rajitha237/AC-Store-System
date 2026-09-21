@@ -8,6 +8,19 @@ export type CashBookSummary = {
   cash_in: string;
   cash_out: string;
   closing_balance: string;
+
+  cash_method_in: string;
+  cash_method_out: string;
+
+  bank_transfer_in: string;
+  bank_transfer_out: string;
+
+  card_in: string;
+  card_out: string;
+
+  cheque_in: string;
+  cheque_out: string;
+
   transaction_count: number;
 };
 

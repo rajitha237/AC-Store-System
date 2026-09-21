@@ -1053,7 +1053,7 @@ export default function CashBookPage() {
                 )
               }
             >
-              Add Cash In
+              Add Money In
             </button>
 
             <button
@@ -1067,7 +1067,7 @@ export default function CashBookPage() {
                 )
               }
             >
-              Add Cash Out
+              Add Money Out
             </button>
           </div>
 
@@ -1232,7 +1232,7 @@ export default function CashBookPage() {
 
             <div>
               <span>
-                Cash In
+                Money In
               </span>
 
               <strong>
@@ -1262,7 +1262,7 @@ export default function CashBookPage() {
 
             <div>
               <span>
-                Cash Out
+                Money Out
               </span>
 
               <strong>
@@ -1303,6 +1303,180 @@ export default function CashBookPage() {
               </strong>
             </div>
           </article>
+        </section>
+
+
+        <section
+          className={
+            styles.transactionsCard
+          }
+          aria-label="Payment method breakdown"
+        >
+          <div
+            className={
+              styles.cardHeader
+            }
+          >
+            <div>
+              <div
+                className={
+                  styles.cardTitle
+                }
+              >
+                <WalletCards
+                  size={19}
+                  aria-hidden="true"
+                />
+
+                <h2>
+                  Payment Method Breakdown
+                </h2>
+              </div>
+
+              <p>
+                Money movement for the
+                selected date range,
+                separated by payment method.
+              </p>
+            </div>
+          </div>
+
+          <div
+            style={{
+              overflowX: "auto",
+            }}
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>Method</th>
+
+                  <th
+                    className={
+                      styles.numberCell
+                    }
+                  >
+                    Money In
+                  </th>
+
+                  <th
+                    className={
+                      styles.numberCell
+                    }
+                  >
+                    Money Out
+                  </th>
+
+                  <th
+                    className={
+                      styles.numberCell
+                    }
+                  >
+                    Net
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {[
+                  {
+                    label: "Cash",
+                    incoming:
+                      summary
+                        ?.cash_method_in,
+                    outgoing:
+                      summary
+                        ?.cash_method_out,
+                  },
+                  {
+                    label:
+                      "Bank Transfer",
+                    incoming:
+                      summary
+                        ?.bank_transfer_in,
+                    outgoing:
+                      summary
+                        ?.bank_transfer_out,
+                  },
+                  {
+                    label: "Card",
+                    incoming:
+                      summary?.card_in,
+                    outgoing:
+                      summary?.card_out,
+                  },
+                  {
+                    label: "Cheque",
+                    incoming:
+                      summary?.cheque_in,
+                    outgoing:
+                      summary?.cheque_out,
+                  },
+                ].map((item) => {
+                  const incoming =
+                    Number(
+                      item.incoming
+                      ?? 0,
+                    );
+
+                  const outgoing =
+                    Number(
+                      item.outgoing
+                      ?? 0,
+                    );
+
+                  return (
+                    <tr
+                      key={
+                        item.label
+                      }
+                    >
+                      <td>
+                        <strong>
+                          {
+                            item.label
+                          }
+                        </strong>
+                      </td>
+
+                      <td
+                        className={
+                          styles.numberCell
+                        }
+                      >
+                        {money(
+                          incoming,
+                        )}
+                      </td>
+
+                      <td
+                        className={
+                          styles.numberCell
+                        }
+                      >
+                        {money(
+                          outgoing,
+                        )}
+                      </td>
+
+                      <td
+                        className={
+                          styles.numberCell
+                        }
+                      >
+                        <strong>
+                          {money(
+                            incoming
+                            - outgoing,
+                          )}
+                        </strong>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
 
 
@@ -1530,8 +1704,8 @@ export default function CashBookPage() {
                             {transaction
                               .direction
                               === "cash_in"
-                              ? "Cash In"
-                              : "Cash Out"
+                              ? "Money In"
+                              : "Money Out"
                             }
                           </span>
                         </td>
@@ -1834,8 +2008,8 @@ export default function CashBookPage() {
                       : (
                         manualEntryType
                           === "cash_in"
-                          ? "Add Cash In"
-                          : "Add Cash Out"
+                          ? "Add Money In"
+                          : "Add Money Out"
                       )}
                 </h2>
               </div>
@@ -1892,7 +2066,7 @@ export default function CashBookPage() {
                     )
                   }
                 >
-                  Cash In
+                  Money In
                 </button>
 
                 <button
@@ -1915,7 +2089,7 @@ export default function CashBookPage() {
                     )
                   }
                 >
-                  Cash Out
+                  Money Out
                 </button>
               </div>
 
@@ -2195,8 +2369,8 @@ export default function CashBookPage() {
                           : (
                             manualEntryType
                               === "cash_in"
-                              ? "Save Cash In"
-                              : "Save Cash Out"
+                              ? "Save Money In"
+                              : "Save Money Out"
                           )
                       )}
                 </button>
@@ -2307,8 +2481,8 @@ export default function CashBookPage() {
                 <strong>
                   {reverseTarget.direction
                     === "cash_in"
-                    ? "Cash In"
-                    : "Cash Out"}
+                    ? "Money In"
+                    : "Money Out"}
                 </strong>
               </div>
             </div>

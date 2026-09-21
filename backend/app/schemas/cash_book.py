@@ -196,6 +196,18 @@ class CashBookSummaryResponse(BaseModel):
     cash_out: Decimal
     closing_balance: Decimal
 
+    cash_method_in: Decimal = Decimal("0.00")
+    cash_method_out: Decimal = Decimal("0.00")
+
+    bank_transfer_in: Decimal = Decimal("0.00")
+    bank_transfer_out: Decimal = Decimal("0.00")
+
+    card_in: Decimal = Decimal("0.00")
+    card_out: Decimal = Decimal("0.00")
+
+    cheque_in: Decimal = Decimal("0.00")
+    cheque_out: Decimal = Decimal("0.00")
+
     transaction_count: int
 
 
