@@ -20,6 +20,7 @@ export type CashBookSummary = {
 
   cheque_in: string;
   cheque_out: string;
+  cheque_pending_out: string;
 
   transaction_count: number;
 };

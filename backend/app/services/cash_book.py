@@ -1388,10 +1388,29 @@ async def list_cash_book(
         },
     }
 
+    cheque_pending_out = ZERO
+
     for transaction in period_transactions:
         signed_amount = _signed_amount(
             transaction
         )
+
+        method = str(
+            transaction.payment_method
+            or ""
+        ).lower()
+
+        if (
+            method == "cheque"
+            and transaction.direction
+            == "cash_out"
+            and transaction.cheque_status
+            == "pending"
+        ):
+            cheque_pending_out = money(
+                cheque_pending_out
+                + transaction.amount
+            )
 
         if signed_amount > ZERO:
             cash_in = money(
@@ -1403,11 +1422,6 @@ async def list_cash_book(
                 cash_out
                 + abs(signed_amount)
             )
-
-        method = str(
-            transaction.payment_method
-            or ""
-        ).lower()
 
         if method in method_totals:
             if signed_amount > ZERO:
@@ -1526,6 +1540,9 @@ async def list_cash_book(
             cheque_out=method_totals[
                 "cheque"
             ]["cash_out"],
+            cheque_pending_out=money(
+                cheque_pending_out
+            ),
             transaction_count=total,
         ),
     )

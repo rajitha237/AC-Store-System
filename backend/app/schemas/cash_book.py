@@ -207,6 +207,7 @@ class CashBookSummaryResponse(BaseModel):
 
     cheque_in: Decimal = Decimal("0.00")
     cheque_out: Decimal = Decimal("0.00")
+    cheque_pending_out: Decimal = Decimal("0.00")
 
     transaction_count: int
 

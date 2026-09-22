@@ -1370,6 +1370,9 @@ export default function CashBookPage() {
                   summary?.cheque_in,
                 outgoing:
                   summary?.cheque_out,
+                pendingOutgoing:
+                  summary
+                    ?.cheque_pending_out,
               },
               {
                 label: "Card",
@@ -1391,8 +1394,21 @@ export default function CashBookPage() {
                   ?? 0,
                 );
 
+              const pendingOutgoing =
+                Number(
+                  item.pendingOutgoing
+                  ?? 0,
+                );
+
+              const issuedTotal =
+                outgoing
+                + pendingOutgoing;
+
               const net =
                 incoming - outgoing;
+
+              const isCheque =
+                item.label === "Cheque";
 
               return (
                 <article
@@ -1447,19 +1463,82 @@ export default function CashBookPage() {
                     </div>
                   </div>
 
-                  <div
-                    className={
-                      styles.methodNet
-                    }
-                  >
-                    <span>
-                      Net movement
-                    </span>
+                  {isCheque ? (
+                    <>
+                      <div
+                        className={
+                          styles.methodMetrics
+                        }
+                      >
+                        <div>
+                          <span>
+                            Issued Total
+                          </span>
 
-                    <strong>
-                      {money(net)}
-                    </strong>
-                  </div>
+                          <strong>
+                            {money(
+                              issuedTotal,
+                            )}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>
+                            Pending Out
+                          </span>
+
+                          <strong>
+                            {money(
+                              pendingOutgoing,
+                            )}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div
+                        className={
+                          styles.methodNet
+                        }
+                      >
+                        <span>
+                          Effective Net
+                        </span>
+
+                        <strong>
+                          {money(net)}
+                        </strong>
+                      </div>
+
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.78rem",
+                          opacity: 0.72,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        Money Out above includes
+                        cleared cheques only.
+                        Pending cheques are shown
+                        separately and do not
+                        affect the balance.
+                      </p>
+                    </>
+                  ) : (
+                    <div
+                      className={
+                        styles.methodNet
+                      }
+                    >
+                      <span>
+                        Net movement
+                      </span>
+
+                      <strong>
+                        {money(net)}
+                      </strong>
+                    </div>
+                  )}
                 </article>
               );
             })}
