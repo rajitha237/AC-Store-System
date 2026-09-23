@@ -29,6 +29,21 @@ from app.services.audit import create_audit_log
 
 
 ZERO = Decimal("0.00")
+
+CASH_BOOK_START_DATE = date(2026, 9, 1)
+
+
+def effective_cash_book_start_date(
+    requested_date: date | None,
+) -> date:
+    if requested_date is None:
+        return CASH_BOOK_START_DATE
+
+    return max(
+        requested_date,
+        CASH_BOOK_START_DATE,
+    )
+
 CENT = Decimal("0.01")
 
 
@@ -1307,13 +1322,18 @@ async def list_cash_book(
         company.timezone
     )
 
-    start_at = (
-        _business_day_start(
-            date_from,
-            company.timezone,
-        )
-        if date_from is not None
-        else None
+    cash_book_start_at = _business_day_start(
+        CASH_BOOK_START_DATE,
+        company.timezone,
+    )
+
+    effective_start_date = effective_cash_book_start_date(
+        date_from,
+    )
+
+    start_at = _business_day_start(
+        effective_start_date,
+        company.timezone,
     )
 
     end_before = (
@@ -1329,13 +1349,13 @@ async def list_cash_book(
         CashBookTransactionResponse
     ] = []
 
-    if start_at is not None:
+    if start_at > cash_book_start_at:
         opening_transactions = (
             await _load_active_transactions(
                 session,
                 company_id=company_id,
                 branch_id=branch_id,
-                start_at=None,
+                start_at=cash_book_start_at,
                 end_before=start_at,
                 business_today=business_today,
             )

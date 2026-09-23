@@ -529,3 +529,43 @@ def test_manual_cash_book_snapshot() -> None:
         snapshot["entry_type"]
         == "cash_out"
     )
+
+
+def test_cash_book_start_date_defaults_to_september_first() -> None:
+    from app.services.cash_book import (
+        effective_cash_book_start_date,
+    )
+
+    assert effective_cash_book_start_date(
+        None
+    ) == date(2026, 9, 1)
+
+
+def test_cash_book_start_date_clamps_august_to_september_first() -> None:
+    from app.services.cash_book import (
+        effective_cash_book_start_date,
+    )
+
+    assert effective_cash_book_start_date(
+        date(2026, 8, 31)
+    ) == date(2026, 9, 1)
+
+
+def test_cash_book_start_date_keeps_september_first() -> None:
+    from app.services.cash_book import (
+        effective_cash_book_start_date,
+    )
+
+    assert effective_cash_book_start_date(
+        date(2026, 9, 1)
+    ) == date(2026, 9, 1)
+
+
+def test_cash_book_start_date_keeps_later_dates() -> None:
+    from app.services.cash_book import (
+        effective_cash_book_start_date,
+    )
+
+    assert effective_cash_book_start_date(
+        date(2026, 9, 15)
+    ) == date(2026, 9, 15)
