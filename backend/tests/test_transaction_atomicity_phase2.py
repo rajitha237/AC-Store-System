@@ -764,7 +764,7 @@ async def test_serialized_replacement_happy_path_receives_original_and_issues_re
     # from the customer.
     assert (
         original_after.status
-        == "customer_returned"
+        == "available"
     )
     assert (
         original_after.current_customer_id

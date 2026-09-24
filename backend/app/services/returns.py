@@ -1322,8 +1322,7 @@ async def receive_returned_stock(
 
             else:
                 serial.status = (
-                    SerialNumberStatus
-                    .CUSTOMER_RETURNED.value
+                    SerialNumberStatus.AVAILABLE.value
                 )
 
         movement = StockMovement(

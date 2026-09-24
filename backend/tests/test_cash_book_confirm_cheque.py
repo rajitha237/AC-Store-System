@@ -4,7 +4,8 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-from app.models import AuditLog
+from app.core.security import create_access_token, hash_password
+from app.models import AuditLog, User
 from app.models.cash_book import ManualCashBookEntry
 
 
@@ -151,3 +152,83 @@ async def test_confirm_manual_cheque_is_idempotency_protected(
         second.json()["detail"]
         == "Cheque is already confirmed paid"
     )
+
+
+async def _cash_book_headers_for_role(
+    db_session,
+    role: str,
+) -> dict[str, str]:
+    user = User(
+        username=f"cashbook_{role}_test",
+        email=f"cashbook_{role}_test@test.local",
+        full_name=f"Cash Book {role.title()} Test",
+        hashed_password=hash_password("Test@12345"),
+        role=role,
+        is_active=True,
+        is_superuser=False,
+    )
+
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    token = create_access_token(subject=str(user.id))
+
+    return {
+        "Authorization": f"Bearer {token}",
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "role",
+    ["owner", "accountant"],
+)
+async def test_owner_and_accountant_can_confirm_due_cheque(
+    client,
+    db_session,
+    role,
+):
+    headers = await _cash_book_headers_for_role(
+        db_session,
+        role,
+    )
+
+    create_response = await client.post(
+        "/api/v1/cash-book/manual",
+        headers=headers,
+        json={
+            "entry_type": "cash_out",
+            "entry_date": date.today().isoformat(),
+            "amount": "1234.00",
+            "payment_method": "cheque",
+            "category": "Role Permission Test",
+            "description": (
+                f"Cheque confirmation by {role}"
+            ),
+            "reference_number": (
+                f"ROLE-CHQ-{role.upper()}"
+            ),
+            "cheque_date": date.today().isoformat(),
+        },
+    )
+
+    assert create_response.status_code == 201, (
+        create_response.text
+    )
+
+    entry_id = create_response.json()["id"]
+
+    response = await client.post(
+        (
+            f"/api/v1/cash-book/manual/"
+            f"{entry_id}/confirm-cheque"
+        ),
+        headers=headers,
+        json={},
+    )
+
+    assert response.status_code == 200, (
+        f"{role}: {response.text}"
+    )
+    assert response.json()["cheque_status"] == "cleared"

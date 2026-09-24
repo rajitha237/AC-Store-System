@@ -1842,43 +1842,6 @@ export default function CashBookPage() {
                                     )
                                     : null}
 
-                                  <button
-                                    type="button"
-                                    className={
-                                      styles.editButton
-                                    }
-                                    disabled={
-                                      !transaction.can_edit
-                                      || lifecycleSavingId
-                                        === transaction.source_id
-                                    }
-                                    onClick={() =>
-                                      openEditManualEntry(
-                                        transaction,
-                                      )
-                                    }
-                                  >
-                                    Edit
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className={
-                                      styles.deleteButton
-                                    }
-                                    disabled={
-                                      !transaction.can_delete
-                                      || lifecycleSavingId
-                                        === transaction.source_id
-                                    }
-                                    onClick={() =>
-                                      void deleteManualEntry(
-                                        transaction,
-                                      )
-                                    }
-                                  >
-                                    Delete
-                                  </button>
                                 </div>
                               )
                               : transaction.source_type
@@ -1889,41 +1852,7 @@ export default function CashBookPage() {
                                       styles.actionButtons
                                     }
                                   >
-                                    <button
-                                      type="button"
-                                      className={
-                                        styles.editButton
-                                      }
-                                      disabled={
-                                        lifecycleSavingId
-                                          === transaction.source_id
-                                      }
-                                      onClick={() =>
-                                        openEditManualEntry(
-                                          transaction,
-                                        )
-                                      }
-                                    >
-                                      Edit
-                                    </button>
 
-                                    <button
-                                      type="button"
-                                      className={
-                                        styles.deleteButton
-                                      }
-                                      disabled={
-                                        lifecycleSavingId
-                                          === transaction.source_id
-                                      }
-                                      onClick={() =>
-                                        void deleteSourcePayment(
-                                          transaction,
-                                        )
-                                      }
-                                    >
-                                      Delete
-                                    </button>
                                   </div>
                                 )
                                 : (
