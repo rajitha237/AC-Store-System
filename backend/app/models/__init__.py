@@ -1,4 +1,7 @@
-from app.models.cash_book import ManualCashBookEntry
+from app.models.cash_book import (
+    CashBookDailyApproval,
+    ManualCashBookEntry,
+)
 from app.models.audit import AuditLog
 from app.models.access_control import (
     Permission,
@@ -97,6 +100,7 @@ __all__ = [
     "AuditLog",
     "ApprovalStatus",
     "Branch",
+    "CashBookDailyApproval",
     "Brand",
     "Company",
     "CreditStatus",

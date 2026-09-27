@@ -13,6 +13,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -194,4 +195,93 @@ class ManualCashBookEntry(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+
+
+class CashBookDailyApproval(Base):
+    __tablename__ = "cash_book_daily_approvals"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id",
+            "business_date",
+            name="uq_cash_book_daily_approval_company_date",
+        ),
+        Index(
+            "ix_cash_book_daily_approvals_company_date",
+            "company_id",
+            "business_date",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "companies.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    business_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+        index=True,
+    )
+
+    opening_balance: Mapped[Decimal] = mapped_column(
+        Numeric(14, 2),
+        nullable=False,
+    )
+
+    cash_in: Mapped[Decimal] = mapped_column(
+        Numeric(14, 2),
+        nullable=False,
+    )
+
+    cash_out: Mapped[Decimal] = mapped_column(
+        Numeric(14, 2),
+        nullable=False,
+    )
+
+    closing_balance: Mapped[Decimal] = mapped_column(
+        Numeric(14, 2),
+        nullable=False,
+    )
+
+    transaction_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    approved_by_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "users.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    approved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )

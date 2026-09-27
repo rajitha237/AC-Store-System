@@ -1,3 +1,5 @@
+from app.services.documents.cash_book import build_cash_book_pdf
+
 from app.services.documents.financial_report_excel import (
     build_financial_report_excel,
 )
@@ -34,6 +36,7 @@ __all__ = [
     "JobCardPDFData",
     "QuotationItemPDFData",
     "QuotationPDFData",
+    "build_cash_book_pdf",
     "build_job_card_pdf",
     "build_payment_receipt_pdf",
     "build_purchase_order_pdf",

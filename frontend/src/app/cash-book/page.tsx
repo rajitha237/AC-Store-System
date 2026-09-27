@@ -10,6 +10,8 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   BookOpenText,
+  CheckCircle2,
+  Download,
   RefreshCw,
   Scale,
   WalletCards,
@@ -34,8 +36,11 @@ import type {
 } from "@/types/auth";
 
 import {
+  approveCashBookDay,
   confirmManualCashBookCheque,
   createManualCashBookEntry,
+  downloadCashBookPdf,
+  getCashBookDailyApproval,
   deleteManualCashBookEntry,
   getCashBook,
   reverseManualCashBookEntry,
@@ -225,6 +230,22 @@ export default function CashBookPage() {
     setDateFrom,
   ] =
     useState("");
+
+
+  const [
+    approvalBusy,
+    setApprovalBusy,
+  ] = useState(false);
+
+  const [
+    pdfBusy,
+    setPdfBusy,
+  ] = useState(false);
+
+  const [
+    approvedDay,
+    setApprovedDay,
+  ] = useState<string | null>(null);
 
   const [
     dateTo,
@@ -940,11 +961,153 @@ export default function CashBookPage() {
     }
   }
 
+  const ownerCanApprove =
+    user?.role === "owner"
+    || user?.role === "super_admin";
+
+  const selectedSingleDay =
+    dateFrom
+    && dateTo
+    && dateFrom === dateTo
+      ? dateFrom
+      : "";
+
+  const refreshApprovalStatus =
+    useCallback(
+      async () => {
+        if (
+          !ownerCanApprove
+          || !selectedSingleDay
+        ) {
+          setApprovedDay(null);
+          return;
+        }
+
+        try {
+          const result =
+            await getCashBookDailyApproval(
+              selectedSingleDay,
+            );
+
+          setApprovedDay(
+            result.approved
+              ? selectedSingleDay
+              : null,
+          );
+        } catch {
+          setApprovedDay(null);
+        }
+      },
+      [
+        ownerCanApprove,
+        selectedSingleDay,
+      ],
+    );
+
+  useEffect(() => {
+    void refreshApprovalStatus();
+  }, [refreshApprovalStatus]);
+
+  const handleApproveDay =
+    async () => {
+      if (!selectedSingleDay) {
+        setError(
+          "Select the same From Date and To Date before approving a day.",
+        );
+        return;
+      }
+
+      if (
+        !window.confirm(
+          `Approve Cash Book for ${selectedSingleDay}? This approval cannot be repeated.`,
+        )
+      ) {
+        return;
+      }
+
+      setApprovalBusy(true);
+      setError("");
+
+      try {
+        await approveCashBookDay(
+          selectedSingleDay,
+        );
+
+        setApprovedDay(
+          selectedSingleDay,
+        );
+
+        await loadCashBook();
+      } catch (approvalError) {
+        setError(
+          errorMessage(
+            approvalError,
+          ),
+        );
+      } finally {
+        setApprovalBusy(false);
+      }
+    };
+
+  const handleDownloadPdf =
+    async () => {
+      if (!dateFrom || !dateTo) {
+        setError(
+          "Select From Date and To Date before downloading the Cash Book PDF.",
+        );
+        return;
+      }
+
+      setPdfBusy(true);
+      setError("");
+
+      try {
+        const blob =
+          await downloadCashBookPdf(
+            dateFrom,
+            dateTo,
+          );
+
+        const url =
+          URL.createObjectURL(blob);
+
+        const anchor =
+          document.createElement(
+            "a",
+          );
+
+        anchor.href = url;
+        anchor.download =
+          `cash-book_${dateFrom}_${dateTo}.pdf`;
+
+        document.body.appendChild(
+          anchor,
+        );
+
+        anchor.click();
+        anchor.remove();
+
+        URL.revokeObjectURL(
+          url,
+        );
+      } catch (pdfError) {
+        setError(
+          errorMessage(
+            pdfError,
+          ),
+        );
+      } finally {
+        setPdfBusy(false);
+      }
+    };
+
   if (
     authLoading
     || !user
   ) {
-    return (
+
+
+  return (
       <main
         className="page-center"
       >
@@ -1021,6 +1184,72 @@ export default function CashBookPage() {
               : "Refresh"
             }
           </button>
+
+          {ownerCanApprove ? (
+            <div
+              className={
+                styles.manualActions
+              }
+            >
+              <button
+                type="button"
+                className={
+                  styles.cashInButton
+                }
+                onClick={() => {
+                  void handleApproveDay();
+                }}
+                disabled={
+                  approvalBusy
+                  || !selectedSingleDay
+                  || approvedDay
+                    === selectedSingleDay
+                }
+                title={
+                  selectedSingleDay
+                    ? "Approve selected Cash Book day"
+                    : "Select one identical From/To date"
+                }
+              >
+                <CheckCircle2
+                  size={17}
+                  aria-hidden="true"
+                />
+
+                {approvedDay
+                  === selectedSingleDay
+                  && selectedSingleDay
+                  ? "Day Approved"
+                  : approvalBusy
+                    ? "Approving..."
+                    : "Approve Day"}
+              </button>
+
+              <button
+                type="button"
+                className={
+                  styles.refreshButton
+                }
+                onClick={() => {
+                  void handleDownloadPdf();
+                }}
+                disabled={
+                  pdfBusy
+                  || !dateFrom
+                  || !dateTo
+                }
+              >
+                <Download
+                  size={17}
+                  aria-hidden="true"
+                />
+
+                {pdfBusy
+                  ? "Preparing PDF..."
+                  : "Download PDF"}
+              </button>
+            </div>
+          ) : null}
         </header>
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from io import BytesIO
+
 from datetime import date
 from typing import Annotated
 
@@ -11,12 +13,17 @@ from fastapi import (
     status,
 )
 
+from fastapi.responses import StreamingResponse
+from app.services.documents.cash_book import build_cash_book_pdf
 from app.api.deps import (
     DatabaseSession,
     require_permission,
 )
 from app.models import User
 from app.schemas.cash_book import (
+    CashBookDailyApprovalCreate,
+    CashBookDailyApprovalResponse,
+    CashBookDailyApprovalStatusResponse,
     CashBookListResponse,
     CashBookSummaryResponse,
     ManualCashBookEntryCreate,
@@ -26,11 +33,13 @@ from app.schemas.cash_book import (
     ManualChequeClearRequest,
 )
 from app.services.cash_book import (
+    approve_cash_book_day,
     cash_book_summary,
     clear_manual_cash_book_cheque,
     create_manual_cash_book_entry,
     delete_manual_cash_book_entry,
     get_active_cash_book_company,
+    get_cash_book_daily_approval,
     list_cash_book,
     reverse_manual_cash_book_entry,
     update_manual_cash_book_entry,
@@ -68,6 +77,17 @@ CanReverseCashBookEntry = Annotated[
     Depends(
         require_permission(
             "payments.reverse"
+        )
+    ),
+]
+
+
+
+CanApproveCashBookDay = Annotated[
+    User,
+    Depends(
+        require_permission(
+            "cash_book.approve"
         )
     ),
 ]
@@ -302,4 +322,164 @@ async def read_cash_book_summary(
         branch_id=branch_id,
         date_from=date_from,
         date_to=date_to,
+    )
+
+
+
+@router.get(
+    "/approvals/{business_date}",
+    response_model=CashBookDailyApprovalStatusResponse,
+)
+async def read_cash_book_daily_approval(
+    business_date: date,
+    session: DatabaseSession,
+    _: CanViewCashBook,
+) -> CashBookDailyApprovalStatusResponse:
+    company_id = await _active_company_id(
+        session
+    )
+
+    approval = (
+        await get_cash_book_daily_approval(
+            session,
+            company_id=company_id,
+            business_date=business_date,
+        )
+    )
+
+    return CashBookDailyApprovalStatusResponse(
+        business_date=business_date,
+        approved=approval is not None,
+        approval=(
+            CashBookDailyApprovalResponse.model_validate(
+                approval
+            )
+            if approval is not None
+            else None
+        ),
+    )
+
+
+@router.post(
+    "/approvals",
+    response_model=CashBookDailyApprovalResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def approve_cash_book_daily(
+    payload: CashBookDailyApprovalCreate,
+    session: DatabaseSession,
+    current_user: CanApproveCashBookDay,
+) -> CashBookDailyApprovalResponse:
+    approval = await approve_cash_book_day(
+        session,
+        payload=payload,
+        current_user=current_user,
+    )
+
+    return CashBookDailyApprovalResponse.model_validate(
+        approval
+    )
+
+
+
+@router.get(
+    "/report.pdf",
+    response_class=StreamingResponse,
+)
+async def download_cash_book_pdf(
+    session: DatabaseSession,
+    _: CanApproveCashBookDay,
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+) -> StreamingResponse:
+    if date_from > date_to:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=(
+                "date_from cannot be after date_to"
+            ),
+        )
+
+    company = await get_active_cash_book_company(
+        session
+    )
+
+    result = await list_cash_book(
+        session,
+        company_id=company.id,
+        date_from=date_from,
+        date_to=date_to,
+        page=1,
+        page_size=100,
+    )
+
+    transactions = list(result.items)
+
+    current_page = 1
+    total_pages = result.pages
+
+    while current_page < total_pages:
+        current_page += 1
+
+        next_result = await list_cash_book(
+            session,
+            company_id=company.id,
+            date_from=date_from,
+            date_to=date_to,
+            page=current_page,
+            page_size=100,
+        )
+
+        transactions.extend(
+            next_result.items
+        )
+
+    approval_text = None
+
+    if date_from == date_to:
+        approval = (
+            await get_cash_book_daily_approval(
+                session,
+                company_id=company.id,
+                business_date=date_from,
+            )
+        )
+
+        if approval is not None:
+            approval_text = (
+                "End-of-Day Status: APPROVED | "
+                f"Approved at "
+                f"{approval.approved_at} | "
+                f"Approved by user "
+                f"#{approval.approved_by_id}"
+            )
+        else:
+            approval_text = (
+                "End-of-Day Status: NOT APPROVED"
+            )
+
+    pdf_bytes = build_cash_book_pdf(
+        company_name=company.name,
+        date_from=date_from,
+        date_to=date_to,
+        summary=result.summary,
+        transactions=transactions,
+        approval_text=approval_text,
+    )
+
+    filename = (
+        "cash-book_"
+        f"{date_from.isoformat()}_"
+        f"{date_to.isoformat()}.pdf"
+    )
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="{filename}"'
+        },
     )

@@ -8,7 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.cash_book import ManualCashBookEntry
+from app.models.cash_book import (
+    CashBookDailyApproval,
+    ManualCashBookEntry,
+)
 from app.models.company import Branch, Company
 from app.models.purchasing import SupplierPayment
 from app.models.sales import (
@@ -17,6 +20,7 @@ from app.models.sales import (
 )
 from app.models.user import User
 from app.schemas.cash_book import (
+    CashBookDailyApprovalCreate,
     CashBookListResponse,
     CashBookSummaryResponse,
     CashBookTransactionResponse,
@@ -256,7 +260,7 @@ async def create_manual_cash_book_entry(
     ):
         raise HTTPException(
             status_code=(
-                status.HTTP_422_UNPROCESSABLE_CONTENT
+                status.HTTP_422_UNPROCESSABLE_ENTITY
             ),
             detail="Cheque date is required",
         )
@@ -272,7 +276,7 @@ async def create_manual_cash_book_entry(
     ):
         raise HTTPException(
             status_code=(
-                status.HTTP_422_UNPROCESSABLE_CONTENT
+                status.HTTP_422_UNPROCESSABLE_ENTITY
             ),
             detail=(
                 "Money In transaction date "
@@ -287,13 +291,25 @@ async def create_manual_cash_book_entry(
     ):
         raise HTTPException(
             status_code=(
-                status.HTTP_422_UNPROCESSABLE_CONTENT
+                status.HTTP_422_UNPROCESSABLE_ENTITY
             ),
             detail=(
                 "Cash Book transaction date "
                 "cannot be in the future"
             ),
         )
+
+    target_business_date = (
+        payload.entry_date
+        if payload.entry_date is not None
+        else business_today
+    )
+
+    await ensure_cash_book_day_not_approved(
+        session,
+        company_id=company.id,
+        business_date=target_business_date,
+    )
 
     entry = ManualCashBookEntry(
         company_id=company.id,
@@ -457,20 +473,32 @@ async def update_manual_cash_book_entry(
 ) -> ManualCashBookEntry:
     from fastapi import HTTPException, status
 
-    entry = await _locked_manual_cash_book_entry(
-        session,
-        entry_id=entry_id,
-        company_id=current_user.company_id,
-    )
-
     company = await get_active_cash_book_company(
         session
     )
 
-    if company.id != current_user.company_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cash book entry was not found",
+    entry = await _locked_manual_cash_book_entry(
+        session,
+        entry_id=entry_id,
+        company_id=company.id,
+    )
+
+    await ensure_manual_cash_book_entry_not_approved(
+        session,
+        entry=entry,
+        company_timezone=company.timezone,
+    )
+
+    if (
+        payload.entry_date
+        != entry.entry_date.astimezone(
+            ZoneInfo(company.timezone)
+        ).date()
+    ):
+        await ensure_cash_book_day_not_approved(
+            session,
+            company_id=company.id,
+            business_date=payload.entry_date,
         )
 
     if entry.reversed_at is not None:
@@ -509,7 +537,7 @@ async def update_manual_cash_book_entry(
     ):
         raise HTTPException(
             status_code=(
-                status.HTTP_422_UNPROCESSABLE_CONTENT
+                status.HTTP_422_UNPROCESSABLE_ENTITY
             ),
             detail="Cheque date is required",
         )
@@ -519,7 +547,7 @@ async def update_manual_cash_book_entry(
     ):
         raise HTTPException(
             status_code=(
-                status.HTTP_422_UNPROCESSABLE_CONTENT
+                status.HTTP_422_UNPROCESSABLE_ENTITY
             ),
             detail=(
                 "Cash Book transaction date "
@@ -621,6 +649,12 @@ async def clear_manual_cash_book_cheque(
         company_id=company.id,
     )
 
+    await ensure_manual_cash_book_entry_not_approved(
+        session,
+        entry=entry,
+        company_timezone=company.timezone,
+    )
+
     if entry.reversed_at is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -634,7 +668,7 @@ async def clear_manual_cash_book_cheque(
     ):
         raise HTTPException(
             status_code=(
-                status.HTTP_422_UNPROCESSABLE_CONTENT
+                status.HTTP_422_UNPROCESSABLE_ENTITY
             ),
             detail=(
                 "Only issued cash-out cheques "
@@ -723,10 +757,20 @@ async def delete_manual_cash_book_entry(
     entry_id: int,
     current_user: User,
 ) -> ManualCashBookEntry:
+    company = await get_active_cash_book_company(
+        session
+    )
+
     entry = await _locked_manual_cash_book_entry(
         session,
         entry_id=entry_id,
-        company_id=current_user.company_id,
+        company_id=company.id,
+    )
+
+    await ensure_manual_cash_book_entry_not_approved(
+        session,
+        entry=entry,
+        company_timezone=company.timezone,
     )
 
     if entry.reversed_at is not None:
@@ -1603,3 +1647,253 @@ async def cash_book_summary(
     )
 
     return result.summary
+
+
+
+async def get_cash_book_daily_approval(
+    session: AsyncSession,
+    *,
+    company_id: int,
+    business_date: date,
+) -> CashBookDailyApproval | None:
+    result = await session.execute(
+        select(CashBookDailyApproval)
+        .where(
+            CashBookDailyApproval.company_id
+            == company_id,
+            CashBookDailyApproval.business_date
+            == business_date,
+        )
+    )
+
+    return result.scalar_one_or_none()
+
+
+async def ensure_cash_book_day_not_approved(
+    session: AsyncSession,
+    *,
+    company_id: int,
+    business_date: date,
+) -> None:
+    from fastapi import (
+        HTTPException,
+        status,
+    )
+
+    approval = await get_cash_book_daily_approval(
+        session,
+        company_id=company_id,
+        business_date=business_date,
+    )
+
+    if approval is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This Cash Book day has already "
+                "been approved and manual entries "
+                "can no longer be changed"
+            ),
+        )
+
+
+
+
+async def ensure_manual_cash_book_entry_not_approved(
+    session: AsyncSession,
+    *,
+    entry: ManualCashBookEntry,
+    company_timezone: str,
+) -> None:
+    business_date = (
+        entry.entry_date
+        .astimezone(
+            ZoneInfo(company_timezone)
+        )
+        .date()
+    )
+
+    await ensure_cash_book_day_not_approved(
+        session,
+        company_id=entry.company_id,
+        business_date=business_date,
+    )
+
+
+async def approve_cash_book_day(
+    session: AsyncSession,
+    *,
+    payload: CashBookDailyApprovalCreate,
+    current_user: User,
+) -> CashBookDailyApproval:
+    from fastapi import (
+        HTTPException,
+        status,
+    )
+
+    company = await get_active_cash_book_company(
+        session
+    )
+
+    business_today = _business_today(
+        company.timezone
+    )
+
+    if (
+        payload.business_date
+        < CASH_BOOK_START_DATE
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=(
+                "Cash Book approval date cannot "
+                "be before 2026-09-01"
+            ),
+        )
+
+    if (
+        payload.business_date
+        > business_today
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=(
+                "Cash Book approval date cannot "
+                "be in the future"
+            ),
+        )
+
+    existing_result = await session.execute(
+        select(CashBookDailyApproval)
+        .where(
+            CashBookDailyApproval.company_id
+            == company.id,
+            CashBookDailyApproval.business_date
+            == payload.business_date,
+        )
+        .with_for_update()
+    )
+
+    existing = (
+        existing_result.scalar_one_or_none()
+    )
+
+    if existing is not None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=(
+                "This Cash Book day has already "
+                "been approved"
+            ),
+        )
+
+    summary = await cash_book_summary(
+        session,
+        company_id=company.id,
+        date_from=payload.business_date,
+        date_to=payload.business_date,
+    )
+
+    approval = CashBookDailyApproval(
+        company_id=company.id,
+        business_date=payload.business_date,
+        opening_balance=money(
+            summary.opening_balance
+        ),
+        cash_in=money(
+            summary.cash_in
+        ),
+        cash_out=money(
+            summary.cash_out
+        ),
+        closing_balance=money(
+            summary.closing_balance
+        ),
+        transaction_count=(
+            summary.transaction_count
+        ),
+        approved_by_id=current_user.id,
+        notes=(
+            payload.notes.strip()
+            if payload.notes
+            and payload.notes.strip()
+            else None
+        ),
+    )
+
+    session.add(approval)
+
+    try:
+        await session.flush()
+
+        await create_audit_log(
+            session=session,
+            user_id=current_user.id,
+            action="cash_book.day_approved",
+            module="cash_book",
+            entity_type=(
+                "cash_book_daily_approval"
+            ),
+            entity_id=approval.id,
+            entity_reference=(
+                payload.business_date.isoformat()
+            ),
+            description=(
+                "Cash Book day "
+                f"{payload.business_date.isoformat()} "
+                "approved"
+            ),
+            before_data=None,
+            after_data={
+                "company_id":
+                    approval.company_id,
+                "business_date":
+                    approval.business_date.isoformat(),
+                "opening_balance":
+                    str(approval.opening_balance),
+                "cash_in":
+                    str(approval.cash_in),
+                "cash_out":
+                    str(approval.cash_out),
+                "closing_balance":
+                    str(approval.closing_balance),
+                "transaction_count":
+                    approval.transaction_count,
+                "approved_by_id":
+                    approval.approved_by_id,
+                "notes":
+                    approval.notes,
+            },
+            metadata={
+                "business_date":
+                    payload.business_date.isoformat(),
+                "transaction_count":
+                    approval.transaction_count,
+            },
+        )
+
+        await session.commit()
+        await session.refresh(
+            approval
+        )
+
+    except IntegrityError as exc:
+        await session.rollback()
+
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=(
+                "This Cash Book day has already "
+                "been approved"
+            ),
+        ) from exc
+
+    return approval

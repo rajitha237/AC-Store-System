@@ -3,6 +3,8 @@ import {
 } from "@/lib/api";
 
 import type {
+  CashBookDailyApproval,
+  CashBookDailyApprovalStatus,
   CashBookFilters,
   CashBookListResponse,
   CashBookSummary,
@@ -171,4 +173,54 @@ export async function reverseCustomerPayment(
       reason,
     },
   );
+}
+
+
+
+export async function getCashBookDailyApproval(
+  businessDate: string,
+): Promise<CashBookDailyApprovalStatus> {
+  const response =
+    await api.get<CashBookDailyApprovalStatus>(
+      `/cash-book/approvals/${businessDate}`,
+    );
+
+  return response.data;
+}
+
+
+export async function approveCashBookDay(
+  businessDate: string,
+  notes: string | null = null,
+): Promise<CashBookDailyApproval> {
+  const response =
+    await api.post<CashBookDailyApproval>(
+      "/cash-book/approvals",
+      {
+        business_date: businessDate,
+        notes,
+      },
+    );
+
+  return response.data;
+}
+
+
+export async function downloadCashBookPdf(
+  dateFrom: string,
+  dateTo: string,
+): Promise<Blob> {
+  const response =
+    await api.get<Blob>(
+      "/cash-book/report.pdf",
+      {
+        params: {
+          date_from: dateFrom,
+          date_to: dateTo,
+        },
+        responseType: "blob",
+      },
+    );
+
+  return response.data;
 }

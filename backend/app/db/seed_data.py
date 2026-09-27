@@ -212,6 +212,14 @@ SYSTEM_PERMISSIONS: tuple[PermissionSeed, ...] = (
         description="Reverse an incorrect posted payment.",
     ),
     PermissionSeed(
+        code="cash_book.approve",
+        name="Approve Cash Book Day",
+        description=(
+            "Approve an end-of-day Cash Book snapshot."
+        ),
+        module="cash_book",
+    ),
+    PermissionSeed(
         code="installments.view",
         module="installments",
         name="View Installments",

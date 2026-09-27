@@ -220,3 +220,39 @@ class CashBookListResponse(BaseModel):
     pages: int
 
     summary: CashBookSummaryResponse
+
+
+
+class CashBookDailyApprovalCreate(BaseModel):
+    business_date: date
+    notes: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
+
+
+class CashBookDailyApprovalResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
+
+    id: int
+    company_id: int
+    business_date: date
+
+    opening_balance: Decimal
+    cash_in: Decimal
+    cash_out: Decimal
+    closing_balance: Decimal
+    transaction_count: int
+
+    approved_by_id: int
+    approved_at: datetime
+    notes: str | None
+    created_at: datetime
+
+
+class CashBookDailyApprovalStatusResponse(BaseModel):
+    business_date: date
+    approved: bool
+    approval: CashBookDailyApprovalResponse | None = None

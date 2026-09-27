@@ -149,3 +149,27 @@ export type CashBookFilters = {
   dateFrom?: string;
   dateTo?: string;
 };
+
+
+
+export type CashBookDailyApproval = {
+  id: number;
+  company_id: number;
+  business_date: string;
+  opening_balance: string;
+  cash_in: string;
+  cash_out: string;
+  closing_balance: string;
+  transaction_count: number;
+  approved_by_id: number;
+  approved_at: string;
+  notes: string | null;
+  created_at: string;
+};
+
+
+export type CashBookDailyApprovalStatus = {
+  business_date: string;
+  approved: boolean;
+  approval: CashBookDailyApproval | null;
+};
