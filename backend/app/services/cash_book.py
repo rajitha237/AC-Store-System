@@ -266,7 +266,23 @@ async def create_manual_cash_book_entry(
     )
 
     if (
-        payload.entry_date is not None
+        payload.entry_type == "cash_in"
+        and payload.entry_date is not None
+        and payload.entry_date != business_today
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Money In transaction date "
+                "must be today"
+            ),
+        )
+
+    if (
+        payload.entry_type != "cash_in"
+        and payload.entry_date is not None
         and payload.entry_date > business_today
     ):
         raise HTTPException(

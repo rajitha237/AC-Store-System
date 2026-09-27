@@ -2102,6 +2102,20 @@ export default function CashBookPage() {
                       value={
                         manualEntryDate
                       }
+                      min={
+                        manualEntryType === "cash_in"
+                          ? new Date()
+                              .toLocaleDateString(
+                                "en-CA",
+                              )
+                          : undefined
+                      }
+                      max={
+                        new Date()
+                          .toLocaleDateString(
+                            "en-CA",
+                          )
+                      }
                       disabled={
                         manualSaving
                       }

@@ -1879,10 +1879,22 @@ async def process_return(
             ),
         )
 
-    if sales_return.resolution in {
-        ReturnResolution.REFUND.value,
-        ReturnResolution.STORE_CREDIT.value,
-    }:
+    is_zero_value_refund = (
+        sales_return.resolution
+        == ReturnResolution.REFUND.value
+        and money(sales_return.subtotal) == ZERO_2
+        and money(sales_return.refund_amount) == ZERO_2
+    )
+
+    if (
+        sales_return.resolution
+        == ReturnResolution.STORE_CREDIT.value
+        or (
+            sales_return.resolution
+            == ReturnResolution.REFUND.value
+            and not is_zero_value_refund
+        )
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
@@ -1929,16 +1941,28 @@ async def process_return(
             ),
         )
 
-        if sales_return.resolution in {
-            ReturnResolution
-            .WARRANTY_SERVICE.value,
-        }:
+        if (
+            sales_return.resolution
+            == ReturnResolution.WARRANTY_SERVICE.value
+            or is_zero_value_refund
+        ):
             sales_return.status = (
                 ReturnStatus.COMPLETED.value
             )
 
             sales_return.completed_at = (
                 utc_now()
+            )
+
+            completion_remarks = (
+                "Zero-value refund return stock "
+                "processing completed; no financial "
+                "refund posting was required"
+                if is_zero_value_refund
+                else (
+                    "Warranty return stock "
+                    "processing completed"
+                )
             )
 
             await add_status_history(
@@ -1953,10 +1977,7 @@ async def process_return(
                     .COMPLETED.value
                 ),
                 current_user=current_user,
-                remarks=(
-                    "Warranty return stock "
-                    "processing completed"
-                ),
+                remarks=completion_remarks,
             )
 
         await create_audit_log(
