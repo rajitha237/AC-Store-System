@@ -2421,6 +2421,13 @@ export default function SalesPage() {
                 .referenceNumber,
             ),
 
+          cheque_date:
+            payment.paymentMethod
+              === "cheque"
+              ? payment.chequeDate
+                || null
+              : null,
+
           notes:
             cleanText(
               payment.notes,
@@ -6262,6 +6269,31 @@ export default function SalesPage() {
                                   }
                                 />
                               </label>
+
+                              {payment.paymentMethod === "cheque" ? (
+                                <label
+                                  className={
+                                    styles.detailChequeDateField
+                                  }
+                                >
+                                  Cheque Date
+
+                                  <input
+                                    type="date"
+                                    required
+                                    value={payment.chequeDate}
+                                    onChange={(event) =>
+                                      updateDetailPaymentRow(
+                                        payment.id,
+                                        {
+                                          chequeDate:
+                                            event.target.value,
+                                        },
+                                      )
+                                    }
+                                  />
+                                </label>
+                              ) : null}
 
                               <button
                                 type="button"

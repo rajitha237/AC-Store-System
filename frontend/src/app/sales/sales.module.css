@@ -1379,6 +1379,26 @@
   padding: 9px;
 }
 
+.detailSplitRow:has(.detailChequeDateField) {
+  grid-template-columns:
+    28px
+    minmax(95px, .75fr)
+    minmax(135px, .9fr)
+    minmax(145px, 1fr)
+    minmax(135px, .9fr)
+    34px;
+}
+
+.detailChequeDateField {
+  min-width: 0;
+}
+
+.detailChequeDateField input[type="date"] {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+
 .detailSplitRow label {
   color: #657186;
   display: grid;
