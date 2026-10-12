@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
@@ -197,6 +197,46 @@ async def run_sms_cycle() -> SmsCycleResult:
 
                 logger.exception(
                     "SMS reminder queue failed "
+                    "for company_id=%s",
+                    company_id,
+                )
+
+    # Recover yesterday's owner summary independently.
+    # A recovery failure must not roll back customer reminders.
+    for company_id, timezone_name in company_rows:
+        company_timezone = _company_timezone(timezone_name)
+        local_now = datetime.now(company_timezone)
+
+        if local_now.hour < 9:
+            continue
+
+        yesterday_at_21 = (
+            local_now.replace(
+                hour=21,
+                minute=0,
+                second=0,
+                microsecond=0,
+            ) - timedelta(days=1)
+        )
+
+        async with AsyncSessionLocal() as session:
+            try:
+                recovered_rows = (
+                    await queue_owner_daily_cash_summary(
+                        session,
+                        company_id=company_id,
+                        local_now=yesterday_at_21,
+                        timezone_name=company_timezone.key,
+                    )
+                )
+                await session.commit()
+                result.daily_cash_summaries_queued += len(
+                    recovered_rows
+                )
+            except Exception:
+                await session.rollback()
+                logger.exception(
+                    "Owner summary recovery failed "
                     "for company_id=%s",
                     company_id,
                 )
