@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
@@ -14,7 +14,6 @@ from app.models.company import Company
 from app.services.sms import (
     dispatch_pending_sms_notifications,
     queue_installment_due_reminders,
-    queue_owner_daily_cash_summary,
     queue_owner_job_reminders,
     recover_stale_processing_sms_notifications,
 )
@@ -167,17 +166,6 @@ async def run_sms_cycle() -> SmsCycleResult:
                     )
                 )
 
-                daily_summary_rows = (
-                    await queue_owner_daily_cash_summary(
-                        session,
-                        company_id=company_id,
-                        local_now=local_now,
-                        timezone_name=(
-                            effective_timezone_name
-                        ),
-                    )
-                )
-
                 await session.commit()
 
                 result.owner_reminders_queued += len(
@@ -188,55 +176,12 @@ async def run_sms_cycle() -> SmsCycleResult:
                     installment_rows
                 )
 
-                result.daily_cash_summaries_queued += len(
-                    daily_summary_rows
-                )
 
             except Exception:
                 await session.rollback()
 
                 logger.exception(
                     "SMS reminder queue failed "
-                    "for company_id=%s",
-                    company_id,
-                )
-
-    # Recover yesterday's owner summary independently.
-    # A recovery failure must not roll back customer reminders.
-    for company_id, timezone_name in company_rows:
-        company_timezone = _company_timezone(timezone_name)
-        local_now = datetime.now(company_timezone)
-
-        if local_now.hour < 9:
-            continue
-
-        yesterday_at_21 = (
-            local_now.replace(
-                hour=21,
-                minute=0,
-                second=0,
-                microsecond=0,
-            ) - timedelta(days=1)
-        )
-
-        async with AsyncSessionLocal() as session:
-            try:
-                recovered_rows = (
-                    await queue_owner_daily_cash_summary(
-                        session,
-                        company_id=company_id,
-                        local_now=yesterday_at_21,
-                        timezone_name=company_timezone.key,
-                    )
-                )
-                await session.commit()
-                result.daily_cash_summaries_queued += len(
-                    recovered_rows
-                )
-            except Exception:
-                await session.rollback()
-                logger.exception(
-                    "Owner summary recovery failed "
                     "for company_id=%s",
                     company_id,
                 )

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from io import BytesIO
 
 from datetime import date
@@ -45,6 +48,16 @@ from app.services.cash_book import (
     update_manual_cash_book_entry,
 )
 
+
+from app.core.config import get_settings
+from app.db.session import AsyncSessionLocal
+from app.models.company import Company
+from app.services.sms import (
+    queue_owner_daily_cash_summary,
+    dispatch_sms_notification,
+)
+
+cashbook_sms_logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter(
     prefix="/cash-book",
@@ -375,6 +388,76 @@ async def approve_cash_book_daily(
         payload=payload,
         current_user=current_user,
     )
+
+    # Approval has already committed successfully.
+    # SMS failures must never reverse the approval.
+    if get_settings().sms_enabled:
+        async with AsyncSessionLocal() as sms_session:
+            notification_id = None
+            try:
+                company = await sms_session.get(
+                    Company,
+                    approval.company_id,
+                )
+                timezone_name = (
+                    company.timezone
+                    if company and company.timezone
+                    else "Asia/Colombo"
+                )
+                try:
+                    zone = ZoneInfo(timezone_name)
+                except Exception:
+                    zone = ZoneInfo("Asia/Colombo")
+
+                # Reuse the existing summary formatter and
+                # per-company/date deduplication key.
+                approval_day_at_21 = datetime.combine(
+                    approval.business_date,
+                    datetime.min.time(),
+                    tzinfo=zone,
+                ).replace(hour=21)
+
+                rows = await queue_owner_daily_cash_summary(
+                    sms_session,
+                    company_id=approval.company_id,
+                    local_now=approval_day_at_21,
+                    timezone_name=zone.key,
+                )
+                if rows:
+                    notification_id = rows[0].id
+
+                await sms_session.commit()
+            except Exception:
+                await sms_session.rollback()
+                cashbook_sms_logger.exception(
+                    "Cash Book approval SMS queue failed: "
+                    "company_id=%s date=%s",
+                    approval.company_id,
+                    approval.business_date,
+                )
+
+        if notification_id is not None:
+            async with AsyncSessionLocal() as send_session:
+                try:
+                    from app.models.sms_notification import (
+                        SmsNotification,
+                    )
+                    notification = await send_session.get(
+                        SmsNotification,
+                        notification_id,
+                    )
+                    if notification is not None:
+                        await dispatch_sms_notification(
+                            send_session,
+                            notification=notification,
+                        )
+                except Exception:
+                    await send_session.rollback()
+                    cashbook_sms_logger.exception(
+                        "Cash Book approval SMS dispatch failed: "
+                        "notification_id=%s",
+                        notification_id,
+                    )
 
     return CashBookDailyApprovalResponse.model_validate(
         approval
