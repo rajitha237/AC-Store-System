@@ -72,7 +72,8 @@ export interface InstallmentPlan {
 }
 
 export interface InstallmentPaymentCreate {
-  amount: number;
+    payment_date?: string;
+amount: number;
   payment_method: InstallmentPaymentMethod;
   reference_number?: string | null;
   notes?: string | null;

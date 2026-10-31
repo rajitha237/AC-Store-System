@@ -186,6 +186,8 @@ export default function InstallmentsPage() {
   const [paymentAmount, setPaymentAmount] =
     useState("");
 
+  const [paymentDate, setPaymentDate] = useState("");
+
   const [
     paymentMethod,
     setPaymentMethod,
@@ -705,6 +707,15 @@ export default function InstallmentsPage() {
         ? outstanding.toFixed(2)
         : "",
     );
+    setPaymentDate(
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Colombo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date()),
+    );
+
 
     setPaymentMethod("cash");
     setPaymentReference("");
@@ -765,6 +776,7 @@ export default function InstallmentsPage() {
           selected.id,
           {
             amount,
+              payment_date: paymentDate,
             payment_method: paymentMethod,
             reference_number:
               paymentReference.trim() || null,
@@ -1722,6 +1734,21 @@ export default function InstallmentsPage() {
                         submitInstallmentPayment
                       }
                     >
+                        <label>
+                          <span>Payment Date</span>
+                          <input
+                            type="date"
+                            required
+                            value={paymentDate}
+                            onChange={(event) =>
+                              setPaymentDate(event.target.value)
+                            }
+                          />
+                          <small>
+                            Select the actual payment date.
+                          </small>
+                        </label>
+
                       <label>
                         <span>
                           Payment amount
