@@ -97,6 +97,8 @@ class InstallmentPlanCreate(BaseModel):
 class InstallmentPaymentCreate(
     BaseModel
 ):
+    payment_date: date | None = None
+
     amount: Decimal = Field(
         gt=Decimal("0.00"),
         max_digits=18,

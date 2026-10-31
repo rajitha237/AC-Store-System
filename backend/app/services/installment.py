@@ -1499,7 +1499,57 @@ async def receive_installment_payment(
             ),
         )
 
+    from zoneinfo import ZoneInfo
+    from app.services.cash_book import (
+        ensure_cash_book_day_not_approved,
+    )
+
+    company = await session.get(
+        Company,
+        plan.company_id,
+    )
+
+    if company is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Installment company not found",
+        )
+
+    business_timezone = ZoneInfo(company.timezone)
+    now_local = datetime.now(business_timezone)
+
+    selected_date = (
+        payload.payment_date
+        if payload.payment_date is not None
+        else now_local.date()
+    )
+
+    if selected_date > now_local.date():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Payment date cannot be in the future",
+        )
+
+    await ensure_cash_book_day_not_approved(
+        session,
+        company_id=plan.company_id,
+        business_date=selected_date,
+    )
+
+    payment_timestamp = (
+        datetime(
+            selected_date.year,
+            selected_date.month,
+            selected_date.day,
+            12, 0, 0,
+            tzinfo=business_timezone,
+        ).astimezone(timezone.utc)
+        if payload.payment_date is not None
+        else utc_now()
+    )
+
     payment = CustomerPayment(
+        payment_date=payment_timestamp,
         company_id=plan.company_id,
         branch_id=plan.branch_id,
         receipt_number=None,
@@ -1761,12 +1811,9 @@ async def receive_installment_payment(
                     Decimal(
                         invoice.grand_total
                     )
-                    - Decimal(
-                        invoice.credited_amount
-                    )
-                    - Decimal(
-                        invoice.paid_amount
-                    ),
+                    - Decimal(invoice.credited_amount)
+                    - Decimal(invoice.trade_in_amount)
+                    - Decimal(invoice.paid_amount),
                 )
             )
 
@@ -2268,12 +2315,9 @@ async def reverse_installment_payment(
                     Decimal(
                         invoice.grand_total
                     )
-                    - Decimal(
-                        invoice.credited_amount
-                    )
-                    - Decimal(
-                        invoice.paid_amount
-                    ),
+                    - Decimal(invoice.credited_amount)
+                    - Decimal(invoice.trade_in_amount)
+                    - Decimal(invoice.paid_amount),
                 )
             )
 

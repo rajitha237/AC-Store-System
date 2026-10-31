@@ -441,12 +441,9 @@ async def receive_invoice_payment(
             max(
                 ZERO,
                 Decimal(invoice.grand_total)
-                - Decimal(
-                    invoice.credited_amount
-                )
-                - Decimal(
-                    invoice.paid_amount
-                ),
+                - Decimal(invoice.credited_amount)
+                - Decimal(invoice.trade_in_amount)
+                - Decimal(invoice.paid_amount),
             )
         )
 
@@ -1048,12 +1045,9 @@ async def update_invoice_payment(
             max(
                 ZERO,
                 Decimal(invoice.grand_total)
-                - Decimal(
-                    invoice.credited_amount
-                )
-                - Decimal(
-                    invoice.paid_amount
-                ),
+                - Decimal(invoice.credited_amount)
+                - Decimal(invoice.trade_in_amount)
+                - Decimal(invoice.paid_amount),
             )
         )
 
@@ -1266,9 +1260,8 @@ async def reverse_invoice_payment(
             max(
                 ZERO,
                 Decimal(invoice.grand_total)
-                - Decimal(
-                    invoice.credited_amount
-                )
+                - Decimal(invoice.credited_amount)
+                - Decimal(invoice.trade_in_amount)
                 - Decimal(invoice.paid_amount),
             )
         )
