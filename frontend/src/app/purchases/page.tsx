@@ -340,6 +340,10 @@ export default function PurchasesPage() {
   ] =
     useState("");
 
+  const [receiveDraft, setReceiveDraft] = useState<
+    Record<number, { quantity: string; serials: string }>
+  >({});
+
   const [
     receiveNotes,
     setReceiveNotes,
@@ -863,111 +867,105 @@ export default function PurchasesPage() {
     };
 
 
-  const receivePo =
-    async () => {
-      if (
-        !selected
-        || !selected.items
-      ) {
+  useEffect(() => {
+    setReceiveDraft({});
+  }, [selected?.id]);
+
+  const receivePo = async () => {
+    if (!selected?.items || saving) return;
+
+    const items: Array<{
+      purchase_order_item_id: number;
+      quantity: string;
+      serials?: Array<{ serial_number: string }>;
+    }> = [];
+    const seenSerials = new Set<string>();
+
+    for (const item of selected.items) {
+      const ordered = Number(item.quantity_ordered ?? item.quantity ?? 0);
+      const received = Number(item.quantity_received ?? 0);
+      const remaining = Math.max(0, ordered - received);
+      if (remaining <= 0) continue;
+
+      const draft = receiveDraft[item.id];
+      const quantityText = draft?.quantity ?? String(remaining);
+      const quantity = Number(quantityText);
+      const name = item.product_name || item.product_code || `Product ${item.product_id}`;
+      if (!quantityText.trim() || !Number.isFinite(quantity) || quantity < 0 || quantity > remaining + 0.000001) {
+        setError(`${name}: receive quantity must be between 0 and ${remaining}.`);
         return;
       }
+      if (quantity === 0) continue;
 
-      const receiveItems =
-        selected.items
-          .map((item) => {
-            const ordered =
-              Number(
-                item.quantity_ordered
-                ?? item.quantity
-                ?? 0,
-              );
-
-            const received =
-              Number(
-                item.quantity_received
-                ?? 0,
-              );
-
-            const remaining =
-              ordered
-              - received;
-
-            return {
-              purchase_order_item_id:
-                item.id,
-
-              quantity:
-                String(
-                  Math.max(
-                    remaining,
-                    0,
-                  ),
-                ),
-            };
-          })
-          .filter(
-            (item) =>
-              Number(
-                item.quantity,
-              ) > 0,
-          );
-
-      if (
-        receiveItems.length
-        === 0
-      ) {
-        setError(
-          "There is no remaining quantity to receive.",
-        );
+      const catalogProduct = products.find((product) => product.id === item.product_id);
+      const tracked = item.track_serial_numbers ?? catalogProduct?.track_serial_numbers;
+      if (tracked === undefined) {
+        setError(`${name}: serial tracking status is unavailable. Refresh product data before receiving.`);
         return;
       }
-
-      setSaving(true);
-      setError("");
-      setSuccess("");
-
-      try {
-        const receipt =
-          await receivePurchaseOrder(
-            selected.id,
-            {
-              delivery_note_number:
-                deliveryNote.trim()
-                  || null,
-
-              notes:
-                receiveNotes.trim()
-                  || null,
-
-              items:
-                receiveItems,
-            },
-          );
-
-        setSuccess(
-          `${receipt.grn_number} created and stock received.`,
-        );
-
-        setDeliveryNote("");
-        setReceiveNotes("");
-
-        await loadBaseData();
-        await refreshSelected(
-          selected.id,
-        );
-      } catch (
-        requestError
-      ) {
-        setError(
-          apiError(
-            requestError,
-          ),
-        );
-      } finally {
-        setSaving(false);
+      const rawSerials = (draft?.serials ?? "")
+        .split(/\r?\n/)
+        .map((serial) => serial.trim())
+        .filter(Boolean);
+      if (tracked) {
+        if (!Number.isInteger(quantity) || quantity > 1000) {
+          setError(`${name}: serialized quantity must be a whole number (maximum 1000 per receipt).`);
+          return;
+        }
+        if (rawSerials.length !== quantity) {
+          setError(`${name}: enter exactly ${quantity} serial numbers (one per line).`);
+          return;
+        }
+        for (const serial of rawSerials) {
+          if (serial.length > 150) {
+            setError(`${name}: serial numbers must be 150 characters or fewer.`);
+            return;
+          }
+          const key = serial.toLocaleLowerCase();
+          if (seenSerials.has(key)) {
+            setError(`Duplicate serial number in this receipt: ${serial}`);
+            return;
+          }
+          seenSerials.add(key);
+        }
+      } else if (rawSerials.length > 0) {
+        setError(`${name}: this product does not use serial numbers.`);
+        return;
       }
-    };
+      items.push({
+        purchase_order_item_id: item.id,
+        quantity: quantityText,
+        ...(tracked ? { serials: rawSerials.map((serial_number) => ({ serial_number })) } : {}),
+      });
+    }
 
+    if (items.length === 0) {
+      setError("Enter a receive quantity greater than zero for at least one product.");
+      return;
+    }
+    if (!window.confirm(`Confirm goods received for ${items.length} product line(s)? This will update inventory.`)) return;
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      const receipt = await receivePurchaseOrder(selected.id, {
+        delivery_note_number: deliveryNote.trim() || null,
+        notes: receiveNotes.trim() || null,
+        items,
+      });
+      setSuccess(`${receipt.grn_number} created and stock received.`);
+      setReceiveDraft({});
+      setDeliveryNote("");
+      setReceiveNotes("");
+      await loadBaseData();
+      await refreshSelected(selected.id);
+    } catch (requestError) {
+      setError(apiError(requestError));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const createInvoice =
     async () => {
@@ -2158,6 +2156,86 @@ export default function PurchasesPage() {
                   </label>
                 </div>
 
+                <div style={{ marginTop: 18, overflowX: "auto" }}>
+                  <h4 style={{ marginBottom: 10 }}>Receive quantity / serials</h4>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
+                    <thead>
+                      <tr style={{ textAlign: "left", borderBottom: "1px solid #d1d5db" }}>
+                        <th style={{ padding: 8 }}>Product</th>
+                        <th style={{ padding: 8 }}>Ordered</th>
+                        <th style={{ padding: 8 }}>Received</th>
+                        <th style={{ padding: 8 }}>Remaining</th>
+                        <th style={{ padding: 8 }}>Receive now</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selected.items?.map((item) => {
+                        const ordered = Number(item.quantity_ordered ?? item.quantity ?? 0);
+                        const received = Number(item.quantity_received ?? 0);
+                        const remaining = Math.max(0, ordered - received);
+                        const tracked = item.track_serial_numbers
+                          ?? products.find((product) => product.id === item.product_id)?.track_serial_numbers;
+                        const draft = receiveDraft[item.id];
+                        const quantity = draft?.quantity ?? String(remaining);
+                        const serials = draft?.serials ?? "";
+                        return (
+                          <tr key={item.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                            <td style={{ padding: 8 }}>
+                              <strong>{item.product_name || item.product_code || `Product ${item.product_id}`}</strong>
+                              {tracked === true && remaining > 0 ? (
+                                <label style={{ display: "block", marginTop: 8, fontSize: 12 }}>
+                                  Serial numbers (one per line)
+                                  <textarea
+                                    aria-label={`Serial numbers for ${item.product_name || item.product_id}`}
+                                    style={{ ...inputStyle, minHeight: 76, marginTop: 4 }}
+                                    rows={Math.max(2, Math.min(5, Number(quantity) || 2))}
+                                    value={serials}
+                                    disabled={saving}
+                                    placeholder="Enter one serial number per unit"
+                                    onChange={(event) => setReceiveDraft((previous) => ({
+                                      ...previous,
+                                      [item.id]: { quantity, serials: event.target.value },
+                                    }))}
+                                  />
+                                  <span style={{ display: "block", color: "#64748b" }}>
+                                    {serials.split(/\r?\n/).filter((value) => value.trim()).length} entered
+                                  </span>
+                                </label>
+                              ) : tracked === false ? (
+                                <small style={{ display: "block", color: "#64748b" }}>No serial required</small>
+                              ) : tracked === undefined ? (
+                                <small style={{ display: "block", color: "#b45309" }}>Serial tracking unknown</small>
+                              ) : null}
+                            </td>
+                            <td style={{ padding: 8 }}>{ordered}</td>
+                            <td style={{ padding: 8 }}>{received}</td>
+                            <td style={{ padding: 8 }}>{remaining}</td>
+                            <td style={{ padding: 8 }}>
+                              <input
+                                aria-label={`Receive quantity for ${item.product_name || item.product_id}`}
+                                type="number"
+                                min={0}
+                                max={remaining}
+                                step={tracked ? 1 : "any"}
+                                style={{ ...inputStyle, width: 110 }}
+                                disabled={saving || remaining <= 0}
+                                value={quantity}
+                                onChange={(event) => setReceiveDraft((previous) => ({
+                                  ...previous,
+                                  [item.id]: { quantity: event.target.value, serials },
+                                }))}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <p style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>
+                    Set quantity to 0 to skip a product. Confirming creates a GRN and updates inventory.
+                  </p>
+                </div>
+
                 <button
                   type="button"
                   disabled={saving}
@@ -2171,7 +2249,7 @@ export default function PurchasesPage() {
                     void receivePo()
                   }
                 >
-                  Receive remaining stock
+                  Confirm & Add to Inventory
                 </button>
               </div>
             ) : null}
