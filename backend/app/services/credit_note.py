@@ -134,7 +134,8 @@ def net_invoice_total(
         max(
             ZERO_2,
             Decimal(invoice.grand_total)
-            - Decimal(invoice.credited_amount),
+            - Decimal(invoice.credited_amount)
+            - Decimal(invoice.trade_in_amount),
         )
     )
 
